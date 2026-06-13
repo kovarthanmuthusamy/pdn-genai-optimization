@@ -1,0 +1,57 @@
+architecture:
+  latent_dim: 32
+  heatmap_private_dim: 8
+  cond_dim: 8
+training:
+  num_epochs: 400
+  batch_size: 64
+  learning_rate: 0.0001
+  lr_patience: 20
+  lr_factor: 0.5
+  lr_min: 5.0e-06
+  train_split: 0.9
+  num_workers: 4
+recon_weights:
+  heatmap_weight: 2.0
+  occupancy_weight: 4.0
+  impedance_weight: 3.0
+  impedance_deriv_weight: 1.0
+  impedance_peak_weight: 2.0
+  heatmap_peak_weight: 3.0
+  heatmap_grad_weight: 1.5
+  occupancy_focal_gamma: 2.0
+latent_reg:
+  free_bits: 0.05
+  mu_hinge_threshold: 4.0
+  mu_hinge_weight: 0.1
+  mu_bias_weight: 0.05
+  per_expert_kl_weight: 0.02
+  sigma_reg_weight: 2.0
+  sigma_reg_target: 0.45
+kl_annealing:
+  use_beta_annealing: true
+  beta_start_epoch: 0
+  beta_end_epoch: 200
+  beta_initial: 0.0
+  beta_final: 0.1
+  beta_phase2_final: 0.2
+  beta_phase2_end_epoch: 600
+modality:
+  modality_dropout: 0.2
+  modality_dropout_start: 0.0
+  modality_dropout_anneal_epochs: 150
+  cross_modal_weight: 0.5
+  cross_modal_update_freq: 4
+physics:
+  physics_ri_weight: 1.0
+  physics_critic_sup_weight: 2.0
+  physics_ar_weight: 0.5
+  physics_critic_warmup_epochs: 50
+performance:
+  amp: 'off'
+  tf32: false
+  compile: false
+  compile_mode: reduce-overhead
+  persistent_workers: true
+  prefetch_factor: 2
+model_params: 5731924

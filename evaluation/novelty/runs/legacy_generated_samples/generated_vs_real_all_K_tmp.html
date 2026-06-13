@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>generated_vs_real_all_K.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="generated-vs-real--all-k">Generated vs Real — All K</h1>
+<p>This file aggregates the per-K comparison plots (heatmap, impedance, occupancy).</p>
+<h2 id="k1">K=1</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K1/generated_vs_real_heatmap.png" alt="K=1 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K1/generated_vs_real_impedance_profile.png" alt="K=1 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K1/generated_occupancy.png" alt="K=1 occupancy"></p>
+<h2 id="k2">K=2</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K2/generated_vs_real_heatmap.png" alt="K=2 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K2/generated_vs_real_impedance_profile.png" alt="K=2 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K2/generated_occupancy.png" alt="K=2 occupancy"></p>
+<h2 id="k3">K=3</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K3/generated_vs_real_heatmap.png" alt="K=3 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K3/generated_vs_real_impedance_profile.png" alt="K=3 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K3/generated_occupancy.png" alt="K=3 occupancy"></p>
+<h2 id="k4">K=4</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K4/generated_vs_real_heatmap.png" alt="K=4 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K4/generated_vs_real_impedance_profile.png" alt="K=4 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K4/generated_occupancy.png" alt="K=4 occupancy"></p>
+<h2 id="k5">K=5</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K5/generated_vs_real_heatmap.png" alt="K=5 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K5/generated_vs_real_impedance_profile.png" alt="K=5 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K5/generated_occupancy.png" alt="K=5 occupancy"></p>
+<h2 id="k6">K=6</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K6/generated_vs_real_heatmap.png" alt="K=6 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K6/generated_vs_real_impedance_profile.png" alt="K=6 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K6/generated_occupancy.png" alt="K=6 occupancy"></p>
+<h2 id="k7">K=7</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K7/generated_vs_real_heatmap.png" alt="K=7 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K7/generated_vs_real_impedance_profile.png" alt="K=7 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K7/generated_occupancy.png" alt="K=7 occupancy"></p>
+<h2 id="k8">K=8</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K8/generated_vs_real_heatmap.png" alt="K=8 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K8/generated_vs_real_impedance_profile.png" alt="K=8 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K8/generated_occupancy.png" alt="K=8 occupancy"></p>
+<h2 id="k9">K=9</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K9/generated_vs_real_heatmap.png" alt="K=9 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K9/generated_vs_real_impedance_profile.png" alt="K=9 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K9/generated_occupancy.png" alt="K=9 occupancy"></p>
+<h2 id="k10">K=10</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K10/generated_vs_real_heatmap.png" alt="K=10 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K10/generated_vs_real_impedance_profile.png" alt="K=10 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K10/generated_occupancy.png" alt="K=10 occupancy"></p>
+<h2 id="k11">K=11</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K11/generated_vs_real_heatmap.png" alt="K=11 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K11/generated_vs_real_impedance_profile.png" alt="K=11 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K11/generated_occupancy.png" alt="K=11 occupancy"></p>
+<h2 id="k12">K=12</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K12/generated_vs_real_heatmap.png" alt="K=12 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K12/generated_vs_real_impedance_profile.png" alt="K=12 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K12/generated_occupancy.png" alt="K=12 occupancy"></p>
+<h2 id="k13">K=13</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K13/generated_vs_real_heatmap.png" alt="K=13 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K13/generated_vs_real_impedance_profile.png" alt="K=13 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K13/generated_occupancy.png" alt="K=13 occupancy"></p>
+<h2 id="k14">K=14</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K14/generated_vs_real_heatmap.png" alt="K=14 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K14/generated_vs_real_impedance_profile.png" alt="K=14 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K14/generated_occupancy.png" alt="K=14 occupancy"></p>
+<h2 id="k15">K=15</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K15/generated_vs_real_heatmap.png" alt="K=15 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K15/generated_vs_real_impedance_profile.png" alt="K=15 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K15/generated_occupancy.png" alt="K=15 occupancy"></p>
+<h2 id="k16">K=16</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K16/generated_vs_real_heatmap.png" alt="K=16 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K16/generated_vs_real_impedance_profile.png" alt="K=16 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K16/generated_occupancy.png" alt="K=16 occupancy"></p>
+<h2 id="k17">K=17</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K17/generated_vs_real_heatmap.png" alt="K=17 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K17/generated_vs_real_impedance_profile.png" alt="K=17 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K17/generated_occupancy.png" alt="K=17 occupancy"></p>
+<h2 id="k18">K=18</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K18/generated_vs_real_heatmap.png" alt="K=18 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K18/generated_vs_real_impedance_profile.png" alt="K=18 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K18/generated_occupancy.png" alt="K=18 occupancy"></p>
+<h2 id="k19">K=19</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K19/generated_vs_real_heatmap.png" alt="K=19 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K19/generated_vs_real_impedance_profile.png" alt="K=19 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K19/generated_occupancy.png" alt="K=19 occupancy"></p>
+<h2 id="k20">K=20</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K20/generated_vs_real_heatmap.png" alt="K=20 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K20/generated_vs_real_impedance_profile.png" alt="K=20 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K20/generated_occupancy.png" alt="K=20 occupancy"></p>
+<h2 id="k21">K=21</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K21/generated_vs_real_heatmap.png" alt="K=21 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K21/generated_vs_real_impedance_profile.png" alt="K=21 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K21/generated_occupancy.png" alt="K=21 occupancy"></p>
+<h2 id="k22">K=22</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K22/generated_vs_real_heatmap.png" alt="K=22 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K22/generated_vs_real_impedance_profile.png" alt="K=22 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K22/generated_occupancy.png" alt="K=22 occupancy"></p>
+<h2 id="k23">K=23</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K23/generated_vs_real_heatmap.png" alt="K=23 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K23/generated_vs_real_impedance_profile.png" alt="K=23 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K23/generated_occupancy.png" alt="K=23 occupancy"></p>
+<h2 id="k24">K=24</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K24/generated_vs_real_heatmap.png" alt="K=24 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K24/generated_vs_real_impedance_profile.png" alt="K=24 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K24/generated_occupancy.png" alt="K=24 occupancy"></p>
+<h2 id="k25">K=25</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K25/generated_vs_real_heatmap.png" alt="K=25 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K25/generated_vs_real_impedance_profile.png" alt="K=25 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K25/generated_occupancy.png" alt="K=25 occupancy"></p>
+<h2 id="k26">K=26</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K26/generated_vs_real_heatmap.png" alt="K=26 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K26/generated_vs_real_impedance_profile.png" alt="K=26 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K26/generated_occupancy.png" alt="K=26 occupancy"></p>
+<h2 id="k27">K=27</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K27/generated_vs_real_heatmap.png" alt="K=27 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K27/generated_vs_real_impedance_profile.png" alt="K=27 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K27/generated_occupancy.png" alt="K=27 occupancy"></p>
+<h2 id="k28">K=28</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K28/generated_vs_real_heatmap.png" alt="K=28 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K28/generated_vs_real_impedance_profile.png" alt="K=28 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K28/generated_occupancy.png" alt="K=28 occupancy"></p>
+<h2 id="k29">K=29</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K29/generated_vs_real_heatmap.png" alt="K=29 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K29/generated_vs_real_impedance_profile.png" alt="K=29 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K29/generated_occupancy.png" alt="K=29 occupancy"></p>
+<h2 id="k30">K=30</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K30/generated_vs_real_heatmap.png" alt="K=30 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K30/generated_vs_real_impedance_profile.png" alt="K=30 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K30/generated_occupancy.png" alt="K=30 occupancy"></p>
+<h2 id="k31">K=31</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K31/generated_vs_real_heatmap.png" alt="K=31 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K31/generated_vs_real_impedance_profile.png" alt="K=31 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K31/generated_occupancy.png" alt="K=31 occupancy"></p>
+<h2 id="k32">K=32</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K32/generated_vs_real_heatmap.png" alt="K=32 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K32/generated_vs_real_impedance_profile.png" alt="K=32 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K32/generated_occupancy.png" alt="K=32 occupancy"></p>
+<h2 id="k33">K=33</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K33/generated_vs_real_heatmap.png" alt="K=33 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K33/generated_vs_real_impedance_profile.png" alt="K=33 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K33/generated_occupancy.png" alt="K=33 occupancy"></p>
+<h2 id="k34">K=34</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K34/generated_vs_real_heatmap.png" alt="K=34 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K34/generated_vs_real_impedance_profile.png" alt="K=34 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K34/generated_occupancy.png" alt="K=34 occupancy"></p>
+<h2 id="k35">K=35</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K35/generated_vs_real_heatmap.png" alt="K=35 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K35/generated_vs_real_impedance_profile.png" alt="K=35 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K35/generated_occupancy.png" alt="K=35 occupancy"></p>
+<h2 id="k36">K=36</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K36/generated_vs_real_heatmap.png" alt="K=36 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K36/generated_vs_real_impedance_profile.png" alt="K=36 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K36/generated_occupancy.png" alt="K=36 occupancy"></p>
+<h2 id="k37">K=37</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K37/generated_vs_real_heatmap.png" alt="K=37 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K37/generated_vs_real_impedance_profile.png" alt="K=37 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K37/generated_occupancy.png" alt="K=37 occupancy"></p>
+<h2 id="k38">K=38</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K38/generated_vs_real_heatmap.png" alt="K=38 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K38/generated_vs_real_impedance_profile.png" alt="K=38 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K38/generated_occupancy.png" alt="K=38 occupancy"></p>
+<h2 id="k39">K=39</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K39/generated_vs_real_heatmap.png" alt="K=39 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K39/generated_vs_real_impedance_profile.png" alt="K=39 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K39/generated_occupancy.png" alt="K=39 occupancy"></p>
+<h2 id="k40">K=40</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K40/generated_vs_real_heatmap.png" alt="K=40 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K40/generated_vs_real_impedance_profile.png" alt="K=40 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K40/generated_occupancy.png" alt="K=40 occupancy"></p>
+<h2 id="k41">K=41</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K41/generated_vs_real_heatmap.png" alt="K=41 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K41/generated_vs_real_impedance_profile.png" alt="K=41 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K41/generated_occupancy.png" alt="K=41 occupancy"></p>
+<h2 id="k42">K=42</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K42/generated_vs_real_heatmap.png" alt="K=42 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K42/generated_vs_real_impedance_profile.png" alt="K=42 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K42/generated_occupancy.png" alt="K=42 occupancy"></p>
+<h2 id="k43">K=43</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K43/generated_vs_real_heatmap.png" alt="K=43 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K43/generated_vs_real_impedance_profile.png" alt="K=43 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K43/generated_occupancy.png" alt="K=43 occupancy"></p>
+<h2 id="k44">K=44</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K44/generated_vs_real_heatmap.png" alt="K=44 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K44/generated_vs_real_impedance_profile.png" alt="K=44 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K44/generated_occupancy.png" alt="K=44 occupancy"></p>
+<h2 id="k45">K=45</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K45/generated_vs_real_heatmap.png" alt="K=45 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K45/generated_vs_real_impedance_profile.png" alt="K=45 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K45/generated_occupancy.png" alt="K=45 occupancy"></p>
+<h2 id="k46">K=46</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K46/generated_vs_real_heatmap.png" alt="K=46 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K46/generated_vs_real_impedance_profile.png" alt="K=46 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K46/generated_occupancy.png" alt="K=46 occupancy"></p>
+<h2 id="k47">K=47</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K47/generated_vs_real_heatmap.png" alt="K=47 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K47/generated_vs_real_impedance_profile.png" alt="K=47 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K47/generated_occupancy.png" alt="K=47 occupancy"></p>
+<h2 id="k48">K=48</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K48/generated_vs_real_heatmap.png" alt="K=48 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K48/generated_vs_real_impedance_profile.png" alt="K=48 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K48/generated_occupancy.png" alt="K=48 occupancy"></p>
+<h2 id="k49">K=49</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K49/generated_vs_real_heatmap.png" alt="K=49 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K49/generated_vs_real_impedance_profile.png" alt="K=49 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K49/generated_occupancy.png" alt="K=49 occupancy"></p>
+<h2 id="k50">K=50</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K50/generated_vs_real_heatmap.png" alt="K=50 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K50/generated_vs_real_impedance_profile.png" alt="K=50 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K50/generated_occupancy.png" alt="K=50 occupancy"></p>
+<h2 id="k51">K=51</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K51/generated_vs_real_heatmap.png" alt="K=51 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K51/generated_vs_real_impedance_profile.png" alt="K=51 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K51/generated_occupancy.png" alt="K=51 occupancy"></p>
+<h2 id="k52">K=52</h2>
+<p><strong>Heatmap</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K52/generated_vs_real_heatmap.png" alt="K=52 heatmap"></p>
+<p><strong>Impedance profile</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K52/generated_vs_real_impedance_profile.png" alt="K=52 impedance profile"></p>
+<p><strong>Occupancy</strong></p>
+<p><img src="file:///home/ubuntu/gan/scrap/generated_samples/K52/generated_occupancy.png" alt="K=52 occupancy"></p>
+
+</body>
+</html>

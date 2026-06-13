@@ -1,25 +1,17 @@
 #!/usr/bin/env python3
 """
-Single script to generate and view VAE architecture diagrams in a browser.
-Usage: python3 view_architecture.py
+VAE Architecture Viewer - Generates standalone HTML file with Mermaid diagrams
 """
 
 import os
-import time
-import subprocess
-import webbrowser
-import signal
-import sys
 import base64
-from pathlib import Path
 
 def encode_image(img_path):
-    """Encode image to base64 data URI"""
+    """Encode image file to base64 data URI."""
     try:
         with open(img_path, 'rb') as f:
-            img_data = f.read()
-            encoded = base64.b64encode(img_data).decode('utf-8')
-            return f"data:image/png;base64,{encoded}"
+            data = base64.b64encode(f.read()).decode('utf-8')
+        return f"data:image/png;base64,{data}"
     except FileNotFoundError:
         return ""
 
@@ -116,53 +108,19 @@ HTML_TEMPLATE = """
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.05);
             margin-bottom: 25px;
         }
-        .result-images {
-            display: flex;
-            flex-direction: column;
-            gap: 30px;
-        }
-        .result-item {
-            background: #ffffff;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-        .result-item h3 {
-            color: #2c3e50;
-            margin-top: 0;
-            margin-bottom: 15px;
-        }
-        .result-item img {
-            max-width: 100%;
-            border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-        }
-        .occupancy-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-top: 15px;
-        }
-        .occupancy-item {
-            text-align: center;
-        }
-        .occupancy-item h4 {
-            color: #34495e;
-            margin-bottom: 10px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Product of Experts Multi-Modal VAE</h1>
-        <p class="subtitle">Multi-modal VAE with Product of Experts fusion (precision-weighted uncertainty). 4 modality branches, private+shared latent spaces (128D total), enhanced occupancy encoder (1.1M params), MAE impedance loss, no skip connections.</p>
+        <h1>Multi-Input Multi-Modal VAE with Product of Experts</h1>
+        <p class="subtitle">3-modality VAE (Heatmap + Occupancy + Impedance) using Product of Experts fusion for the shared latent space. Private latent dimensions: Heatmap 32D, Occupancy 32D, Impedance 20D. Shared dimension: 48D. Total latent: 132D.</p>
 
         <div class="tabs">
             <button class="tab active" onclick="showTab(event, 'encoder')">🧩 Encoder</button>
             <button class="tab" onclick="showTab(event, 'decoder')">🎯 Decoder</button>
             <button class="tab" onclick="showTab(event, 'pipeline')">📊 Data Pipeline</button>
             <button class="tab" onclick="showTab(event, 'losses')">⚖️ Loss Functions</button>
-            <button class="tab" onclick="showTab(event, 'results')">📊 Results</button>
+            <button class="tab" onclick="showTab(event, 'results')">🖼️ Results</button>
         </div>
 
         <div id="encoder" class="tab-content active">
@@ -172,168 +130,157 @@ HTML_TEMPLATE = """
             </div>
 
             <div class="mermaid">
-graph TB
+flowchart TB
     %% Input Layer
     INPUT[🎯 MULTI-MODAL INPUTS]
     
-    INPUT --> H_IN[Heatmap<br/>64x64x2]
-    INPUT --> O_IN[Occupancy<br/>7x8x1]
-    INPUT --> I_IN[Impedance<br/>231x1]
-    INPUT --> M_IN[MaxValue<br/>scalar]
+    INPUT --> H_IN[Heatmap<br/>1×64×64]
+    INPUT --> O_IN[Occupancy<br/>52-D vector]
+    INPUT --> I_IN[Impedance<br/>2×231<br/>raw + derivative]
     
     %% Encoder Branches
-    H_IN --> H_ENC["🔥 Heatmap Encoder<br/>CNN: 2→16→32→64<br/>FC: 4096→64"]
-    O_IN --> O_ENC["🗺️ Occupancy Encoder<br/>CNN: 1→16→32→64→128<br/>FC: 7168→512→256→128→64"]
-    I_IN --> I_ENC["📊 Impedance Encoder<br/>MLP: 231→128→128→64<br/>with BatchNorm"]
-    M_IN --> M_ENC["📡 MaxValue Encoder<br/>MLP: 1→64→128→64"]
+    H_IN --> H_ENC["🔥 Heatmap Encoder<br/>Conv2d: 1→16→32→64<br/>FC: 4096→512→64"]
+    O_IN --> O_ENC["🗺️ Occupancy Encoder<br/>Linear: 52→128→256→128→64"]
+    I_IN --> I_ENC["📊 Impedance Encoder<br/>Conv1d: 2→16→32→64→128<br/>FC: 1920→256→64"]
     
-    H_ENC --> H_FEAT[Heatmap Feat 64D]
-    O_ENC --> O_FEAT[Occupancy Feat 64D]
-    I_ENC --> I_FEAT[Impedance Feat 64D]
-    M_ENC --> M_FEAT[MaxValue Feat 64D]
+    H_ENC --> H_FEAT["Heatmap Features<br/>64-D"]
+    O_ENC --> O_FEAT["Occupancy Features<br/>64-D"]
+    I_ENC --> I_FEAT["Impedance Features<br/>64-D"]
     
     %% Private Latent Spaces
-    H_FEAT --> H_PRIV["Private Space<br/>μ_h, σ²_h 16D"]
-    O_FEAT --> O_PRIV["Private Space<br/>μ_o, σ²_o 16D"]
-    I_FEAT --> I_PRIV["Private Space<br/>μ_i, σ²_i 16D"]
-    M_FEAT --> M_PRIV["Private Space<br/>μ_m, σ²_m 16D"]
+    H_FEAT --> H_PRIV["Private Heatmap<br/>μ_h, logvar_h<br/>32-D"]
+    O_FEAT --> O_PRIV["Private Occupancy<br/>logits → Binary Concrete<br/>32-D"]
+    I_FEAT --> I_PRIV["Private Impedance<br/>μ_i, logvar_i<br/>20-D"]
     
     %% Shared Latent Spaces for PoE
-    H_FEAT --> H_SHARED["Shared Prediction<br/>μ_h, σ²_h 64D"]
-    O_FEAT --> O_SHARED["Shared Prediction<br/>μ_o, σ²_o 64D"]
-    I_FEAT --> I_SHARED["Shared Prediction<br/>μ_i, σ²_i 64D"]
-    M_FEAT --> M_SHARED["Shared Prediction<br/>μ_m, σ²_m 64D"]
+    H_FEAT --> H_SHARED["Shared Prediction<br/>μ_h, logvar_h<br/>48-D"]
+    O_FEAT --> O_SHARED["Shared Prediction<br/>μ_o, logvar_o<br/>48-D"]
+    I_FEAT --> I_SHARED["Shared Prediction<br/>μ_i, logvar_i<br/>48-D"]
     
     %% Product of Experts Fusion
-    H_SHARED --> POE["⚡ Product of Experts<br/>Precision-Weighted Fusion<br/>1/σ²_comb = Σ1/σ²_i<br/>μ_comb = σ²_comb·Σμ_i/σ²_i"]
+    H_SHARED --> POE["⚡ Product of Experts Fusion<br/>precision:  1/σ²_comb = Σ(1/σ²_i) + 1/σ²_prior<br/>mean:  μ_comb = σ²_comb · Σ(μ_i/σ²_i)<br/>unit Gaussian N(0,1) included as 4th expert"]
     O_SHARED --> POE
     I_SHARED --> POE
-    M_SHARED --> POE
     
-    POE --> SHARED["Shared Space<br/>μ_s, σ²_s 64D"]
+    POE --> SHARED["Combined posterior<br/>μ_comb, σ²_comb  —  48-D<br/>logvar clamped to [-2, 2]  →  σ_floor = 0.368"]
     
-    %% Concatenation
-    H_PRIV --> CONCAT["Concatenate<br/>Private + Shared"]
-    O_PRIV --> CONCAT
-    I_PRIV --> CONCAT
-    M_PRIV --> CONCAT
-    SHARED --> CONCAT
+    %% Private sampling — explicit distributions
+    H_PRIV --> REPARAMPARAM["z_h ~ N(μ_h, exp(0.5·logvar_h))<br/>logvar clamped to [-4, 2]<br/>σ_floor = 0.135"]
+    I_PRIV --> REPARAMPARAM2["z_i ~ N(μ_i, exp(0.5·logvar_i))<br/>logvar clamped to [-4, 2]<br/>σ_floor = 0.135"]
+    O_PRIV --> BINCONCRETE["z_o ~ BinaryConcrete(logits, τ)<br/>sigmoid((logits + Logistic(0,1)) / τ)<br/>τ annealed  1.0 → 0.1  over 200 epochs"]
     
-    CONCAT --> FINAL["Final Distribution<br/>μ, logvar 128D<br/>64 private + 64 shared"]
+    REPARAMPARAM --> Z_H["z_heatmap  32-D"]
+    REPARAMPARAM2 --> Z_I["z_impedance  20-D"]
+    BINCONCRETE --> Z_O["z_occupancy  32-D"]
     
-    %% Reparameterization
-    FINAL --> SAMPLE["🎲 Reparameterize<br/>z = μ + σ·ε, ε~N(0,1)"]
-    SAMPLE --> LATENT["🧬 Latent z<br/>128D"]
+    %% Shared sampling
+    SHARED --> REPARAMSHARED["z_shared ~ N(μ_comb, σ²_comb)<br/>reparameterization trick<br/>z = μ + σ · ε,   ε ~ N(0,1)"]
+    REPARAMSHARED --> Z_S["z_shared  48-D"]
+    
+    %% Final concatenation
+    Z_H --> CONCAT["Concatenate All<br/>z_heatmap || z_occupancy ||<br/>z_impedance || z_shared"]
+    Z_O --> CONCAT
+    Z_I --> CONCAT
+    Z_S --> CONCAT
+    
+    CONCAT --> LATENT["🧬 Full Latent z<br/>132-D<br/>32+32+20+48"]
 
     %% Styling
     style INPUT fill:#e0e0e0,stroke:#333,stroke-width:3px
     style H_ENC fill:#ffb3ba,stroke:#333,stroke-width:2px
     style O_ENC fill:#baffc9,stroke:#333,stroke-width:2px
     style I_ENC fill:#ffd8a8,stroke:#333,stroke-width:2px
-    style M_ENC fill:#ffaaee,stroke:#333,stroke-width:2px
     style H_PRIV fill:#ffe0e0,stroke:#333,stroke-width:2px
     style O_PRIV fill:#e0ffe0,stroke:#333,stroke-width:2px
     style I_PRIV fill:#fff0e0,stroke:#333,stroke-width:2px
-    style M_PRIV fill:#ffe0ff,stroke:#333,stroke-width:2px
     style H_SHARED fill:#ffcccb,stroke:#333,stroke-width:2px
     style O_SHARED fill:#ccffcc,stroke:#333,stroke-width:2px
     style I_SHARED fill:#ffe6cc,stroke:#333,stroke-width:2px
-    style M_SHARED fill:#ffccff,stroke:#333,stroke-width:2px
     style POE fill:#ff6b6b,color:#fff,stroke:#333,stroke-width:3px
     style SHARED fill:#ffa94d,stroke:#333,stroke-width:2px
+    style REPARAMPARAM fill:#fff9e6,stroke:#333,stroke-width:2px
+    style REPARAMPARAM2 fill:#fff9e6,stroke:#333,stroke-width:2px
+    style BINCONCRETE fill:#e6f3ff,stroke:#333,stroke-width:2px
+    style Z_H fill:#ffe6e6,stroke:#333,stroke-width:2px
+    style Z_O fill:#e6ffe6,stroke:#333,stroke-width:2px
+    style Z_I fill:#ffe6cc,stroke:#333,stroke-width:2px
+    style Z_S fill:#ffa94d,stroke:#333,stroke-width:2px
     style CONCAT fill:#aed9e0,stroke:#333,stroke-width:2px
-    style FINAL fill:#95e1d3,stroke:#333,stroke-width:2px
-    style SAMPLE fill:#ffeaa7,stroke:#333,stroke-width:2px
     style LATENT fill:#b4a7f5,stroke:#333,stroke-width:3px
             </div>
 
             <div class="info-box">
-                <h3>📊 Product of Experts Encoder Architecture:</h3>
+                <h3>📊 Product of Experts Encoder — Distributions:</h3>
                 <ul>
-                    <li><strong>🔥 Heatmap Branch:</strong> CNN (2→16→32→64 channels) + FC → 64D features</li>
-                    <li><strong>🗺️ Occupancy Branch (Enhanced):</strong> 4 Conv layers (1→16→32→64→128) + 4 FC layers (7168→512→256→128→64) [~1.1M params, 17× original]</li>
-                    <li><strong>📊 Impedance Branch:</strong> 3 FC layers with BatchNorm (231→128→128→64), NO skip connections</li>
-                    <li><strong>📡 MaxValue Branch:</strong> MLP (1→64→128→64)</li>
-                    <li><strong>🎯 Private Latent Spaces:</strong> Each modality → independent (μ_priv, σ²_priv) of 16D → Total 64D private</li>
-                    <li><strong>⚡ Product of Experts (PoE):</strong> Each modality predicts shared space (μ_i, σ²_i) of 64D → Combined via precision-weighted fusion</li>
-                    <li><strong>📐 PoE Formula:</strong> 1/σ²_combined = Σ(1/σ²_i), μ_combined = σ²_combined × Σ(μ_i/σ²_i)</li>
-                    <li><strong>🧬 Total Latent:</strong> 128D = 64D private (modality-specific) + 64D shared (PoE-fused cross-modal)</li>
-                    <li><strong>✨ Benefits:</strong> Uncertainty-aware fusion, robust to noisy modalities, automatic confidence weighting</li>
+                    <li><strong>🔥 Heatmap private  z_h ~ N(μ_h, σ²_h):</strong> σ_h = exp(0.5·logvar_h), logvar clamped to [−4, 2] → σ_floor = 0.135</li>
+                    <li><strong>🗺️ Occupancy private  z_o ~ BinaryConcrete(logits, τ):</strong> z = sigmoid((logits + Logistic(0,1)) / τ); τ annealed from 1.0 → 0.1 over 200 epochs; straight-through gradient in backward pass</li>
+                    <li><strong>📊 Impedance private  z_i ~ N(μ_i, σ²_i):</strong> same parameterization as heatmap, logvar clamped to [−4, 2]</li>
+                    <li><strong>⚡ Shared PoE posterior  z_s ~ N(μ_comb, σ²_comb):</strong> precision sum: 1/σ²_comb = Σ(1/σ²_i) + 1, weighted mean: μ_comb = σ²_comb · Σ(μ_i/σ²_i); unit Gaussian N(0,1) is the 4th expert (prior); logvar clamped to [−2, 2] → σ_floor = 0.368</li>
+                    <li><strong>🔄 Reparameterization trick:</strong> z = μ + σ·ε,  ε ~ N(0,1) — enables gradients to flow through sampling for Gaussian branches</li>
+                    <li><strong>🧬 Full latent z  132-D:</strong> [z_h (32) ‖ z_o (32) ‖ z_i (20) ‖ z_s (48)]</li>
                 </ul>
             </div>
         </div>
 
         <div id="decoder" class="tab-content">
             <div class="info-box">
-                <h2>🎯 Multi-Modal Decoder with Shared-to-Private Reconstruction</h2>
-                <p>Latent z (128D: 64 private + 64 shared) → Reverse fusion → 4 independent reconstruction heads</p>
+                <h2>🎯 Multi-Modal Decoder with Private+Shared Reconstruction</h2>
+                <p>Latent z (132D: 32+32+20+48) → Split into private+shared → 3 independent reconstruction heads</p>
             </div>
 
             <div class="mermaid">
-graph TB
-    LATENT[🧬 Latent z<br/>128D<br/>64 priv + 64 shared]
-    
-    subgraph "Reverse Fusion Layer"
-        LATENT --> REVERSE_FC[FC 128→256]
-        REVERSE_FC --> REVERSE_FEAT[Shared Features<br/>256D]
+flowchart TB
+    LATENT["🧬 Latent z — 132-D<br/>32 + 32 + 20 + 48"]
+    LATENT --> SP["Split into modality components<br/>z_heatmap: 32-D  |  z_occupancy: 32-D<br/>z_impedance: 20-D  |  z_shared: 48-D"]
+
+    SP --> H_IN["Input 80-D<br/>z_heatmap + z_shared"]
+    SP --> O_IN["Input 80-D<br/>z_occupancy + z_shared"]
+    SP --> I_IN["Input 68-D<br/>z_impedance + z_shared"]
+
+    subgraph HD["Heatmap Decoder"]
+        H_IN --> H_FC["FC  80 → 256"]
+        H_FC --> H_FC2["FC  256 → 4096"]
+        H_FC2 --> H_RESHAPE["Reshape  64 × 8 × 8"]
+        H_RESHAPE --> H_C1["ConvTranspose2d  64→32<br/>8×8 → 16×16"]
+        H_C1 --> H_C2["ConvTranspose2d  32→16<br/>16×16 → 32×32"]
+        H_C2 --> H_C3["ConvTranspose2d  16→1<br/>32×32 → 64×64"]
+        H_C3 --> H_OUT["🔥 Heatmap  1×64×64"]
     end
-    
-    subgraph "Heatmap Decoder"
-        REVERSE_FEAT --> H_FC[FC 256→4096]
-        H_FC --> H_RESHAPE[Reshape 64×8×8]
-        H_RESHAPE --> H_DECONV1[ConvT 64→32]
-        H_DECONV1 --> H_DECONV2[ConvT 32→16]
-        H_DECONV2 --> H_DECONV3[ConvT 16→2]
-        H_DECONV3 --> H_SIG[Sigmoid]
-        H_SIG --> H_OUT[🔥 Heatmap<br/>64x64x2]  
+
+    subgraph OD["Occupancy Decoder"]
+        O_IN --> O_F1["FC  80 → 256"]
+        O_F1 --> O_F2["FC  256 → 512"]
+        O_F2 --> O_F3["FC  512 → 512"]
+        O_F3 --> O_F4["FC  512 → 256"]
+        O_F4 --> O_F5["FC  256 → 52"]
+        O_F5 --> O_OUT["🗺️ Occupancy  52-D<br/>Sigmoid activation"]
     end
-    
-    subgraph "Occupancy Decoder (Enhanced)"
-        REVERSE_FEAT --> O_FC1[FC 256→512]
-        O_FC1 --> O_FC2[FC 512→1024]
-        O_FC2 --> O_FC3[FC 1024→7168]
-        O_FC3 --> O_RESHAPE[Reshape 128×7×8]
-        O_RESHAPE --> O_DECONV1[Conv 128→64]
-        O_DECONV1 --> O_DECONV2[Conv 64→32]
-        O_DECONV2 --> O_DECONV3[Conv 32→16]
-        O_DECONV3 --> O_DECONV4[Conv 16→8]
-        O_DECONV4 --> O_DECONV5[Conv 8→1]
-        O_DECONV5 --> O_OUT[🗺️ Occupancy Logits<br/>7x8x1]
+
+    subgraph ID["Impedance Decoder"]
+        I_IN --> I_F1["FC  68 → 256"]
+        I_F1 --> I_F2["FC  256 → 512"]
+        I_F2 --> I_F3["FC  512 → 462"]
+        I_F3 --> I_OUT["📊 Impedance  2×231<br/>raw + derivative channels"]
     end
-    
-    subgraph "Impedance Decoder"
-        REVERSE_FEAT --> I_FC1[FC 256→128]
-        I_FC1 --> I_FC2[FC 128→128]
-        I_FC2 --> I_FC3[FC 128→231]
-        I_FC3 --> I_SIG[Sigmoid]
-        I_SIG --> I_OUT[📊 Impedance<br/>231x1]
-    end
-    
-    subgraph "MaxValue Decoder"
-        REVERSE_FEAT --> M_FC1[FC 256→64]
-        M_FC1 --> M_FC2[FC 64→32]
-        M_FC2 --> M_FC3[FC 32→1]
-        M_FC3 --> M_SIG[Sigmoid]
-        M_SIG --> M_OUT[📡 Max Value<br/>scalar]
-    end
-    
-    style LATENT fill:#b4a7f5
-    style REVERSE_FEAT fill:#e6f3ff
-    style H_OUT fill:#ffb3ba
-    style O_OUT fill:#baffc9
-    style I_OUT fill:#ffd8a8
-    style M_OUT fill:#ffaaee
+
+    style LATENT   fill:#b4a7f5,stroke:#333,stroke-width:3px
+    style SP       fill:#aed9e0,stroke:#333,stroke-width:2px
+    style H_IN     fill:#fff9e6,stroke:#333,stroke-width:2px
+    style O_IN     fill:#fff9e6,stroke:#333,stroke-width:2px
+    style I_IN     fill:#fff9e6,stroke:#333,stroke-width:2px
+    style H_OUT    fill:#ffb3ba,stroke:#333,stroke-width:2px
+    style O_OUT    fill:#baffc9,stroke:#333,stroke-width:2px
+    style I_OUT    fill:#ffd8a8,stroke:#333,stroke-width:2px
             </div>
 
             <div class="info-box">
                 <h3>📊 Decoder Architecture:</h3>
                 <ul>
-                    <li><strong>� Reverse Fusion:</strong> Latent 128D → FC to 256D shared features with BatchNorm</li>
-                    <li><strong>🔥 Heatmap Decoder:</strong> 256→4096 → Reshape 64×8×8 → 3 ConvTranspose layers → Sigmoid → 64x64x2</li>
-                    <li><strong>🗺️ Occupancy Decoder (Enhanced):</strong> 3 FC layers (256→512→1024→7168) + 5 Conv layers (128→64→32→16→8→1) [~450K params]</li>
-                    <li><strong>📊 Impedance Decoder:</strong> 3 FC layers (256→128→128→231), NO skip connections, Sigmoid output</li>
-                    <li><strong>📡 MaxValue Decoder:</strong> MLP (256→64→32→1) with Sigmoid → scalar output</li>
-                    <li><strong>🎯 Design:</strong> All decoders independent, occupancy uses logits (BCEWithLogitsLoss), others use Sigmoid activation</li>
+                    <li><strong>🔥 Heatmap Decoder:</strong> Input 80D (z_heatmap[32D] + z_shared[48D]) → FC (80→256→4096) → Reshape 64×8×8 → 3 ConvTranspose2d layers → 1×64×64 output (z-score normalized)</li>
+                    <li><strong>🗺️ Occupancy Decoder:</strong> Input 80D (z_occupancy[32D] + z_shared[48D]) → 5 FC layers (80→256→512→512→256→52) → 52-D binary logits with Sigmoid activation</li>
+                    <li><strong>📊 Impedance Decoder (Dual-channel):</strong> Input 68D (z_impedance[20D] + z_shared[48D]) → FC (68→256→512→462) → Reshape 2×231 (raw values + derivatives)</li>
+                    <li><strong>🎯 Architecture Philosophy:</strong> Each decoder receives concatenation of [private_latent || shared_latent] to maintain modality-specific structure while leveraging shared cross-modal information</li>
+                    <li><strong>✨ Key feature:</strong> All decoders are independent pure FC layers (impedance) or FC+ConvTranspose (heatmap), no shared hidden layer bottleneck</li>
                 </ul>
             </div>
         </div>
@@ -345,88 +292,64 @@ graph TB
             </div>
 
             <div class="mermaid">
-graph TB
-    subgraph "� Dataset Statistics"
-        DS[15K Samples<br/>Quality: 8/8 EXCELLENT]
-        DS --> H_STATS[Heatmap: CV=2.81<br/>exceptional diversity]
-        DS --> I_STATS[Impedance: CV=0.38<br/>high diversity<br/>skew 2.72→-0.10]
-        DS --> O_STATS[Occupancy: CV=0.31<br/>100% unique patterns<br/>46.4% density]
+flowchart TB
+    subgraph LOAD["Data Loading"]
+        H_IN["Heatmap<br/>1x64x64"] --> DL["DataLoader<br/>batch = 64"]
+        O_IN["Occupancy<br/>52-D binary"]  --> DL
+        I_IN["Impedance<br/>2x231"] --> DL
     end
-    
-    subgraph "🗂️ Data Loading"
-        HEATMAP[Load Heatmap<br/>64x64x2]
-        OCCUPANCY[Load Occupancy<br/>7x8x1]
-        IMPEDANCE[Load Impedance<br/>231x1 normalized]
-        MAXVALUE[Load MaxValue<br/>scalar]
-        
-        HEATMAP --> DATALOADER[DataLoader<br/>batch_size=64]
-        OCCUPANCY --> DATALOADER
-        IMPEDANCE --> DATALOADER
-        MAXVALUE --> DATALOADER
+
+    subgraph TRAIN["Training Loop"]
+        ENC["Encoder<br/>3 independent branches"] --> POE["Product of Experts<br/>precision-weighted fusion"]
+        POE --> LAT["Latent z — 132-D<br/>32 + 32 + 20 + 48"]
+        LAT --> DEC["Decoder<br/>3 reconstruction heads"]
+        DEC --> H_P["Heatmap Pred<br/>1x64x64"]
+        DEC --> O_P["Occupancy Pred<br/>52-D"]
+        DEC --> I_P["Impedance Pred<br/>2x231"]
+        H_P --> LH["MSE Loss"]
+        O_P --> LO["BCE Loss"]
+        I_P --> LI["MAE Loss"]
+        LAT --> KL["KL Divergence"]
+        LH --> LOSS["Total Loss<br/>L_h + L_o + L_i + beta x KL"]
+        LO --> LOSS
+        LI --> LOSS
+        KL --> LOSS
+        LOSS --> OPT["Adam  lr=1e-4  —  300 epochs"]
     end
-    
-    subgraph "🏋️ Training Pipeline with PoE"
-        DATALOADER --> ENCODER[VAE Encoder<br/>4 branches]
-        ENCODER --> POE[Product of Experts<br/>precision-weighted fusion]
-        POE --> LATENT[Latent z<br/>128D<br/>64 priv + 64 shared]
-        
-        LATENT --> DECODER[VAE Decoder<br/>4 heads]
-        
-        DECODER --> H_PRED[Heatmap Pred 64x64x2]
-        DECODER --> O_PRED[Occupancy Pred 7x8x1]
-        DECODER --> I_PRED[Impedance Pred 231x1]
-        DECODER --> M_PRED[MaxValue Pred scalar]
-        
-        H_PRED --> L_H[MSE Loss]
-        HEATMAP --> L_H
-        
-        O_PRED --> L_O[BCE Loss]
-        OCCUPANCY --> L_O
-        
-        I_PRED --> L_I[MAE Loss]
-        IMPEDANCE --> L_I
-        
-        M_PRED --> L_M[MSE Loss]
-        MAXVALUE --> L_M
-        
-        LATENT --> KL_DIV[KL Divergence]
-        
-        L_H --> TOTAL[Total Loss]
-        L_O --> TOTAL
-        L_I --> TOTAL
-        L_M --> TOTAL
-        KL_DIV --> TOTAL
-        
-        TOTAL --> BACKPROP[Backprop<br/>Adam lr=1e-5]
+
+    subgraph INFER["Inference"]
+        ZS["Sample z from N(0,1)"] --> DI["VAE Decoder"]
+        DI --> RH["Heatmap<br/>1x64x64"]
+        DI --> RO["Occupancy<br/>52-D"]
+        DI --> RI["Impedance<br/>2x231"]
     end
-    
-    subgraph "🔮 Inference"
-        Z_SAMPLE[Sample z ~ N(0,1)]
-        Z_SAMPLE --> DEC_INF[VAE Decoder]
-        DEC_INF --> H_OUT[Heatmap 64x64x2]
-        DEC_INF --> O_OUT[Occupancy 7x8x1]
-        DEC_INF --> I_OUT[Impedance 231x1]
-        DEC_INF --> M_OUT[MaxValue scalar]
-    end
-    
-    style DS fill:#e6f3ff
-    style POE fill:#ff6b6b,color:#fff
-    style LATENT fill:#b4a7f5
-    style H_PRED fill:#ffb3ba
-    style O_PRED fill:#baffc9
-    style I_PRED fill:#ffd8a8
-    style M_PRED fill:#ffaaee
-    style TOTAL fill:#d4edda
+
+    DL --> ENC
+
+    style H_IN fill:#ffb3ba,stroke:#333,stroke-width:2px
+    style O_IN fill:#baffc9,stroke:#333,stroke-width:2px
+    style I_IN fill:#ffd8a8,stroke:#333,stroke-width:2px
+    style DL  fill:#e6f3ff,stroke:#333,stroke-width:2px
+    style POE fill:#ff6b6b,color:#fff,stroke:#333,stroke-width:3px
+    style LAT fill:#b4a7f5,stroke:#333,stroke-width:3px
+    style H_P fill:#ffb3ba,stroke:#333,stroke-width:2px
+    style O_P fill:#baffc9,stroke:#333,stroke-width:2px
+    style I_P fill:#ffd8a8,stroke:#333,stroke-width:2px
+    style LOSS fill:#d4edda,stroke:#333,stroke-width:2px
+    style OPT fill:#e6f3ff,stroke:#333,stroke-width:2px
+    style ZS  fill:#e0e0e0,stroke:#333,stroke-width:2px
             </div>
 
             <div class="info-box">
                 <h3>📊 Pipeline Details:</h3>
                 <ul>
-                    <li><strong>🗂️ Dataset:</strong> 15K samples, 8/8 quality score. Heatmap (2ch,64x64), Occupancy (1ch,7x8), Impedance (231D), MaxValue (scalar)</li>
-                    <li><strong>📊 Diversity:</strong> Exceptional (CV=2.81 heatmap, 0.38 impedance, 0.31 occupancy). 100% unique patterns</li>
-                    <li><strong>🔧 Normalization:</strong> Log-scale + percentile (1-99%) for impedance. Reduced skewness from 2.72 to -0.10</li>
-                    <li><strong>🏋️ Training:</strong> Batch size 64, LR 1e-5, 300 epochs. PoE fusion with private+shared latent spaces</li>
-                    <li><strong>🎯 Design:</strong> Product of Experts for uncertainty-aware multi-modal fusion, MAE for impedance, enhanced occupancy (1.1M params)</li>
+                    <li><strong>🗂️ Input Data:</strong> Heatmap (1×64×64 normalized), Occupancy (52-D binary), Impedance (2×231 dual-channel with derivatives)</li>
+                    <li><strong>📦 Data Loading:</strong> Batch size 64, normalized z-score data for all modalities</li>
+                    <li><strong>🧬 Encoding:</strong> 3 independent encoders → feature extraction (64D each) → private latent projections + shared space predictions</li>
+                    <li><strong>⚡ PoE Fusion:</strong> Each modality predicts shared latent with uncertainty → precision-weighted fusion → 48D shared latent</li>
+                    <li><strong>🔄 Decoding:</strong> Split z into [private || shared] for each modality → 3 independent decoders → reconstruction outputs</li>
+                    <li><strong>⚖️ Loss:</strong> MSE (heatmap) + BCE with logits (occupancy) + MAE (impedance) + β-annealed KL regularization</li>
+                    <li><strong>🎯 Optimization:</strong> Adam optimizer (lr=1e-4), 300 epochs, β annealing from 0.0 to 0.01</li>
                 </ul>
             </div>
         </div>
@@ -434,139 +357,115 @@ graph TB
         <div id="losses" class="tab-content">
             <div class="info-box">
                 <h2>⚖️ Loss Functions</h2>
-                <p>Multi-task loss with uncertainty-based automatic weighting, specialized losses for class imbalance, and KL annealing.</p>
+                <p>Multi-task loss with specialized losses per modality and KL annealing.</p>
             </div>
 
             <div class="mermaid">
-graph TB
+flowchart TB
     subgraph "Heatmap Loss"
-        H_PRED[Heatmap Pred<br/>64x64x2]
-        H_TARGET[Heatmap Target<br/>64x64x2]
+        H_PRED["Heatmap Pred<br/>1×64×64"]
+        H_TARGET["Heatmap Target<br/>1×64×64"]
         
-        H_PRED --> H_MSE[Mean Squared<br/>Error MSE]
+        H_PRED --> H_MSE["Mean Squared<br/>Error MSE"]
         H_TARGET --> H_MSE
-        H_MSE --> H_LOSS[L_heatmap]
+        H_MSE --> H_LOSS["L_heatmap"]
     end
     
     subgraph "Occupancy Loss"
-        O_PRED[Occupancy Logits<br/>7x8x1]
-        O_TARGET[Occupancy Target<br/>7x8x1 binary]
+        O_PRED["Occupancy Logits<br/>52-D"]
+        O_TARGET["Occupancy Target<br/>52-D binary"]
         
-        O_PRED --> O_BCE[Binary Cross Entropy<br/>With Logits]
+        O_PRED --> O_BCE["Binary Cross Entropy<br/>With Logits"]
         O_TARGET --> O_BCE
-        O_BCE --> O_LOSS[L_occupancy]
+        O_BCE --> O_LOSS["L_occupancy"]
     end
     
     subgraph "Impedance Loss"
-        I_PRED[Impedance Pred<br/>231x1]
-        I_TARGET[Impedance Target<br/>231x1]
+        I_PRED["Impedance Pred<br/>2×231"]
+        I_TARGET["Impedance Target<br/>2×231"]
         
-        I_PRED --> I_MAE[Mean Absolute<br/>Error L1]
+        I_PRED --> I_MAE["Mean Absolute<br/>Error L1"]
         I_TARGET --> I_MAE
-        I_MAE --> I_LOSS[L_impedance<br/>changed from MSE to MAE]
-    end
-    
-    subgraph "MaxValue Loss"
-        M_PRED[MaxValue Pred<br/>scalar]
-        M_TARGET[MaxValue Target<br/>scalar]
-        
-        M_PRED --> M_MSE[Mean Squared<br/>Error MSE]
-        M_TARGET --> M_MSE
-        M_MSE --> M_LOSS[L_maxvalue]
+        I_MAE --> I_LOSS["L_impedance<br/>MAE for derivatives"]
     end
     
     subgraph "KL Regularization with Beta Annealing"
-        MU[mu<br/>128D]
-        LOGVAR[logvar<br/>128D]
+        MU["μ<br/>132-D"]
+        LOGVAR["logvar<br/>132-D"]
         
-        MU --> KL_CALC[KL ∼ -0.5 × sum<br/>1 + logvar - μ² - exp logvar]
+        MU --> KL_CALC["KL ~ -0.5 × sum<br/>1 + logvar - μ² - exp(logvar)"]
         LOGVAR --> KL_CALC
-        KL_CALC --> KL_RAW[L_KL_raw]
+        KL_CALC --> KL_RAW["L_KL_raw"]
         
-        BETA[beta annealing<br/>0.0 → 0.01<br/>epochs 0-100]
-        KL_RAW --> KL_MULT[Multiply]
+        BETA["beta annealing<br/>0.0 → 0.01<br/>epochs 0-200"]
+        KL_RAW --> KL_MULT["Multiply"]
         BETA --> KL_MULT
-        KL_MULT --> KL_LOSS[L_KL = beta × L_KL_raw]
+        KL_MULT --> KL_LOSS["L_KL = β × L_KL_raw"]
     end
     
-    H_LOSS --> RECON[Reconstruction Loss<br/>L_recon]
-    O_LOSS --> RECON
-    I_LOSS --> RECON
-    M_LOSS --> RECON
-    
-    RECON --> TOTAL[Total Loss]
+    subgraph CROSS["Cross-Modal Reconstruction Loss"]
+        direction TB
+        PARTIAL["Encode subset of modalities<br/>e.g. Heatmap only at inference"]
+        PARTIAL --> POE_P["Partial PoE:<br/>observed experts + unit Gaussian prior<br/>missing modalities contribute only 1/σ²_prior = 1"]
+        POE_P --> Z_CM["z_shared from partial obs<br/>shared space captures cross-modal info"]
+        Z_CM --> DEC_CM["Decode all 3 modalities<br/>from partial encoding"]
+        DEC_CM --> L_CM["L_cross = L_h + L_o + L_i<br/>over predicted modalities only"]
+    end
+
+    H_LOSS --> TOTAL["Total Loss"]
+    O_LOSS --> TOTAL
+    I_LOSS --> TOTAL
     KL_LOSS --> TOTAL
+    L_CM -.->|optional cross-modal term| TOTAL
     
-    TOTAL --> FINAL[L_total = L_heatmap + L_occupancy<br/>+ L_impedance + L_maxvalue + beta×L_KL]
+    TOTAL --> FINAL["L_total = L_h + L_o + L_i + β·L_KL  (+  λ·L_cross)"]
     
     style H_LOSS fill:#ffb3ba
     style O_LOSS fill:#baffc9
     style I_LOSS fill:#ffd8a8
-    style M_LOSS fill:#ffaaee
     style KL_LOSS fill:#b4a7f5
     style BETA fill:#ffeaa7
-    style RECON fill:#e6f3ff
     style TOTAL fill:#d4edda
     style FINAL fill:#d4edda
+    style PARTIAL fill:#e6f3ff,stroke:#4a90d9,stroke-width:2px
+    style POE_P fill:#ff6b6b,color:#fff,stroke:#333,stroke-width:2px
+    style Z_CM fill:#b4a7f5,stroke:#333,stroke-width:2px
+    style L_CM fill:#fff0e6,stroke:#e67e22,stroke-width:2px
             </div>
 
             <div class="info-box">
-                <h3>📊 Loss Function Details:</h3>
+                <h3>📊 Loss Function Details + Cross-Modal Reconstruction:</h3>
                 <ul>
-                    <li><strong>🔥 Heatmap Loss:</strong> MSE (reduction='mean') on normalized heatmap 64x64x2</li>
-                    <li><strong>🗺️ Occupancy Loss:</strong> Binary Cross Entropy with Logits (BCEWithLogitsLoss) for binary classification 7x8</li>
-                    <li><strong>📊 Impedance Loss:</strong> MAE/L1 Loss (changed from MSE) - better for skewed data with outliers. Normalized data: skewness 2.72→-0.10</li>
-                    <li><strong>📡 MaxValue Loss:</strong> MSE (reduction='mean') on scalar prediction</li>
-                    <li><strong>🧬 KL Divergence:</strong> Regularizes latent to N(0,1). Formula: -0.5 × sum(1 + logvar - μ² - exp(logvar))</li>
-                    <li><strong>⏳ Beta Annealing:</strong> β goes from 0.0 → 0.01 over epochs 0-100 to prevent posterior collapse</li>
-                    <li><strong>⚖️ Weighting:</strong> All losses use reduction='mean' for comparable scales. No uncertainty weighting (removed complexity)</li>
-                    <li><strong>🎯 Total:</strong> L_total = MSE + BCE + MAE + MSE + β×KL, batch size 64, lr=1e-5, 300 epochs</li>
+                    <li><strong>🔥 Heatmap Loss:</strong> MSE (reduction='mean') on z-score normalized 1×64×64 output</li>
+                    <li><strong>🗺️ Occupancy Loss:</strong> BCEWithLogitsLoss — numerically stable, handles 52-D binary vector</li>
+                    <li><strong>📊 Impedance Loss:</strong> MAE / L1 — robust to outliers in dual-channel 2×231 signal</li>
+                    <li><strong>🧬 KL Divergence:</strong> −0.5 · Σ(1 + logσ² − μ² − σ²) over all 132 latent dims; β annealed 0.0 → 0.01 over epochs 0–200 to prevent posterior collapse</li>
+                    <li><strong>🔀 Cross-Modal Reconstruction:</strong> At inference time, encode only a subset of modalities; missing modalities contribute only their prior (unit Gaussian) to the PoE. The shared z_s still captures the cross-modal structure, so all modalities can be decoded — enabling <em>modality imputation</em> from partial observations</li>
+                    <li><strong>⚡ Partial PoE formula:</strong> 1/σ²_comb = 1/σ²_observed + 1  (prior precision = 1); μ_comb = σ²_comb · (μ_obs/σ²_obs + 0) — unobserved modalities simply fall back to the prior</li>
+                    <li><strong>🎯 Total training loss:</strong> L_total = L_h + L_o + L_i + β·L_KL  (cross-modal term λ·L_cross is optional at training time)</li>
                 </ul>
             </div>
         </div>
 
         <div id="results" class="tab-content">
             <div class="info-box">
-                <h2>📊 Experiment Results</h2>
-                <p>Visualization comparisons between generated and real data for heatmaps, impedance profiles, and occupancy maps.</p>
+                <h2>🖼️ Generated vs Real — Visual Results</h2>
+                <p>Side-by-side comparison of VAE reconstructions against real samples across all three modalities.</p>
             </div>
 
-            <div class="result-images">
-                <div class="result-item">
-                    <h3>🔥 Heatmap Comparison</h3>
-                    <img src="__HEATMAP_SRC__" alt="Generated vs Real Heatmap">
-                </div>
+            <div class="result-item">
+                <h3>🔥 Heatmap — Generated vs Real</h3>
+                <img src="__HEATMAP_SRC__" alt="Generated vs Real Heatmap" style="max-width:100%;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);"/>
+            </div>
 
-                <div class="result-item">
-                    <h3>📈 Impedance Profile Comparison</h3>
-                    <img src="__IMPEDANCE_SRC__" alt="Generated vs Real Impedance Profile">
-                </div>
+            <div class="result-item" style="margin-top:30px;">
+                <h3>📊 Impedance Profile — Generated vs Real</h3>
+                <img src="__IMPEDANCE_SRC__" alt="Generated vs Real Impedance" style="max-width:100%;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);"/>
+            </div>
 
-                <div class="result-item">
-                    <h3>🗺️ Occupancy Map Visualizations</h3>
-                    <div class="occupancy-grid">
-                        <div class="occupancy-item">
-                            <h4>Data Sample 0</h4>
-                            <img src="__OCC0_SRC__" alt="Occupancy Map Sample 0">
-                        </div>
-                        <div class="occupancy-item">
-                            <h4>Data Sample 1</h4>
-                            <img src="__OCC1_SRC__" alt="Occupancy Map Sample 1">
-                        </div>
-                        <div class="occupancy-item">
-                            <h4>Data Sample 2</h4>
-                            <img src="__OCC2_SRC__" alt="Occupancy Map Sample 2">
-                        </div>
-                        <div class="occupancy-item">
-                            <h4>Data Sample 3</h4>
-                            <img src="__OCC3_SRC__" alt="Occupancy Map Sample 3">
-                        </div>
-                        <div class="occupancy-item">
-                            <h4>Data Sample 4</h4>
-                            <img src="__OCC4_SRC__" alt="Occupancy Map Sample 4">
-                        </div>
-                    </div>
-                </div>
+            <div class="result-item" style="margin-top:30px;">
+                <h3>🗺️ Occupancy Map — Comparison</h3>
+                <img src="__OCCUPANCY_SRC__" alt="Occupancy Comparison" style="max-width:100%;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);"/>
             </div>
         </div>
 
@@ -584,8 +483,13 @@ graph TB
             theme: 'default',
             flowchart: {
                 useMaxWidth: true,
-                htmlLabels: true
-            }
+                htmlLabels: true,
+                curve: 'basis',
+                nodeSpacing: 50,
+                rankSpacing: 60,
+                padding: 15
+            },
+            arrowMarkerAbsolute: false
         });
         
         console.log('Mermaid initialized');
@@ -639,64 +543,25 @@ graph TB
 </html>
 """
 
+
 def main():
-    print("🔄 Encoding images into HTML...")
-    os.makedirs('temp_visuals', exist_ok=True)
-    html_path = 'temp_visuals/vae_architecture_diagram.html'
-    
-    # Encode all images
-    heatmap_src = encode_image("experiments/exp012/visuals/generated_vs_real_heatmap.png")
-    impedance_src = encode_image("experiments/exp012/visuals/generated_vs_real_impedance_profile.png")
-    occ0_src = encode_image("experiments/exp012/visuals/data_sample_0/occupancy_map_visual.png")
-    occ1_src = encode_image("experiments/exp012/visuals/data_sample_1/occupancy_map_visual.png")
-    occ2_src = encode_image("experiments/exp012/visuals/data_sample_2/occupancy_map_visual.png")
-    occ3_src = encode_image("experiments/exp012/visuals/data_sample_3/occupancy_map_visual.png")
-    occ4_src = encode_image("experiments/exp012/visuals/data_sample_4/occupancy_map_visual.png")
-    
-    # Replace placeholders with actual base64 data
-    html_content = HTML_TEMPLATE.replace('__HEATMAP_SRC__', heatmap_src)
-    html_content = html_content.replace('__IMPEDANCE_SRC__', impedance_src)
-    html_content = html_content.replace('__OCC0_SRC__', occ0_src)
-    html_content = html_content.replace('__OCC1_SRC__', occ1_src)
-    html_content = html_content.replace('__OCC2_SRC__', occ2_src)
-    html_content = html_content.replace('__OCC3_SRC__', occ3_src)
-    html_content = html_content.replace('__OCC4_SRC__', occ4_src)
-    
+    output_dir = os.path.dirname(os.path.abspath(__file__))
+    html_path = os.path.join(output_dir, 'vae_architecture_diagram.html')
+
+    workspace = os.path.dirname(output_dir)
+    heatmap_src   = encode_image(os.path.join(workspace, 'temp_visuals', 'generated_vs_real_heatmap.png'))
+    impedance_src = encode_image(os.path.join(workspace, 'temp_visuals', 'generated_vs_real_impedance_profile.png'))
+    occupancy_src = encode_image(os.path.join(workspace, 'temp_visuals', 'occupancy_comparison.png'))
+
+    html = HTML_TEMPLATE.replace('__HEATMAP_SRC__',   heatmap_src)
+    html = html.replace('__IMPEDANCE_SRC__', impedance_src)
+    html = html.replace('__OCCUPANCY_SRC__', occupancy_src)
+
     with open(html_path, 'w', encoding='utf-8') as f:
-        f.write(html_content)
+        f.write(html)
+    size_mb = len(html.encode('utf-8')) / (1024 * 1024)
+    print(f"HTML created: {html_path}  ({size_mb:.1f} MB)")
 
-    print("✅ Architecture diagram HTML created with embedded images")
-    print(f"   File size: {len(html_content) / (1024*1024):.2f} MB")
-
-    port = 8899
-    print(f"🌐 Starting HTTP server on port {port}...")
-
-    # Run server from temp_visuals since images are embedded
-    server_process = subprocess.Popen(
-        ['python3', '-m', 'http.server', str(port)],
-        cwd='temp_visuals',
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-
-    time.sleep(1)
-
-    url = f'http://localhost:{port}/vae_architecture_diagram.html'
-    print(f"🚀 Opening diagram in browser: {url}")
-    print("📋 Press Ctrl+C to stop the server")
-
-    try:
-        webbrowser.open(url)
-    except Exception:
-        print(f"   Manually open: {url}")
-
-    try:
-        server_process.wait()
-    except KeyboardInterrupt:
-        print("\n🛑 Stopping server...")
-        server_process.terminate()
-        server_process.wait()
-        print("✅ Server stopped")
 
 if __name__ == '__main__':
     main()

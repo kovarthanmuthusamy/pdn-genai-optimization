@@ -141,12 +141,10 @@ class MultiInputVAE(nn.Module):
             nn.LeakyReLU(),
         )
 
-        # Impedance input: (B, 2, 231) → flatten to 462
-        # Channel 0: z-score log-impedance
-        # Channel 1: 1st derivative
+        # Impedance input: (B, 1, 231) → flatten to 231 (log-z-score PI spectrum)
         self.impedance_encoder = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(2 * 231, 512),
+            nn.Linear(231, 512),
             nn.LayerNorm(512),
             nn.LeakyReLU(0.1),
             nn.Dropout(Dr_value),
@@ -340,9 +338,7 @@ class MultiInputVAE(nn.Module):
 
         occ_recon = self.occupancy_decoder(dec_sh)          # (B, 52) logits
 
-        ch0 = self.impedance_decoder(dec_sh)                # (B, 231)
-        d1  = F.pad(torch.diff(ch0, n=1, dim=-1), (0, 1), mode='replicate')  # (B, 231)
-        imp_recon = torch.stack([ch0, d1], dim=1)           # (B, 2, 231)
+        imp_recon = self.impedance_decoder(dec_sh).unsqueeze(1)  # (B, 1, 231)
 
         return hm_recon, occ_recon, imp_recon
 
@@ -356,7 +352,7 @@ class MultiInputVAE(nn.Module):
             K: int or tensor broadcastable to (B,)
 
         Returns:
-            imp_recon: (B, 2, 231) (or (2,231) if input z was 1D)
+            imp_recon: (B, 1, 231) (or (1,231) if input z was 1D)
         """
         squeeze = False
         if z.dim() == 1:
@@ -383,9 +379,7 @@ class MultiInputVAE(nn.Module):
         z_shared = z[:, : self.shared_latent_dim]
         dec      = torch.cat([z_shared, k_emb], dim=1)
 
-        ch0 = self.impedance_decoder(dec)                  # (B, 231)
-        d1  = F.pad(torch.diff(ch0, n=1, dim=-1), (0, 1), mode='replicate')
-        imp_recon = torch.stack([ch0, d1], dim=1)           # (B, 2, 231)
+        imp_recon = self.impedance_decoder(dec).unsqueeze(1)  # (B, 1, 231)
         return imp_recon[0] if squeeze else imp_recon
 
 
@@ -409,25 +403,23 @@ class MultiInputVAE(nn.Module):
             if impedance is None:
                 raise ValueError("impedance must be provided when source='impedance'")
             imp_in = impedance
-            # Accept (B, 2, 231) or flattened variant.
             if imp_in.dim() == 1:
-                imp_in = imp_in.unsqueeze(0)
-            if imp_in.dim() == 2:
-                if imp_in.shape[1] == 2 * 231:
-                    imp_in = imp_in.reshape(-1, 2, 231)
+                imp_in = imp_in.unsqueeze(0).unsqueeze(1)
+            elif imp_in.dim() == 2:
+                if imp_in.shape[1] == 231:
+                    imp_in = imp_in.unsqueeze(1)
+                elif imp_in.shape[1] % 231 == 0:
+                    imp_in = imp_in.reshape(-1, 1, 231)
                 else:
                     raise ValueError(
-                        f"Expected impedance shape (B,2,231) or flattened; got {tuple(imp_in.shape)}"
+                        f"Expected impedance (B,231) or (B,1,231); got {tuple(imp_in.shape)}"
                     )
             elif imp_in.dim() == 3:
-                if imp_in.shape[1] != 2 or imp_in.shape[2] != 231:
-                    raise ValueError(
-                        f"Expected impedance shape (B,2,231); got {tuple(imp_in.shape)}"
-                    )
+                if imp_in.shape[2] != 231:
+                    raise ValueError(f"Expected last dim 231; got {tuple(imp_in.shape)}")
+                imp_in = imp_in[:, :1, :]
             else:
-                raise ValueError(
-                    f"Expected impedance shape (B,2,231) or flattened; got {tuple(imp_in.shape)}"
-                )
+                raise ValueError(f"Expected impedance (B,1,231); got {tuple(imp_in.shape)}")
 
             feat   = self.impedance_encoder(imp_in)
             feat_c = torch.cat([feat, k_emb], dim=1)

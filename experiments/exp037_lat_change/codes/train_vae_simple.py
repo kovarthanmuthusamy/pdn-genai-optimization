@@ -39,12 +39,13 @@ class Config:
     latent_dim:          int   = 32
     heatmap_private_dim: int   = 8
     cond_dim:            int   = 8
+    # Impedance: (1,231) log-z ch0 only. K conditions occ/imp; no PI_freq in this experiment.
 
     # ── Training ──────────────────────────────────────────────────────────────
-    num_epochs:   int   = 500
+    num_epochs:   int   = 400
     batch_size:   int   = 64
-    learning_rate: float = 3e-4
-    lr_patience:  int   = 10    # ReduceLROnPlateau patience (epochs)
+    learning_rate: float = 1e-4
+    lr_patience:  int   = 20    # ReduceLROnPlateau patience (epochs)
     lr_factor:    float = 0.5   # LR multiplier on plateau
     lr_min:       float = 5e-6  # LR floor
     train_split:  float = 0.9
@@ -58,7 +59,7 @@ class Config:
 
     # ── Reconstruction weights ────────────────────────────────────────────────
     heatmap_weight:         float = 3.0
-    occupancy_weight:       float = 2.0  # lowered from 3.0: occ train=0.08 vs val=0.24 was overfitting
+    occupancy_weight:       float = 4.0   # raised from 2→4 to match exp035  # lowered from 3.0: occ train=0.08 vs val=0.24 was overfitting
     impedance_weight:       float = 3.0
     impedance_deriv_weight: float = 1.0
     impedance_peak_weight:  float = 2.0
@@ -88,6 +89,7 @@ class Config:
     heatmap_bg_weight:       float = 0.5  # Huber on background pixels (was 0 = no bg gradient — root cause of mid-range output)
     heatmap_dynrange_weight: float = 2.0  # one-sided MSE: penalise when max(fg_recon) < max(fg_target)
     occupancy_focal_gamma:  float = 2.0
+    focal_gamma_warmup_epochs: int = 120  # linear warmup 0→gamma_final over N epochs
     occ_k_consistency_weight: float = 1.0  # MSE(sigmoid(logits).sum(), K) — pushes exactly K slots active
     # ── K-aware loss weighting ────────────────────────────────────────────────
     use_k_weighting:    bool  = True
@@ -98,13 +100,13 @@ class Config:
     hm_low_k_multiplier: float = 2.0
 
     # ── Latent regularisation ─────────────────────────────────────────────────
-    free_bits:            float = 0.10   # raised: prevents KL near-zero that pulls sigma below target
+    free_bits:            float = 0.05   # lowered to match exp034: lets KL relax more
     mu_hinge_threshold:   float = 4.0
     mu_hinge_weight:      float = 0.10
     mu_bias_weight:       float = 0.05
     per_expert_kl_weight: float = 0.02
     sigma_reg_weight:     float = 2.0   # 2.0: gentler push — was 4.0 which dominated recon gradients
-    sigma_reg_target:     float = 0.65  # target posterior sigma; 0.65 keeps posteriors
+    sigma_reg_target:     float = 0.45  # target posterior sigma; lowered to match exp034
                                         # inside the N(0,1) prior cloud for good inference sampling
 
     # ── KL annealing (two-phase linear) ───────────────────────────────────────
@@ -133,12 +135,17 @@ class Config:
     physics_critic_warmup_epochs: int   = 50
     physics_slope_anneal_epochs:  int   = 100
 
+    # ── Penalty curriculum ────────────────────────────────────────────────
+    # topk / concavity / Laplacian / contrast / bg / dynrange are noisy in
+    # early training. Ramp in linearly so base recon stabilises first.
+    penalty_warmup_epochs: int = 50   # epochs to ramp penalty terms 0→1 (≈10% of 500)
+
     # ── Paths & checkpointing ─────────────────────────────────────────────────
     data_dir:            str = "/home/ubuntu/gan/datasets/data_norm"
     experiment_dir:      str = "/home/ubuntu/gan/experiments/exp037_lat_change"
     checkpoint_interval: int = 50
     keep_last_n_checkpoints: int = 0   # keep N most recent epoch checkpoints (0 = keep all)
-    resume_checkpoint:   int | None = 300  # epoch number, or None to start fresh
+    resume_checkpoint:   int | None = None  # epoch number, or None to start fresh
 
     # ── Runtime overrides (set from normalization_stats.json) ─────────────────
     background_value: float = -3.6228
@@ -195,6 +202,16 @@ def compute_modality_dropout(epoch: int, cfg: Config) -> float:
     return cfg.modality_dropout_start + t * (cfg.modality_dropout - cfg.modality_dropout_start)
 
 
+def compute_focal_gamma(epoch: int, cfg: Config) -> float:
+    """Linear warmup of focal gamma: 0→cfg.occupancy_focal_gamma."""
+    if cfg.focal_gamma_warmup_epochs <= 0 or cfg.occupancy_focal_gamma <= 0:
+        return cfg.occupancy_focal_gamma
+    if epoch >= cfg.focal_gamma_warmup_epochs:
+        return cfg.occupancy_focal_gamma
+    t = epoch / max(cfg.focal_gamma_warmup_epochs, 1)
+    return t * cfg.occupancy_focal_gamma
+
+
 def _physics_stage_weights(epoch: int, cfg: Config) -> tuple[float, ...]:
     if epoch < cfg.physics_critic_warmup_epochs:
         # During critic warmup: only critic supervision losses active; analytical/consistency off
@@ -243,9 +260,27 @@ _LAP_KERNEL = torch.tensor(
        [1., -4., 1.],
        [0.,  1., 0.]]]], dtype=torch.float32
 )  # (1,1,3,3)
+_LAP_KERNEL_CACHE: dict = {}
 
 
-def heatmap_loss_per_sample(recon: torch.Tensor, target: torch.Tensor, cfg: Config) -> torch.Tensor:
+def _lap_kernel(device, dtype=torch.float32) -> torch.Tensor:
+    """Return _LAP_KERNEL on the requested device, caching after first use."""
+    key = (str(device), dtype)
+    if key not in _LAP_KERNEL_CACHE:
+        _LAP_KERNEL_CACHE[key] = _LAP_KERNEL.to(device=device, dtype=dtype)
+    return _LAP_KERNEL_CACHE[key]
+
+
+def _penalty_scale(epoch: int, cfg) -> float:
+    """Linear ramp 0→1 for noisy penalty terms (topk, concavity, Laplacian,
+    contrast, bg, dynrange). Base reconstruction + peak + grad stay always-on."""
+    if cfg.penalty_warmup_epochs <= 0:
+        return 1.0
+    return min(1.0, epoch / max(cfg.penalty_warmup_epochs, 1))
+
+
+def heatmap_loss_per_sample(recon: torch.Tensor, target: torch.Tensor, cfg: Config,
+                            penalty_scale: float = 1.0) -> torch.Tensor:
     """Foreground Huber + gradient + Laplacian sharpness + fg/bg contrast. Returns (B,).
 
     Laplacian term: MSE(lap(recon), lap(target)) on fg region.
@@ -277,7 +312,7 @@ def heatmap_loss_per_sample(recon: torch.Tensor, target: torch.Tensor, cfg: Conf
     # Apply Laplacian filter to both recon and target, then MSE on the fg
     # high-frequency residual.  Blurry recons have near-zero Laplacian response
     # while sharp targets have strong edges — this directly penalises blurring.
-    lap_k = _LAP_KERNEL.to(recon.device)
+    lap_k = _lap_kernel(recon.device, recon.dtype)
     lap_r = F.conv2d(recon,  lap_k, padding=1)   # (B,1,H,W)
     lap_t = F.conv2d(target, lap_k, padding=1)
     lap_err    = (lap_r - lap_t).pow(2)
@@ -304,18 +339,24 @@ def heatmap_loss_per_sample(recon: torch.Tensor, target: torch.Tensor, cfg: Conf
     dynrange_loss = F.relu(max_fg_targ - max_fg_recon).pow(2)                   # (B,)
 
     return (base
-            + cfg.heatmap_peak_weight     * peak
-            + cfg.heatmap_grad_weight     * (grad_x + grad_y)
-            + cfg.heatmap_lap_weight      * lap_loss
-            + cfg.heatmap_contrast_weight * contrast_loss
-            + cfg.heatmap_bg_weight       * bg_huber
-            + cfg.heatmap_dynrange_weight * dynrange_loss)
+            + cfg.heatmap_peak_weight * peak
+            + cfg.heatmap_grad_weight * (grad_x + grad_y)
+            + penalty_scale * (
+                cfg.heatmap_lap_weight      * lap_loss
+                + cfg.heatmap_contrast_weight * contrast_loss
+                + cfg.heatmap_bg_weight       * bg_huber
+                + cfg.heatmap_dynrange_weight * dynrange_loss))
+
+
+def _imp_ch0(x: torch.Tensor) -> torch.Tensor:
+    """Log-z impedance channel: (B, 1, 231) or (B, 231) → (B, 231)."""
+    return x[:, 0] if x.dim() == 3 else x
 
 
 def impedance_loss_per_sample(
     recon: torch.Tensor, target: torch.Tensor, cfg: Config,
     *, delta_raw: float = 1.0, delta_deriv: float = 1.0,
-    imp_log_std: float = 1.0,
+    imp_log_std: float = 1.0, penalty_scale: float = 1.0,
 ) -> torch.Tensor:
     """Multi-peak-aware impedance loss.  Returns (B,).
 
@@ -334,8 +375,8 @@ def impedance_loss_per_sample(
                        peaks by regression-to-mean.
     """
     s     = imp_log_std
-    ch0_r = recon[:, 0, :] * s          # (B, 231)
-    ch0_t = target[:, 0, :] * s
+    ch0_r = _imp_ch0(recon) * s         # (B, 231)
+    ch0_t = _imp_ch0(target) * s
 
     # ── Base Huber ─────────────────────────────────────────────────────────
     raw_err = F.huber_loss(ch0_r, ch0_t, delta=delta_raw, reduction='none')    # (B, 231)
@@ -376,9 +417,10 @@ def impedance_loss_per_sample(
     topk_loss    = (err_at_peaks * asym_weight).mean(dim=1)                    # (B,)
 
     return (raw
-            + cfg.impedance_concavity_weight * concavity_loss
-            + cfg.impedance_deriv_weight     * d1_loss
-            + cfg.impedance_topk_weight      * topk_loss)
+            + cfg.impedance_deriv_weight * d1_loss
+            + penalty_scale * (
+                cfg.impedance_concavity_weight * concavity_loss
+                + cfg.impedance_topk_weight    * topk_loss))
 
 
 def _weighted_mean(v: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
@@ -405,15 +447,16 @@ def vae_loss(
     recon_hm, recon_occ, recon_imp,
     target_hm, target_occ, target_imp,
     mu, logvar, beta: float, cfg: Config,
-    expert_stats=None, *,
+    expert_stats=None, *, epoch: int = 0,
     K: torch.Tensor | None = None,
     apply_k_weights: bool = True,
     physics: 'PhysicsLoss | None' = None,
     physics_weights: tuple[float, ...] | None = None,
     imp_log_std: float = 1.0,
+    penalty_scale: float = 1.0,
 ) -> dict:
     # Reconstruction
-    hm_ps  = heatmap_loss_per_sample(recon_hm, target_hm, cfg)
+    hm_ps  = heatmap_loss_per_sample(recon_hm, target_hm, cfg, penalty_scale)
     # Dynamic pos_weight: for each sample, up-weight positives by (52-K)/K so that
     # rare active slots (low K) get proportionally stronger gradient signal.
     # Clamped to [0.5, 10] to avoid extreme weights at K=1 or K=51.
@@ -421,9 +464,11 @@ def vae_loss(
     if K is not None:
         pw_per_sample = ((52.0 - K.float()) / K.float().clamp(min=1.0)).clamp(0.5, 10.0)  # (B,)
         occ_pos_w = pw_per_sample.unsqueeze(1).expand_as(recon_occ)  # (B, 52)
-    occ_ps = focal_bce_per_sample(recon_occ, target_occ, gamma=cfg.occupancy_focal_gamma,
+    focal_gamma = compute_focal_gamma(epoch, cfg)
+    occ_ps = focal_bce_per_sample(recon_occ, target_occ, gamma=focal_gamma,
                                    pos_weight=occ_pos_w)
-    imp_ps = impedance_loss_per_sample(recon_imp, target_imp, cfg, imp_log_std=imp_log_std)
+    imp_ps = impedance_loss_per_sample(recon_imp, target_imp, cfg, imp_log_std=imp_log_std,
+                                       penalty_scale=penalty_scale)
 
     if apply_k_weights and cfg.use_k_weighting and K is not None:
         w_hm, w_occ = _k_loss_weights(K, cfg)
@@ -557,8 +602,12 @@ def _prepare_batch(batch: dict, cfg: Config):
     imp = batch['impedance'].to(cfg.device, non_blocking=nb)
     K   = batch['K'].to(cfg.device, non_blocking=nb)
     if hm.dim()  == 3: hm  = hm.unsqueeze(1)
-    if imp.dim() == 1: imp = imp.unsqueeze(0)
-    imp = imp[:, :2, :]  # keep ch0 + d1 only (drop d2)
+    if imp.dim() == 1:
+        imp = imp.unsqueeze(0)
+    if imp.dim() == 2 and imp.shape[1] == 231:
+        imp = imp.unsqueeze(1)
+    elif imp.dim() == 3:
+        imp = imp[:, :1, :]   # ch0 log-z only (legacy multi-ch files)
     hm_enc = hm.masked_fill(hm < cfg.background_value + 0.5, 0.0)
     return hm, hm_enc, occ, imp, K
 
@@ -611,16 +660,18 @@ def _build_checkpoint(epoch, model, optimizer, train_loss, val, cfg,
     return d
 
 
-def _cross_modal_loss(model, hm_enc, occ, imp, hm, K, cfg: Config, imp_log_std: float = 1.0) -> torch.Tensor:
+def _cross_modal_loss(model, hm_enc, occ, imp, hm, K, cfg: Config,
+                      imp_log_std: float = 1.0, penalty_scale: float = 1.0) -> torch.Tensor:
     """Cross-modal reconstruction loss (heatmap + impedance sources), averaged."""
     w_hm_cm, w_occ_cm = _k_loss_weights(K, cfg) if cfg.use_k_weighting else (None, None)
     total = hm.new_zeros(())
     for source in ('heatmap', 'impedance'):
         z_cm            = model.encode_cross_modal(source, K, heatmap=hm_enc, impedance=imp)
         r_hm, r_occ, r_imp = model.decode(z_cm, K)
-        hm_ps   = heatmap_loss_per_sample(r_hm, hm, cfg)
+        hm_ps   = heatmap_loss_per_sample(r_hm, hm, cfg, penalty_scale)
         occ_ps  = focal_bce_per_sample(r_occ, occ, gamma=cfg.occupancy_focal_gamma)
-        imp_ps  = impedance_loss_per_sample(r_imp, imp, cfg, delta_raw=1.0, delta_deriv=2.0, imp_log_std=imp_log_std)
+        imp_ps  = impedance_loss_per_sample(r_imp, imp, cfg, delta_raw=1.0, delta_deriv=2.0,
+                                            imp_log_std=imp_log_std, penalty_scale=penalty_scale)
         loss_hm  = _weighted_mean(hm_ps,  w_hm_cm)  if w_hm_cm  is not None else hm_ps.mean()
         loss_occ = _weighted_mean(occ_ps, w_occ_cm) if w_occ_cm is not None else occ_ps.mean()
         total = total + cfg.heatmap_weight*loss_hm + cfg.occupancy_weight*loss_occ + cfg.impedance_weight*imp_ps.mean()
@@ -643,12 +694,10 @@ def train_epoch(model, loader, optimizer, cfg: Config, epoch: int,
     scalar, per_mod = _init_trackers()
     amp_dtype       = _autocast_dtype(cfg)
     if scaler is None:
-        scaler = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
+        scaler = torch.amp.GradScaler('cuda', enabled=(amp_dtype == torch.float16)) # pyright: ignore[reportPrivateImportUsage]
     autocast  = torch.autocast(device_type=_device_type(cfg.device),
                                 dtype=amp_dtype, enabled=(amp_dtype is not None))
     cm_freq   = max(1, cfg.cross_modal_update_freq)
-    ema_alpha = 0.05
-    ema: dict = {}
 
     for batch_idx, batch in enumerate(loader):
         hm, hm_enc, occ, imp, K = _prepare_batch(batch, cfg)
@@ -656,14 +705,16 @@ def train_epoch(model, loader, optimizer, cfg: Config, epoch: int,
         optimizer.zero_grad(set_to_none=True)
         with autocast:
             recon_hm, recon_occ, recon_imp, mu, logvar, expert_stats = model(hm_enc, occ, imp, K)
+            _ps = _penalty_scale(epoch, cfg)
             losses = vae_loss(recon_hm, recon_occ, recon_imp, hm, occ, imp,
                               mu, logvar, beta, cfg, expert_stats,
-                              K=K, apply_k_weights=True,
+                              epoch=epoch, K=K, apply_k_weights=True,
                               physics=physics, physics_weights=physics_weights,
-                              imp_log_std=imp_log_std)
+                              imp_log_std=imp_log_std, penalty_scale=_ps)
             if cfg.cross_modal_weight > 0 and batch_idx % cm_freq == 0:
                 losses['total_loss'] = losses['total_loss'] + cfg.cross_modal_weight * _cross_modal_loss(
-                    model, hm_enc, occ, imp, hm, K, cfg, imp_log_std=imp_log_std
+                    model, hm_enc, occ, imp, hm, K, cfg, imp_log_std=imp_log_std,
+                    penalty_scale=_ps
                 )
 
         with torch.no_grad():
@@ -684,9 +735,6 @@ def train_epoch(model, loader, optimizer, cfg: Config, epoch: int,
 
         for k in loss_acc:
             loss_acc[k] += losses[k].item()
-        for key, val in [('loss', losses['total_loss'].item()), ('recon', losses['recon_loss'].item()),
-                         ('kl', losses['kl_loss'].item()), ('ri', losses['physics_ri_loss'].item())]:
-            ema[key] = (1 - ema_alpha) * ema.get(key, val) + ema_alpha * val
 
     n      = len(loader)
     result: dict[str, Any] = {k: v/n for k, v in loss_acc.items()}
@@ -704,7 +752,7 @@ def train_epoch(model, loader, optimizer, cfg: Config, epoch: int,
     return result
 
 
-def validate(model, loader, cfg: Config, beta: float,
+def validate(model, loader, cfg: Config, beta: float, epoch: int,
              physics=None, physics_weights=None,
              imp_log_std=1.0) -> dict:
     model.eval()
@@ -730,7 +778,7 @@ def validate(model, loader, cfg: Config, beta: float,
                 recon_hm, recon_occ, recon_imp, mu, logvar, expert_stats = model(hm_enc, occ, imp, K)
                 losses = vae_loss(recon_hm, recon_occ, recon_imp, hm, occ, imp,
                                   mu, logvar, beta, cfg, expert_stats,
-                                  K=K, apply_k_weights=False,
+                                  epoch=epoch, K=K, apply_k_weights=False,
                                   physics=physics, physics_weights=physics_weights,
                                   imp_log_std=imp_log_std)
 
@@ -824,8 +872,8 @@ def train_vae():
     for p in (exp_path, ckpt_path, log_path, metrics_path, plots_path):
         p.mkdir(parents=True, exist_ok=True)
 
-    logger     = VAETrainingLogger(log_dir=str(log_path), checkpoint_dir=str(ckpt_path),
-                                   csv_path=str(metrics_path / "loss.csv"))
+    logger = VAETrainingLogger(log_dir=str(log_path), checkpoint_dir=str(ckpt_path),
+                               csv_path=str(metrics_path / "loss.csv"))
 
     logger.log_start(exp_path.name, {
         'Device':  cfg.device,
@@ -918,7 +966,7 @@ def train_vae():
         except Exception: pass
 
     amp_dtype   = _autocast_dtype(cfg)
-    grad_scaler = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
+    grad_scaler = torch.amp.GradScaler('cuda', enabled=(amp_dtype == torch.float16)) # type: ignore
     t0          = time.time()
 
     print(f"\nTraining epochs {start_epoch+1}–{cfg.num_epochs}...\n")
@@ -932,7 +980,7 @@ def train_vae():
                           physics=physics, physics_weights=pw,
                           imp_log_std=imp_log_std,
                           scaler=grad_scaler)
-        val = validate(model, val_loader, cfg, beta,
+        val = validate(model, val_loader, cfg, beta, epoch,
                        physics=physics, physics_weights=pw,
                        imp_log_std=imp_log_std)
 
@@ -1011,8 +1059,8 @@ def train_vae():
 
     logger.plot(save_path=str(plots_path / "convergence_final.png"))
     logger.plot_loss_components(save_path=str(plots_path / "loss_components_final.png"))
-    logger.plot_overfitting(save_path=str(plots_path / "overfitting_final.png"))
-    logger.plot_physics(save_path=str(plots_path / "physics_losses_final.png"))
+    logger.plot_overfitting(save_path=str(plots_path / "overfitting_final.png")) # type: ignore
+    logger.plot_physics(save_path=str(plots_path / "physics_losses_final.png")) # type: ignore
     logger.print_statistics()
 
     cfg_dict = asdict(cfg)

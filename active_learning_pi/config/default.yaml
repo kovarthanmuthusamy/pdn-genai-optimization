@@ -1,0 +1,60 @@
+# Active learning loop for PI-distribution heatmaps (see docs/active-learning-pi-heatmaps.md)
+
+gan_root: null  # null = auto-detect parent of active_learning_pi/
+
+# Model / inference (exp038 multifreq VAE by default)
+experiment_dir: experiments/exp038_true_multi
+checkpoint_path: experiments/exp038_true_multi/checkpoints/checkpoint_epoch_900.pt
+data_dir: datasets/data_multifreq_norm
+inference_mode: anchor_blend  # layout | anchor_blend | marginal
+pi_ref_mhz: 200.0
+shared_temp: 1.5
+calibrate_fg_max: true
+fixed_k: 5
+
+# Candidate pool (decap combos × MHz)
+mhz_grid: [80, 100, 130, 200, 250]
+mhz_priority: [80, 250]  # frequency-gap prior boost
+num_candidates: 48
+candidate_seed: 42
+
+# Acquisition
+simulate_batch_size: 8
+min_uncertainty_percentile: 50
+min_uncertainty: null
+mc_passes: 6
+score_metric: p99_var  # p99_var | p95_var | topk_mean_var
+
+# PEB / simulation
+powerbus: Power_GND
+heatmap_only_peb: true
+peb_components: "IC1_Port1,IC2_Port2"
+
+# ECADSTAR (Windows paths — edit for your machine)
+ecadstar:
+  erf_path: "C:/Users/muthusamy/Desktop/Pcb/h-design.emc/h-design.erf"
+  emc_output_dir: "C:/Users/muthusamy/Desktop/Pcb/h-design.emc"
+  skip_open_erf: false
+  ahk_exe: null  # null = %LOCALAPPDATA%/Programs/AutoHotkey/v2/AutoHotkey64.exe
+  tools_click_x: 89
+  tools_click_y: 7
+
+# Pipeline I/O (under active_learning_pi/runs/)
+run_name: al_run_001
+
+# Ingest after simulation
+mask_board: configs/binary_mask.npy
+heatmap_grid_size: 64
+normalization_stats_json: datasets/data_multifreq_norm/normalization_stats.json
+raw_dataset_subdir: raw_dataset
+normalized_dataset_subdir: dataset_norm
+normalize_overwrite: true
+
+# Training hook (optional — command template)
+finetune:
+  enabled: false
+  experiment_dir: experiments/exp039_improved_heatmap
+  config_path: experiments/exp039_improved_heatmap/config.yaml
+  extra_args: []
+
+eval_off_anchor_mhz: [80, 250]

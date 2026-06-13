@@ -112,3 +112,5 @@ def visualize_heatmap(heatmap_file, output_path=None, show=True):
         plt.show()
     else:
         plt.close()
+
+

@@ -130,7 +130,7 @@ class VAEInference:
             print("WARNING: No latent stats — sampling from N(0,1). Run scripts/compute_latent_stats.py first.")
 
     def _denorm_impedance(self, imp_norm):
-        """Denormalize impedance output → log-impedance (B,231). Uses ch0 from (B,2,231)."""
+        """Denormalize impedance output → log-impedance (B,231). Uses ch0 from (B,1,231)."""
         z_raw = imp_norm[:, 0] if imp_norm.dim() == 3 else imp_norm
         return z_raw * self.imp_log_std + self.imp_log_mean
 

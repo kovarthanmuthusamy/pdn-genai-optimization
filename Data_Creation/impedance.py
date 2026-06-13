@@ -35,16 +35,18 @@ def read_impedance_file(filepath):
         return None
 
 def visualize_impedance(impedance_file, output_path=None, show=True):
-    """Visualize impedance profile from saved numpy file.
+    """Visualize impedance profile from a numpy array or a .npy file.
     
     Args:
-        impedance_file: Path to impedance .npy file (shape: 231, 1)
+        impedance_file: numpy array of impedance values, or path to a .npy file
         output_path: Path to save visualization (optional)
         show: Whether to display plot
     """
     try:
-        impedance = np.load(impedance_file)
-        impedance = impedance.flatten()
+        if isinstance(impedance_file, np.ndarray):
+            impedance = impedance_file.flatten()
+        else:
+            impedance = np.load(impedance_file).flatten()
         
         # Load frequency and target impedance from configs
         freq_file = Path(__file__).parent.parent / "configs" / "Frequency_data_hz.npy"
@@ -89,3 +91,12 @@ def visualize_impedance(impedance_file, output_path=None, show=True):
     except Exception as e:
         print(f"Error visualizing impedance: {e}")
     return None
+
+if __name__ == "__main__":
+
+    imp = read_impedance_file("temp_visuals/49107-PIPinZ_IC1_Port1.csv")
+    if imp is not None:
+        print(f"Successfully read impedance file. Shape: {imp.shape}")
+        visualize_impedance(imp, output_path="configs/bare_Real_Imp.png")
+    else:
+        print("Failed to read impedance file.")

@@ -2,10 +2,11 @@
 import numpy as np
 from pathlib import Path
 from scipy import stats
+from scipy.spatial.distance import pdist, squareform
 from tqdm import tqdm
 
 
-def calculate_statistics(data_root="datasets/data_up5"):
+def calculate_statistics(data_root="datasets/data_norm"):
     """Calculate comprehensive statistics for all modalities in the dataset.
     
     Args:
@@ -49,18 +50,21 @@ def calculate_statistics(data_root="datasets/data_up5"):
     
     print("Loading all samples...")
     for idx in tqdm(sample_indices):
-        # Load heatmap (2 channels: impedance + mask)
+        # Load heatmap — supports (1,64,64) single-ch or (2,64,64) dual-ch
         heatmap_file = heatmap_dir / f"sample_{idx}.npy"
         if heatmap_file.exists():
             heatmap = np.load(heatmap_file)
-            if heatmap.shape[0] == 2:
+            if heatmap.shape[0] >= 1:
                 heatmap_impedance_ch.append(heatmap[0])
+            if heatmap.shape[0] == 2:
                 heatmap_mask_ch.append(heatmap[1])
         
-        # Load impedance vector
+        # Load impedance (2-channel: ch0=z-score, ch1=derivative)
         impedance_file = impedance_dir / f"sample_{idx}.npy"
         if impedance_file.exists():
-            impedance = np.load(impedance_file).flatten()
+            impedance = np.load(impedance_file)  # (2, 231)
+            if impedance.ndim == 1:
+                impedance = impedance[np.newaxis, :]  # handle legacy 1-ch files
             impedance_vectors.append(impedance)
         
         # Load occupancy grid
@@ -107,21 +111,28 @@ def calculate_statistics(data_root="datasets/data_up5"):
         print("No heatmap mask data found!")
     
     print("\n" + "="*80)
-    print("IMPEDANCE VECTOR STATISTICS")
+    print("IMPEDANCE STATISTICS  (2-channel: ch0=z-score, ch1=derivative)")
     print("="*80)
     if impedance_vectors:
-        impedance_data = np.array(impedance_vectors).flatten()
+        imp_arr = np.array(impedance_vectors)          # (N, 2, 231)
+        n_ch    = imp_arr.shape[1]
         print(f"Total samples: {len(impedance_vectors)}")
-        print(f"Vector length per sample: {impedance_vectors[0].shape[0]}")
-        print(f"Total values: {len(impedance_data):,}")
-        print(f"\nMean:     {impedance_data.mean():.6f}")
-        print(f"Median:   {np.median(impedance_data):.6f}")
-        print(f"Variance: {impedance_data.var():.6f}")
-        print(f"Std Dev:  {impedance_data.std():.6f}")
-        print(f"Min:      {impedance_data.min():.6f}")
-        print(f"Max:      {impedance_data.max():.6f}")
-        print(f"Skewness: {stats.skew(impedance_data):.6f}")
-        print(f"Kurtosis: {stats.kurtosis(impedance_data):.6f}")
+        print(f"Shape per sample: {imp_arr.shape[1:]}")
+        for ch, label in enumerate(['ch0 (z-score)', 'ch1 (derivative)']):
+            if ch >= n_ch:
+                break
+            d = imp_arr[:, ch, :].flatten()
+            print(f"\n--- {label} ---")
+            print(f"  Mean:     {d.mean():.6f}")
+            print(f"  Median:   {np.median(d):.6f}")
+            print(f"  Variance: {d.var():.6f}")
+            print(f"  Std Dev:  {d.std():.6f}")
+            print(f"  Min:      {d.min():.6f}")
+            print(f"  Max:      {d.max():.6f}")
+            print(f"  Skewness: {stats.skew(d):.6f}")
+            print(f"  Kurtosis: {stats.kurtosis(d):.6f}")
+        # flat view used by downstream variance/diversity sections
+        impedance_data = imp_arr.flatten()
     else:
         print("No impedance data found!")
     
@@ -269,19 +280,20 @@ def calculate_statistics(data_root="datasets/data_up5"):
     # 2. IMPEDANCE VARIATION
     if impedance_vectors:
         print("\n--- IMPEDANCE VARIATION ---")
-        impedance_samples = np.array(impedance_vectors)  # Shape: (n_samples, 231)
+        imp_arr          = np.array(impedance_vectors)           # (N, 2, 231)
+        impedance_samples = imp_arr.reshape(len(imp_arr), -1)    # (N, 462) — both channels flat
         
         # Inter-sample variance (variance across samples for each frequency)
         inter_sample_var = np.var(impedance_samples, axis=0).mean()
         
-        # Intra-sample variance (variance within each impedance curve)
+        # Intra-sample variance (variance within each flattened sample)
         intra_sample_vars = [np.var(sample) for sample in impedance_samples]
         avg_intra_var = np.mean(intra_sample_vars)
-        
-        # Sample statistics
-        sample_means = impedance_samples.mean(axis=1)
-        sample_stds = impedance_samples.std(axis=1)
-        sample_maxs = impedance_samples.max(axis=1)
+
+        # Per-channel sample-level statistics (ch0 only for interpretability)
+        sample_means = imp_arr[:, 0, :].mean(axis=1)   # mean of ch0 per sample
+        sample_stds  = imp_arr[:, 0, :].std(axis=1)
+        sample_maxs  = imp_arr[:, 0, :].max(axis=1)
         
         print(f"  Inter-sample variance: {inter_sample_var:.6f}")
         print(f"    → How much impedance varies across samples at each frequency")
@@ -398,7 +410,6 @@ def calculate_statistics(data_root="datasets/data_up5"):
         print(f"  Analyzing {n_samples_to_compare} randomly sampled heatmaps...")
         
         # Calculate pairwise Euclidean distances
-        from scipy.spatial.distance import pdist, squareform
         distances = pdist(heatmap_subset, metric='euclidean')
         
         # Statistics on pairwise distances
@@ -455,8 +466,9 @@ def calculate_statistics(data_root="datasets/data_up5"):
     # IMPEDANCE Inter-sample Diversity
     if impedance_vectors:
         print("\n--- IMPEDANCE INTER-SAMPLE DIVERSITY ---")
-        impedance_samples = np.array(impedance_vectors)
-        
+        imp_arr          = np.array(impedance_vectors)           # (N, 2, 231)
+        impedance_samples = imp_arr.reshape(len(imp_arr), -1)    # (N, 462)
+
         # Sample subset
         n_samples_to_compare = min(500, len(impedance_samples))
         indices = np.random.choice(len(impedance_samples), n_samples_to_compare, replace=False)
@@ -478,7 +490,7 @@ def calculate_statistics(data_root="datasets/data_up5"):
         print(f"    Min:  {min_distance:.4f} (most similar pair)")
         print(f"    Max:  {max_distance:.4f} (most different pair)")
         
-        # Distance to mean
+        # Distance to mean (both channels)
         mean_impedance = impedance_samples.mean(axis=0)
         distances_to_mean = np.sqrt(np.sum((impedance_samples - mean_impedance)**2, axis=1))
         
@@ -732,11 +744,28 @@ def quick_stats_normalized(data_root="datasets/data_norm"):
 
 if __name__ == "__main__":
     import sys
-    
-    # Check command line argument
+    import io
+    from datetime import datetime
+
+    # Capture all stdout output
+    buffer = io.StringIO()
+    tee = type("Tee", (), {
+        "write": lambda self, msg: (sys.__stdout__.write(msg), buffer.write(msg)), # type: ignore
+        "flush": lambda self: (sys.__stdout__.flush(), buffer.flush()), # type: ignore
+    })()
+    sys.stdout = tee  # type: ignore
+
     if len(sys.argv) > 1 and sys.argv[1] == "norm":
-        # Quick stats for normalized data
         quick_stats_normalized(data_root="datasets/data_norm")
+        label = "norm"
     else:
-        # Full statistics for raw data (default)
-        calculate_statistics(data_root="datasets/data")
+        calculate_statistics(data_root="datasets/data_norm")
+        label = "raw"
+
+    sys.stdout = sys.__stdout__
+
+    # Save snapshot to markdown
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = Path(__file__).parent / "data_check_stats.md"
+    out_path.write_text(f"# Dataset Stats Snapshot — {label} — {timestamp}\n\n```\n{buffer.getvalue()}```\n")
+    print(f"\nSnapshot saved → {out_path}")

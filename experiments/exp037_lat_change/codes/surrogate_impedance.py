@@ -1,6 +1,6 @@
 """Surrogate impedance model and training script — exp037.
 
-Direct mapping:  occ (52,) + PI_freq → impedance (2, 231)
+Direct mapping:  occ (52,) → impedance (1, 231) log-z spectrum
 No VAE bottleneck → can learn exact resonance structure.
 
 The surrogate is used during latent optimization:
@@ -49,7 +49,7 @@ class SurrConfig:
     occ_dim:      int   = 52
     freq_emb_dim: int   = 16     # PI_freq embedding dimension
     hidden_dims:  tuple = (256, 512, 512, 512, 256)
-    out_channels: int   = 2      # ch0 (base) + d1 (derivative) — matches VAE output
+    out_channels: int   = 1      # ch0 log-z — matches VAE output
     freq_pts:     int   = 231    # number of frequency points
     dropout:      float = 0.1
 
@@ -63,8 +63,7 @@ class SurrConfig:
     weight_decay:  float = 1e-4
 
     # ── Loss weights ──────────────────────────────────────────────────────────
-    ch0_weight:      float = 1.0    # MSE on base impedance channel
-    d1_weight:       float = 1.0    # MSE on derivative channel
+    ch0_weight:      float = 1.0    # MSE on log-z impedance channel
     topk_k:          int   = 15     # supervise top-K amplitude frequencies
     topk_weight:     float = 3.0    # extra MSE at peak frequencies
     under_penalty:   float = 2.0    # asymmetric: penalise underestimate more
@@ -82,7 +81,7 @@ class SurrConfig:
 # =============================================================================
 
 class OccImpDataset(Dataset):
-    """Load (occ, PI_freq) → impedance pairs from data_multifreq_norm."""
+    """Load occupancy → impedance (ch0) pairs. PI_freq in files is ignored (heatmap-only cond)."""
 
     def __init__(self, data_dir: str, indices: list[int]):
         self.data_dir = Path(data_dir)
@@ -109,8 +108,7 @@ class OccImpDataset(Dataset):
         return len(self.indices)
 
     def __getitem__(self, idx: int):
-        # Return only ch0 + d1 (first 2 channels) to match VAE output convention
-        return self.occ[idx], self.freq[idx], self.imp[idx, :2]
+        return self.occ[idx], self.imp[idx, :1]
 
 
 def _get_indices(data_dir: str) -> list[int]:
@@ -123,11 +121,7 @@ def _get_indices(data_dir: str) -> list[int]:
 # =============================================================================
 
 class SurrogateImpedanceNet(nn.Module):
-    """Direct occ + PI_freq → impedance (2, 231) mapping.
-
-    No VAE bottleneck — can learn exact resonance structure.
-    Used in latent optimization to replace/augment the VAE's impedance decoder.
-    """
+    """Direct occ → impedance (1, 231). K/decap layout only — not PI_freq."""
 
     def __init__(self, cfg: SurrConfig | None = None):
         super().__init__()
@@ -137,23 +131,13 @@ class SurrogateImpedanceNet(nn.Module):
         self.out_channels = cfg.out_channels
         self.freq_pts     = cfg.freq_pts
 
-        # PI_freq embedding
-        self.freq_proj = nn.Sequential(
-            nn.Linear(1, cfg.freq_emb_dim),
-            nn.SiLU(),
-            nn.Linear(cfg.freq_emb_dim, cfg.freq_emb_dim),
-            nn.SiLU(),
-        )
-
-        # Occupancy feature extractor (lightweight MLP before concat)
         self.occ_proj = nn.Sequential(
             nn.Linear(cfg.occ_dim, 128),
             nn.LayerNorm(128),
             nn.LeakyReLU(),
         )
 
-        # Main MLP: (128 + freq_emb_dim) → impedance
-        in_dim = 128 + cfg.freq_emb_dim
+        in_dim = 128
         layers: list[nn.Module] = []
         prev = in_dim
         for h in cfg.hidden_dims:
@@ -168,20 +152,11 @@ class SurrogateImpedanceNet(nn.Module):
         layers.append(nn.Linear(prev, cfg.out_channels * cfg.freq_pts))
         self.net = nn.Sequential(*layers)
 
-    def forward(self, occ: torch.Tensor, pi_freq_norm: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            occ:           (B, 52)  — binary or soft occupancy in [0,1]
-            pi_freq_norm:  (B,)     — PI_freq normalised to [0,1]
-
-        Returns:
-            (B, 2, 231) — ch0 (base log-imp) + d1 (derivative) channels
-        """
-        f_emb  = self.freq_proj(pi_freq_norm.view(-1, 1))   # (B, freq_emb_dim)
-        o_feat = self.occ_proj(occ)                          # (B, 128)
-        x      = torch.cat([o_feat, f_emb], dim=1)          # (B, 128+freq_emb_dim)
-        out    = self.net(x)                                 # (B, out_channels * freq_pts)
-        return out.view(-1, self.out_channels, self.freq_pts)  # (B, 2, 231)
+    def forward(self, occ: torch.Tensor, pi_freq_norm: torch.Tensor | None = None) -> torch.Tensor:
+        """pi_freq_norm is ignored (kept for backward-compatible call sites)."""
+        o_feat = self.occ_proj(occ)
+        out    = self.net(o_feat)
+        return out.view(-1, self.out_channels, self.freq_pts)
 
 
 # =============================================================================
@@ -189,10 +164,8 @@ class SurrogateImpedanceNet(nn.Module):
 # =============================================================================
 
 def surrogate_loss(pred: torch.Tensor, target: torch.Tensor, cfg: SurrConfig) -> torch.Tensor:
-    """Per-batch loss for (B, 2, 231) predictions."""
-    # Channel-wise MSE
+    """Per-batch loss for (B, 1, 231) predictions."""
     loss = cfg.ch0_weight * F.mse_loss(pred[:, 0], target[:, 0])
-    loss = loss + cfg.d1_weight * F.mse_loss(pred[:, 1], target[:, 1])
 
     # Top-K frequency supervision on ch0
     if cfg.topk_weight > 0 and cfg.topk_k > 0:
@@ -273,10 +246,10 @@ def train_surrogate(cfg: SurrConfig | None = None) -> None:
         # Train
         model.train()
         train_loss = 0.0
-        for occ, freq, imp in train_loader:
-            occ, freq, imp = occ.to(device), freq.to(device), imp.to(device)
+        for occ, imp in train_loader:
+            occ, imp = occ.to(device), imp.to(device)
             optimizer.zero_grad()
-            pred = model(occ, freq)
+            pred = model(occ)
             loss = surrogate_loss(pred, imp, cfg)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -288,9 +261,9 @@ def train_surrogate(cfg: SurrConfig | None = None) -> None:
         model.eval()
         val_loss = 0.0
         with torch.no_grad():
-            for occ, freq, imp in val_loader:
-                occ, freq, imp = occ.to(device), freq.to(device), imp.to(device)
-                pred = model(occ, freq)
+            for occ, imp in val_loader:
+                occ, imp = occ.to(device), imp.to(device)
+                pred = model(occ)
                 val_loss += surrogate_loss(pred, imp, cfg).item()
         val_loss /= len(val_loader)
         scheduler.step(val_loss)

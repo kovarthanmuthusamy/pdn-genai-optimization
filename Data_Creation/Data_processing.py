@@ -55,22 +55,9 @@ def _read_csv(filepath, cols=None, **kwargs):
         print(f"Error reading {filepath}: {e}")
         return None
 
-def iter_dataset_samples(data_root=None, verbose=True):
+def iter_dataset_samples(data_root=None, verbose=True, *, resolve_paths: bool = True):
     """
     Iterates through all dataset samples from the multi-folder dataset structure.
-
-    Expected structure:
-        Dataset/
-          1_true/
-            Heatmap/   PI-1/  PI-2/  ...   (*.map files inside)
-            Imp/       PI-1/  PI-2/  ...   (*IC1*.csv files inside)
-            decap                          (CSV file: each row = decap vector for one PI)
-          2_true/  ...   5_true/  ...
-
-    Matching logic per sub-folder:
-      - PI folders are matched between Heatmap/ and Imp/ by shared PI number.
-      - Decap rows are matched to sorted PI numbers by position (row 0 → lowest PI number).
-      - Samples are yielded with a globally incremented sample_id.
     """
     root = Path(data_root) if data_root else DEFAULT_DATA_ROOT
     if not root or not root.exists():
@@ -78,68 +65,197 @@ def iter_dataset_samples(data_root=None, verbose=True):
             print(f"Error: Dataset root not found: {root}")
         return
 
-    # Helper: extract integer from a "PI-N" path component
+    import os
+    import re
+
+    # Helper: extract integer PI number from any path component.
+    # Supports directory names like "PI-12" as well as filenames like "PI-12.map" or "IC1_PI-12.csv".
+    _pi_re = re.compile(r"PI[-_]?([0-9]+)", flags=re.IGNORECASE)
+
     def extract_pi_number(path):
-        for part in Path(path).parts:
-            if part.upper().startswith('PI-'):
+        p = Path(path)
+        for part in p.parts:
+            m = _pi_re.search(part)
+            if m:
                 try:
-                    return int(part.split('-')[1])
-                except (ValueError, IndexError):
-                    pass
+                    return int(m.group(1))
+                except ValueError:
+                    return None
         return None
 
-    # Find all N_true sub-folders, sorted numerically
+    def _sort_key_true_folder(p: Path):
+        m = re.match(r"^(\d+)", p.name)
+        return (int(m.group(1)) if m else 10**9, p.name.lower())
+
+    def _find_subdir(base: Path, candidates: list[str]) -> Path | None:
+        # Direct matches first
+        for name in candidates:
+            d = base / name
+            if d.is_dir():
+                return d
+        # Case-insensitive fallback (Windows/DrvFS can be confusing from Linux)
+        name_map = {c.name.lower(): c for c in base.iterdir() if c.is_dir()}
+        for name in candidates:
+            d = name_map.get(name.lower())
+            if d is not None:
+                return d
+        return None
+
+    def _list_pi_dirs(base_dir: Path) -> dict[int, Path]:
+        """List immediate PI-* subdirectories, keyed by PI number.
+
+        Uses os.scandir() for speed on DrvFS (/mnt/c).
+        """
+        pi_map: dict[int, Path] = {}
+        try:
+            with os.scandir(base_dir) as it:
+                for entry in it:
+                    if not entry.is_dir():
+                        continue
+                    m = _pi_re.search(entry.name)
+                    if not m:
+                        continue
+                    try:
+                        pi_num = int(m.group(1))
+                    except ValueError:
+                        continue
+                    pi_map[pi_num] = Path(entry.path)
+        except FileNotFoundError:
+            return {}
+        return pi_map
+
+    # Find all N_true sub-folders, sorted numerically (case-insensitive).
     true_folders = sorted(
-        [d for d in root.iterdir() if d.is_dir() and d.name.endswith('_true')],
-        key=lambda d: int(d.name.split('_')[0])
+        [d for d in root.iterdir() if d.is_dir() and d.name.lower().endswith('_true')],
+        key=_sort_key_true_folder,
     )
 
+    # If the provided root is already a single dataset folder (e.g., Raw/ or Raw/1_true/),
+    # fall back to treating it as one "folder".
     if not true_folders:
-        print(f"Error: No '*_true' sub-folders found in {root}")
-        return
-
-    if verbose:
+        true_folders = [root]
+        if verbose:
+            print(f"  No '*_true' sub-folders found; treating root as a single dataset folder: {root}")
+    elif verbose:
         print(f"  Found {len(true_folders)} sub-folders: {[d.name for d in true_folders]}")
 
     global_idx = 0  # globally unique sequential index across all sub-folders
 
     for folder in true_folders:
-        heatmap_dir = folder / "heatmaps"
-        imp_dir     = folder / "imp"
+        # Support both older and Windows-raw naming conventions.
+        # (The user referenced: C:\\Users\\muthusamy\\Desktop\\Raw)
+        heatmap_dir = _find_subdir(folder, ["heatmaps", "heatmap", "Heatmaps", "Heatmap", "HEATMAP"]) 
+        imp_dir = _find_subdir(folder, ["imp", "Imp", "impedance", "Impedance", "IMP"]) 
 
-        # Locate the decap CSV file directly inside the numbered folder
-        decap_candidates = [
-            f for f in folder.iterdir()
-            if f.is_file() and f.suffix.lower() == '.csv' and 'decap' in f.name.lower()
+        # Locate the decap CSV.
+        # Raw layouts sometimes store it inside a 'decap/' subfolder; keep the old behavior too.
+        decap_csv = None
+        decap_search_dirs = [
+            folder,
+            folder / "decap",
+            folder / "Decap",
+            folder / "DECAP",
+            folder / "decap_combinations",
+            folder / "Decap_combinations",
+            folder / "DECAP_COMBINATIONS",
         ]
-        if not decap_candidates:
+        for d in decap_search_dirs:
+            if not d.exists() or not d.is_dir():
+                continue
+            candidates = [
+                f
+                for f in d.iterdir()
+                if f.is_file()
+                and f.suffix.lower() == ".csv"
+                and "ic1" not in f.name.lower()
+                and "imp" not in f.name.lower()
+                and "impedance" not in f.name.lower()
+            ]
+            if candidates:
+                # Prefer obvious names first if multiple CSVs exist.
+                candidates = sorted(
+                    candidates,
+                    key=lambda p: (
+                        0 if "decap" in p.name.lower() else 1,
+                        0 if "comb" in p.name.lower() else 1,
+                        p.name.lower(),
+                    ),
+                )
+                decap_csv = candidates[0]
+                break
+
+        if decap_csv is None:
             print(f"  Warning: No decap file found in {folder.name}, skipping.")
             continue
-        decap_csv = decap_candidates[0]
 
         # Validate sub-directories
-        if not heatmap_dir.exists():
+        if heatmap_dir is None or not heatmap_dir.exists():
             print(f"  Warning: heatmaps/ not found in {folder.name}, skipping.")
             continue
-        if not imp_dir.exists():
+        if imp_dir is None or not imp_dir.exists():
             print(f"  Warning: imp/ not found in {folder.name}, skipping.")
             continue
 
-        # Collect heatmap files keyed by PI number
-        heatmap_dict = {}
-        for f in heatmap_dir.rglob('*'):
-            if f.is_file() and f.suffix.lower() == '.map':
-                pi_num = extract_pi_number(f)
-                if pi_num is not None:
-                    heatmap_dict[pi_num] = f
+        # Build PI-number keyed maps for heatmap and impedance so we can align them.
+        # IMPORTANT: Raw trees often look like heatmap/PI-1234/*.map and imp/PI-1234/IC1*.csv.
+        # Doing a full rglob() over /mnt/c (DrvFS) can be extremely slow, so we prefer:
+        #   - list immediate PI-* subfolders
+        #   - do a shallow glob within each PI folder
+        # and only fall back to rglob if needed.
 
-        # Collect impedance files keyed by PI number (IC1 files only)
-        impedance_dict = {}
-        for f in imp_dir.rglob('*.csv'):
-            if f.is_file() and 'IC1' in f.name:
-                pi_num = extract_pi_number(f)
-                if pi_num is not None:
-                    impedance_dict[pi_num] = f
+        heatmap_dict: dict[int, Path] = {}
+        if heatmap_dir.exists():
+            pi_dirs = _list_pi_dirs(heatmap_dir)
+            if pi_dirs:
+                for pi_num, pi_dir in pi_dirs.items():
+                    if not resolve_paths:
+                        heatmap_dict[pi_num] = pi_dir
+                        continue
+                    map_candidates = sorted(
+                        (p for p in pi_dir.glob("*.map") if p.is_file()),
+                        key=lambda x: x.name.lower(),
+                    )
+                    if not map_candidates:
+                        map_candidates = sorted(pi_dir.rglob("*.map"), key=lambda x: str(x).lower())
+                    if map_candidates:
+                        heatmap_dict[pi_num] = map_candidates[0]
+            else:
+                for p in heatmap_dir.rglob("*.map"):
+                    if not p.is_file():
+                        continue
+                    pi_num = extract_pi_number(p)
+                    if pi_num is None:
+                        continue
+                    heatmap_dict[pi_num] = p if resolve_paths else p.parent
+
+        impedance_dict: dict[int, Path] = {}
+        if imp_dir.exists():
+            pi_dirs = _list_pi_dirs(imp_dir)
+            if pi_dirs:
+                for pi_num, pi_dir in pi_dirs.items():
+                    if not resolve_paths:
+                        impedance_dict[pi_num] = pi_dir
+                        continue
+                    csv_candidates = [p for p in pi_dir.glob("*.csv") if p.is_file()]
+                    ic1_candidates = [p for p in csv_candidates if "ic1" in p.name.lower()]
+                    if not ic1_candidates:
+                        ic1_candidates = [
+                            p
+                            for p in pi_dir.rglob("*.csv")
+                            if p.is_file() and "ic1" in p.name.lower()
+                        ]
+                    if ic1_candidates:
+                        impedance_dict[pi_num] = sorted(ic1_candidates, key=lambda x: x.name.lower())[0]
+            else:
+                for p in imp_dir.rglob("*.csv"):
+                    if not p.is_file():
+                        continue
+                    if "ic1" not in p.name.lower():
+                        continue
+                    pi_num = extract_pi_number(p)
+                    if pi_num is None:
+                        continue
+                    impedance_dict[pi_num] = p if resolve_paths else p.parent
 
         # PI numbers present in both Heatmap and Imp
         common_pi_numbers = sorted(set(heatmap_dict.keys()) & set(impedance_dict.keys()))

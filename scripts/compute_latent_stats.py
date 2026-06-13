@@ -9,14 +9,20 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from source.model.vae_multi_input_simple import MultiInputVAE
+from experiments.exp021.codes.vae_multi_input_simple import MultiInputVAE
 from source.others.dataloader import create_data_loaders
 
 
 def compute_latent_stats(checkpoint_path, data_root='datasets/data_norm', device='cuda'):
     # Load model
     ckpt = torch.load(checkpoint_path, map_location=device)
-    model = MultiInputVAE(latent_dim=160).to(device)
+    model = MultiInputVAE(
+        latent_dim=116,
+        heatmap_private_dim=32,
+        occupancy_private_dim=0,
+        impedance_private_dim=16,
+        shared_dim=68,
+    ).to(device)
     model.load_state_dict(ckpt['model_state_dict'])
     model.eval()
 
@@ -27,8 +33,8 @@ def compute_latent_stats(checkpoint_path, data_root='datasets/data_norm', device
     )
 
     # Collect all mu vectors per modality
-    all_mu = {'heatmap': [], 'impedance': [], 'maxvalue': [], 'shared': []}
-    all_std = {'heatmap': [], 'impedance': [], 'maxvalue': [], 'shared': []}
+    all_mu = {'heatmap': [], 'impedance': [], 'shared': []}
+    all_std = {'heatmap': [], 'impedance': [], 'shared': []}
 
     print(f"Computing latent stats over {len(train_loader)} batches...")
     with torch.no_grad():
@@ -36,16 +42,14 @@ def compute_latent_stats(checkpoint_path, data_root='datasets/data_norm', device
             heatmap = batch['heatmap_norm'].to(device)
             occupancy = batch['occupancy'].to(device)
             impedance = batch['impedance'].to(device)
-            maxvalue = batch['max_impedance_std'].to(device)
-            if maxvalue.dim() == 1:
-                maxvalue = maxvalue.unsqueeze(1)
 
-            _, _, _, _, mu_gauss, logvar_gauss, _, mod_stats = model(
-                heatmap, occupancy, impedance, maxvalue
+            # exp021 forward() returns 6 values: recon_hm, recon_occ, recon_imp, mu, logvar, mod_stats
+            _, _, _, mu_gauss, logvar_gauss, mod_stats = model(
+                heatmap, occupancy, impedance
             )
 
-            # Per-modality private stats
-            for name in ['heatmap', 'impedance', 'maxvalue']:
+            # Per-modality private stats (heatmap + impedance have Gaussian privates)
+            for name in ['heatmap', 'impedance']:
                 mu_mod, logvar_mod = mod_stats[name]
                 all_mu[name].append(mu_mod.cpu())
                 all_std[name].append(torch.exp(0.5 * logvar_mod).cpu())
@@ -66,16 +70,17 @@ def compute_latent_stats(checkpoint_path, data_root='datasets/data_norm', device
         per_dim_mu_mean = mu_all.mean(dim=0)  # (dim,)
         per_dim_mu_std = mu_all.std(dim=0)    # (dim,)
 
-        # Aggregate posterior std: sqrt(var(mu) + E[sigma^2])
-        agg_std = torch.sqrt(mu_all.var(dim=0) + (std_all ** 2).mean(dim=0))
+        # Per-dim aggregate posterior std: sqrt(Var[mu_d] + E[sigma_d^2])
+        agg_std_per_dim = torch.sqrt(mu_all.var(dim=0) + (std_all ** 2).mean(dim=0))  # (dim,)
 
         stats[name] = {
             'mu_mean': per_dim_mu_mean.mean().item(),
             'mu_std': per_dim_mu_std.mean().item(),
-            'mu_mean_per_dim': per_dim_mu_mean.tolist(),
+            'mu_mean_per_dim': per_dim_mu_mean.tolist(),     # (dim,) — used by inference
             'mu_std_per_dim': per_dim_mu_std.tolist(),
             'sigma_mean': std_all.mean().item(),
-            'agg_std': agg_std.mean().item(),
+            'agg_std': agg_std_per_dim.mean().item(),
+            'agg_std_per_dim': agg_std_per_dim.tolist(),    # (dim,) — used by inference
             'n_samples': mu_all.shape[0],
             'n_dims': mu_all.shape[1],
         }
@@ -83,13 +88,17 @@ def compute_latent_stats(checkpoint_path, data_root='datasets/data_norm', device
         print(f"\n{name} (dim={mu_all.shape[1]}):")
         print(f"  mu:  mean={stats[name]['mu_mean']:.4f}, std={stats[name]['mu_std']:.4f}")
         print(f"  sigma: mean={stats[name]['sigma_mean']:.4f}")
-        print(f"  aggregate posterior std: {stats[name]['agg_std']:.4f}")
+        print(f"  aggregate posterior std (mean over dims): {stats[name]['agg_std']:.4f}")
 
     return stats
 
 
 if __name__ == '__main__':
-    ckpt_path = 'experiments/exp018/checkpoints/checkpoint_epoch_200.pt'
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--checkpoint', required=True, help='Path to checkpoint .pt file')
+    args = parser.parse_args()
+    ckpt_path = args.checkpoint
     stats = compute_latent_stats(ckpt_path)
 
     out_path = Path(ckpt_path).parent.parent / 'metrics' / 'latent_stats.json'

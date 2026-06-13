@@ -1,0 +1,20 @@
+# PI-Distribution training anchor frequencies (MHz).
+# Edit this file when adding new simulated anchors, then:
+#   1. python Data_Creation/Data_processing_multifreq.py --append
+#   2. python scripts/Normalization.py --append
+#   3. Delete datasets/data_multifreq_norm/multifreq_meta.json (or it auto-invalidates)
+#
+# Original 7 anchors + 4 new (change the four new MHz to match your Raw/ folders).
+
+anchors_mhz:
+  - 10
+  - 63
+  - 80
+  - 130
+  - 150
+  - 200
+  - 250
+  - 270
+  - 330
+  - 400
+  - 500

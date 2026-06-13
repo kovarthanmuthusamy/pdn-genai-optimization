@@ -121,12 +121,13 @@ def Impedance_profile(generated_impedance, output_path,stats_path,stats_type="pe
 
 
 
-heatmap = np.load("experiments/exp012/visuals/data_sample_0/heatmap.npy")
-Imp = np.load("experiments/exp012/visuals/data_sample_0/impedance_profile.npy")
-stats_path = Path("datasets/source/data_norm/normalization_stats.json")
-heatmap_ch0 = heatmap[0]  # Extract channel 0 (impedance channel)
-out_path = "temp_visuals/heatmap_sample0.png"
-out_Im_path = out_path.replace("heatmap_sample0", "impedance_profile0")
+if __name__ == "__main__":
+    heatmap = np.load("experiments/exp012/visuals/data_sample_0/heatmap.npy")
+    Imp = np.load("experiments/exp012/visuals/data_sample_0/impedance_profile.npy")
+    stats_path = Path("datasets/source/data_norm/normalization_stats.json")
+    heatmap_ch0 = heatmap[0]  # Extract channel 0 (impedance channel)
+    out_path = "temp_visuals/heatmap_sample0.png"
+    out_Im_path = out_path.replace("heatmap_sample0", "impedance_profile0")
 
-plot_heatmap_array(heatmap=heatmap_ch0, output_path=out_path, vmin=0.0, vmax=1.0)
-Impedance_profile(generated_impedance=Imp, output_path=out_Im_path, stats_path=stats_path)
+    plot_heatmap_array(heatmap=heatmap_ch0, output_path=out_path, vmin=0.0, vmax=1.0)
+    Impedance_profile(generated_impedance=Imp, output_path=out_Im_path, stats_path=stats_path)

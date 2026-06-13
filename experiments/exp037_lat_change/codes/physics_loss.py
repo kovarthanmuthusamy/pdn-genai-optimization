@@ -165,8 +165,7 @@ class PhysicsLoss(nn.Module):
     def anti_resonance_loss(self, recon_imp: torch.Tensor) -> torch.Tensor:
         """Every impedance peak must be preceded by a resonance dip (causality).
 
-        Applied to channel 0 (raw log-Z) only.  Channel 1/2 are derivative channels
-        so the peak/dip concept is undefined for them.  The HF region (idx 190+) is
+        Applied to channel 0 (raw log-Z) only.  The HF region (idx 190+) is
         monotonically increasing by construction (no peaks possible), so the loss
         only fires meaningfully in the LF region.
         """

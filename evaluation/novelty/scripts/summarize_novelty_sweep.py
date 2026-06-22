@@ -18,7 +18,6 @@ Additional novelty method (discrete)
 
 from __future__ import annotations
 
-import argparse
 import csv
 from collections import Counter
 import math
@@ -26,6 +25,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python evaluation/novelty/scripts/summarize_novelty_sweep.py
+# =============================================================================
+
+SWEEP_ROOT = Path("evaluation/novelty/runs/novelty_sweep_N100")
+DATASET_ROOT = Path("datasets/data_norm")
+NO_OCC_NOVELTY = False
+GENERATE_PLOTS = False
+
+# =============================================================================
 
 
 def _q(x: list[float]) -> dict[str, float | None]:
@@ -321,32 +331,7 @@ def _load_per_k_report(path: Path) -> dict[str, Any]:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--sweep-root",
-        type=Path,
-        default=Path("evaluation/novelty/runs/novelty_sweep_N100"),
-        help="Sweep output root containing novelty_sweep_summary.csv and K*/ folders",
-    )
-    ap.add_argument(
-        "--dataset-root",
-        type=Path,
-        default=Path("datasets/data_norm"),
-        help="Dataset root (used for occupancy-pattern novelty)",
-    )
-    ap.add_argument(
-        "--no-occ-novelty",
-        action="store_true",
-        help="Disable occupancy-pattern novelty analysis",
-    )
-    ap.add_argument(
-        "--plots",
-        action="store_true",
-        help="Generate PNG plots into <sweep_root>/plots and embed them in the markdown",
-    )
-    args = ap.parse_args()
-
-    sweep_root: Path = args.sweep_root
+    sweep_root: Path = SWEEP_ROOT
     agg_path = sweep_root / "novelty_sweep_summary.csv"
     if not agg_path.exists():
         raise SystemExit(f"Missing aggregate summary: {agg_path}")
@@ -357,12 +342,12 @@ def main() -> None:
     if not ks:
         raise SystemExit(f"No K* folders found under {sweep_root}")
 
-    compute_occ_novelty = not bool(args.no_occ_novelty)
+    compute_occ_novelty = not NO_OCC_NOVELTY
     train_occ_counters: dict[int, Counter[bytes]] = {}
     train_occ_totals: dict[int, int] = {}
     if compute_occ_novelty:
         print("Building training occupancy-pattern counters...")
-        train_occ_counters, train_occ_totals = _build_train_occ_counters(dataset_root=args.dataset_root, ks=set(ks))
+        train_occ_counters, train_occ_totals = _build_train_occ_counters(dataset_root=DATASET_ROOT, ks=set(ks))
 
     dataset_total_occ = sum(int(train_occ_totals.get(k, 0)) for k in ks) if compute_occ_novelty else 0
     dataset_total_occ_unique = sum(len(train_occ_counters.get(k, Counter())) for k in ks) if compute_occ_novelty else 0
@@ -601,7 +586,7 @@ def main() -> None:
         manual_summary = "(Write your human summary here; this block is preserved on regeneration.)"
 
     plot_paths: dict[str, str] = {}
-    if bool(args.plots):
+    if GENERATE_PLOTS:
         plot_paths = _generate_plots(rows_by_k=rows_by_k, out_dir=sweep_root / "plots")
 
     ratio_vals: list[float] = []

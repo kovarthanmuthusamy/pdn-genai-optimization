@@ -123,7 +123,7 @@ flowchart LR
 | Stage | Input | Output | Code |
 | ----- | ----- | ------ | ---- |
 | 1. Surrogate training | dataset (one design) | frozen VAE + impedance surrogate | [`experiments/exp043/`](experiments/exp043/) |
-| 2. Latent optimization | target $Z_\text{target}$ | best placement per $K$ | [`Latent_opm/latent_optimization_impedance.py`](Latent_opm/latent_optimization_impedance.py) |
+| 2. Latent optimization | target $Z_\text{target}$ | best placement per $K$ | [`pipelines/latent/optimize.py`](pipelines/latent/optimize.py) |
 | 3. Analysis | a solution | PI-distribution hotspot maps | VAE heatmap decoder |
 
 ---
@@ -279,28 +279,61 @@ concentrates spatially.
 
 ## 7. Repository Structure
 
+Scripts are grouped under **`pipelines/`** and **`libs/`**. Legacy folders (`Data_Creation/`, `scripts/`, `New_heatmaps/`, `Latent_opm/`) have been removed — see [`REPO_LAYOUT.md`](REPO_LAYOUT.md) for the migration map.
+
 ```text
 .
+├── pipelines/                   Runnable workflows (edit CONFIG, then python …)
+│   ├── data/                    Build datasets from raw ECAD exports
+│   ├── dataset/                 Manifest transforms, subsample, gmax
+│   ├── normalize/               Normalization & stats
+│   ├── analysis/                Latent traversal, QA utilities
+│   ├── visualize/               Heatmap & impedance plotting
+│   ├── latent/                  Stage-2 optimization & reports
+│   ├── heatmaps/                PEB frequency & combination tools
+│   └── active_learning/         Active-learning entry (run.py)
+├── libs/                        Shared import-only modules
+│   ├── data_creation/           heatmap, impedance, occupancy, csv_to_occupancy
+│   └── peb/                     PEB frequency regex helper
 ├── experiments/                 Generative surrogate experiments (exp029 … exp043)
 │   ├── exp043/                  ← current model
 │   │   ├── codes/
 │   │   │   ├── vae_poe_freq.py        PoE VAE with frequency expert
 │   │   │   ├── train_vae_simple.py    training entry point
-│   │   │   ├── inference_vae.py        sampling / reconstruction
-│   │   │   └── evaluate_vae.py         metrics
-│   │   └── config.yaml                 hyperparameters
+│   │   │   ├── inference_vae.py       sampling / reconstruction
+│   │   │   └── evaluate_vae.py        metrics
+│   │   └── config.yaml                hyperparameters
 │   └── exp038_true_multi/       baseline + impedance surrogate used by Stage 2
-├── Latent_opm/                  Stage-2 latent optimization
-│   ├── latent_optimization_impedance.py   main optimizer (per-K, STE top-K)
-│   ├── find_feasible_configs.py
-│   └── generate_run_report.py
-├── Data_Creation/               dataset generation (occupancy, impedance, heatmaps)
-├── scripts/                     normalization + latent-statistics utilities
-├── configs/                     target_impedance.npy, frequency grid, masks, anchors
-├── evaluation/                  novelty / quality evaluation of generated samples
-├── source/, src_vae/            shared model + loss code
-└── viewer/, visualization/      result viewers and plotting
+├── active_learning_pi/al/       Active-learning library (pipeline, ingest, …)
+├── scrap/                       Sample generation, comparison, orchestration
+│   ├── generation/
+│   ├── comparison/
+│   └── orchestration/           End-to-end multifreq sweep pipelines
+├── datasets/                    Training data (not committed — see §8)
+├── data/
+│   ├── heatmaps/                PEB files, all_combinations.csv, decap maps
+│   └── latent_runs/             Latent optimization outputs
+├── configs/                     target_impedance.npy, frequency grid, masks
+├── tools/ecadstar/              ECADSTAR batch helpers (PowerShell + AutoHotkey)
+├── gan_paths.py                 Repo-root path helpers (REPO_ROOT, repo_path)
+├── evaluation/                  Novelty / quality evaluation of generated samples
+├── src_vae/                     Shared VAE training library
+└── viewer/, visualization/      Result viewers and plotting
 ```
+
+### Common entry points
+
+| Task | Command |
+| ---- | ------- |
+| Build multifreq dataset | `python pipelines/data/processing_multifreq.py` |
+| Normalize dataset | `python pipelines/normalize/multifreq.py` |
+| Train surrogate (exp043) | `python experiments/exp043/codes/train_vae_simple.py` |
+| Latent optimization (Stage 2) | `python pipelines/latent/optimize.py` |
+| Feasibility sampling | `python pipelines/latent/find_feasible.py` |
+| Active-learning cycle | `python pipelines/active_learning/run.py` |
+| Multifreq sweep | `python scrap/orchestration/run_multifreq_sweep_pipeline.py` |
+
+All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script’s docstring includes **Agent notes** (What, Usage, Config keys). See [`pipelines/README.md`](pipelines/README.md) and [`docs/CONFIG_ONLY_SCRIPTS.md`](docs/CONFIG_ONLY_SCRIPTS.md).
 
 ---
 
@@ -310,6 +343,7 @@ The dataset is **not committed** (size). Expected layout under `datasets/`:
 
 ```text
 datasets/data_multifreq/
+├── dataset_meta.json    summary: layouts, sample count, size (MB), PI MHz anchors
 ├── manifest.csv         one row per (layout, frequency) sample
 ├── layouts/             per-layout decap occupancy vectors
 ├── Imp/                 PI-spectrum magnitudes      [231]
@@ -318,8 +352,15 @@ datasets/data_multifreq/
 └── Occ_map/             occupancy maps
 ```
 
-Normalization statistics: `datasets/data_multifreq_norm/normalization_stats.json`. The optimization
-target is `configs/target_impedance.npy` (shape `[231]`).
+Normalized datasets (`data_multifreq_norm/`) include the same ``dataset_meta.json`` (updated at
+normalize time) plus ``normalization_stats.json``. The optimization target is
+``configs/target_impedance.npy`` (shape `[231]`).
+
+Build scripts: `pipelines/data/processing_multifreq.py` → `pipelines/normalize/multifreq.py`.
+PEB / combination assets live in `data/heatmaps/`.
+
+Example ``dataset_meta.json`` fields: `unique_layouts`, `manifest_rows`, `size.total_mb`,
+`pi_frequencies_mhz` (e.g. `[10, 80, 130, …, 600]`), `samples_per_mhz`.
 
 ---
 
@@ -327,37 +368,62 @@ target is `configs/target_impedance.npy` (shape `[231]`).
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install torch numpy pyyaml matplotlib pandas pillow
+pip install torch numpy pyyaml matplotlib pandas pillow tqdm
 ```
 
 Tested with **PyTorch 2.7 (CUDA 11.8)**; a GPU is recommended for training.
 
-**Stage 1 — train the surrogate:**
+### Running scripts
+
+Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `# CONFIGURATION` block, then run `python path/to/script.py`. Module docstrings explain **What** each script does, **Usage**, and **Config keys** — see [`docs/CONFIG_ONLY_SCRIPTS.md`](docs/CONFIG_ONLY_SCRIPTS.md).
+
+### Stage 1 — train the surrogate
 
 ```bash
 python experiments/exp043/codes/train_vae_simple.py
 # config: experiments/exp043/config.yaml
 ```
 
-**Stage 2 — inverse design:**
+### Build & normalize a dataset (if starting from raw ECAD)
 
 ```bash
-python Latent_opm/latent_optimization_impedance.py
+python pipelines/data/processing_multifreq.py
+python pipelines/normalize/multifreq.py
 ```
 
-Results are written to `Latent_opm/runs/<experiment>/<run-idx>/K##/` as `best_latent.npy`,
-`best_occupancy_topk.npy`, `best_metrics.json`, or `no_solution.json`. Selected knobs (overridable
-via environment variables at the top of the script):
+### Stage 2 — inverse design
 
-| Variable / constant | Meaning | Default |
-| ------------------- | ------- | ------- |
+Edit the **CONFIGURATION** block at the top of [`pipelines/latent/optimize.py`](pipelines/latent/optimize.py), then:
+
+```bash
+python pipelines/latent/optimize.py
+```
+
+Results are written to `data/latent_runs/<experiment>/<run-idx>/K##/` as `best_latent.npy`,
+`best_occupancy_topk.npy`, `best_metrics.json`, or `no_solution.json`. A Markdown summary is
+auto-generated via `pipelines/latent/generate_run_report.py`.
+
+Selected knobs (constants in the CONFIG block):
+
+| Constant | Meaning | Default |
+| -------- | ------- | ------- |
 | `NUM_STEPS` | Adam steps per K | 1200 |
 | `LR` | learning rate | 5e-2 |
 | `NUM_CANDIDATE_SEEDS` | parallel latent seeds per K | 32 |
 | `K_LIST` | decap budgets to solve | 1 … 25 |
 | `BOUNDARY_MARGIN` | feasibility safety margin | 0.1 |
 | `SELECT_METRIC` | ranking metric (`max_ohm` = lowest peak) | `max_ohm` |
-| `LATENT_OPT_USE_SURROGATE` | use impedance surrogate vs. VAE decoder | 1 |
+| `USE_SURROGATE` | use impedance surrogate vs. VAE decoder | True |
+
+### Stage 2 — export to ECADSTAR & compare
+
+After optimization, export samples and build a batch PEB, run PI simulation, then compare:
+
+```bash
+python pipelines/latent/export_peb.py
+# … run ECADSTAR batch PI on latent_run.peb …
+python pipelines/latent/compare_report.py
+```
 
 ---
 
@@ -378,12 +444,14 @@ via environment variables at the top of the script):
 
 To keep the repository lightweight, the following are intentionally **excluded** (see `.gitignore`):
 
-- `datasets/` — training data
+- `datasets/` — training data (`data_multifreq`, `data_multifreq_norm`, …)
+- `data/latent_runs/` — optimization run outputs (regenerated by Stage 2)
+- `data/heatmaps/` — large PEB exports and combination CSVs
 - model checkpoints — `*.pt`, `checkpoints/` (~11 GB; regenerated by training)
-- `*.peb` simulation/heatmap exports and oversized HTML reports
+- `*.peb` simulation exports and oversized HTML reports
 - `src_gan/`, `temp_visuals/`, `ppt/`, virtual-environment and IDE folders, Python caches
 
-Source code, configuration, documentation, and lightweight result artifacts are tracked.
+Source code (`pipelines/`, `libs/`, `experiments/`, `src_vae/`), configuration, and documentation are tracked.
 
 ---
 

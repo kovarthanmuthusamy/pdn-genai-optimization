@@ -1,8 +1,6 @@
-"""
-Generate ECADStar batch .peb file for PI analysis
-from an occupancy vector input (N x 52), values 0 or 1.
-"""
+"""Generate ECADStar Batch PEB.
 
+Run: import generate_peb(...) or run as script with INPUT_PATH/OUTPUT_PATH constants."""
 import numpy as np
 
 # ── Configuration ─────────────────────────────────────────────────────────────

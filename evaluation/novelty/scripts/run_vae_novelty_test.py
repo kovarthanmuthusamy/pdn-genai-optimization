@@ -8,16 +8,14 @@ This script:
 4) Writes a short markdown summary next to the CSV.
 
 Example
-  python scripts/run_vae_novelty_test.py --K 5 --N 50
+  python scripts/run_vae_novelty_test.py
 
 Notes
 - This does NOT require ECADStar / .peb.
 - For scoring, we strongly recommend filtering the dataset to the same K.
 """
-
 from __future__ import annotations
 
-import argparse
 import datetime as _dt
 import os
 import subprocess
@@ -27,6 +25,25 @@ from pathlib import Path
 import numpy as np
 import torch
 
+
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python evaluation/novelty/scripts/run_vae_novelty_test.py
+# =============================================================================
+
+CHECKPOINT = "experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt"
+LATENT_DIM = 32
+K_VALUE = 5
+NUM_SAMPLES = 50
+SHARED_TEMP = 1.5
+DATASET_ROOT = Path("datasets/data_norm")
+HM_POOL = 16
+BASELINE_N = 200
+MAX_TRAIN: int | None = None
+FORCE_CPU = False
+OUT_DIR: Path | None = None  # None → evaluation/novelty/runs/K{K}_noveltyN{N}
+
+# =============================================================================
 
 def _project_root() -> Path:
     here = Path(__file__).resolve()
@@ -107,26 +124,22 @@ def _run_report(
     max_train: int | None,
 ) -> tuple[int, str]:
     project_root = _project_root()
-    cmd = [
-        _python_exe(),
-        str(project_root / "evaluation" / "novelty" / "scripts" / "vae_novelty_report.py"),
-        "--gen-dir",
-        str(gen_dir),
-        "--dataset-root",
-        str(dataset_root),
-        "--K",
-        str(k_value),
-        "--hm-pool",
-        str(hm_pool),
-        "--baseline-n",
-        str(baseline_n),
-    ]
-    if max_train is not None:
-        cmd += ["--max-train", str(max_train)]
-
-    p = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    out = (p.stdout or "") + ("\n" + p.stderr if p.stderr else "")
-    return p.returncode, out.strip()
+    import io
+    from contextlib import redirect_stdout, redirect_stderr
+    import evaluation.novelty.scripts.vae_novelty_report as report_mod
+    report_mod.GEN_DIR = gen_dir
+    report_mod.DATASET_ROOT = dataset_root
+    report_mod.K_FILTER = k_value
+    report_mod.HM_POOL = hm_pool
+    report_mod.BASELINE_N = baseline_n
+    report_mod.MAX_TRAIN = max_train
+    buf = io.StringIO()
+    with redirect_stdout(buf), redirect_stderr(buf):
+        try:
+            report_mod.main()
+            return 0, buf.getvalue().strip()
+        except SystemExit as e:
+            return int(e.code or 1), buf.getvalue().strip()
 
 
 def _write_summary(*, out_dir: Path, params: dict, report_stdout: str) -> Path:
@@ -147,53 +160,32 @@ def _write_summary(*, out_dir: Path, params: dict, report_stdout: str) -> Path:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", default="experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt")
-    ap.add_argument("--latent-dim", type=int, default=32)
-    ap.add_argument("--K", type=int, default=5)
-    ap.add_argument("--N", type=int, default=50)
-    ap.add_argument("--shared-temp", type=float, default=1.5)
-    ap.add_argument("--dataset-root", type=Path, default=Path("datasets/data_norm"))
-    ap.add_argument("--hm-pool", type=int, default=16)
-    ap.add_argument("--baseline-n", type=int, default=200)
-    ap.add_argument("--max-train", type=int, default=None)
-    ap.add_argument("--force-cpu", action="store_true")
-    ap.add_argument(
-        "--out-dir",
-        type=Path,
-        default=None,
-        help="Output dir (default: evaluation/novelty/runs/K{K}_noveltyN{N})",
-    )
-    args = ap.parse_args()
+    if not (0 <= K_VALUE <= 52):
+        raise SystemExit("K_VALUE must be in [0,52]")
+    if NUM_SAMPLES <= 0:
+        raise SystemExit("NUM_SAMPLES must be > 0")
 
-    if not (0 <= args.K <= 52):
-        raise SystemExit("--K must be in [0,52]")
-    if args.N <= 0:
-        raise SystemExit("--N must be > 0")
+    out_dir = OUT_DIR or (Path("evaluation/novelty/runs") / f"K{K_VALUE}_noveltyN{NUM_SAMPLES}")
 
-    out_dir = args.out_dir
-    if out_dir is None:
-        out_dir = Path("evaluation/novelty/runs") / f"K{args.K}_noveltyN{args.N}"
-
-    print(f"[1/3] Generating N={args.N} samples at K={args.K} → {out_dir}")
+    print(f"[1/3] Generating N={NUM_SAMPLES} samples at K={K_VALUE} → {out_dir}")
     _save_generated_samples(
         out_dir=out_dir,
-        checkpoint_path=args.checkpoint,
-        latent_dim=args.latent_dim,
-        k_value=args.K,
-        num_samples=args.N,
-        shared_temp=args.shared_temp,
-        force_cpu=bool(args.force_cpu),
+        checkpoint_path=CHECKPOINT,
+        latent_dim=LATENT_DIM,
+        k_value=K_VALUE,
+        num_samples=NUM_SAMPLES,
+        shared_temp=SHARED_TEMP,
+        force_cpu=bool(FORCE_CPU),
     )
 
     print("[2/3] Scoring generated samples vs dataset (nearest-neighbor)")
     rc, report_out = _run_report(
         gen_dir=out_dir,
-        dataset_root=args.dataset_root,
-        k_value=args.K,
-        hm_pool=args.hm_pool,
-        baseline_n=args.baseline_n,
-        max_train=args.max_train,
+        dataset_root=DATASET_ROOT,
+        k_value=K_VALUE,
+        hm_pool=HM_POOL,
+        baseline_n=BASELINE_N,
+        max_train=MAX_TRAIN,
     )
     if rc != 0:
         print(report_out)
@@ -201,16 +193,16 @@ def main() -> None:
 
     print("[3/3] Writing summary markdown")
     params = {
-        "checkpoint": args.checkpoint,
-        "latent_dim": args.latent_dim,
-        "K": args.K,
-        "N": args.N,
-        "shared_temp": args.shared_temp,
-        "dataset_root": str(args.dataset_root),
-        "hm_pool": args.hm_pool,
-        "baseline_n": args.baseline_n,
-        "max_train": args.max_train,
-        "force_cpu": args.force_cpu,
+        "checkpoint": CHECKPOINT,
+        "latent_dim": LATENT_DIM,
+        "K": K_VALUE,
+        "N": NUM_SAMPLES,
+        "shared_temp": SHARED_TEMP,
+        "dataset_root": str(DATASET_ROOT),
+        "hm_pool": HM_POOL,
+        "baseline_n": BASELINE_N,
+        "max_train": MAX_TRAIN,
+        "force_cpu": FORCE_CPU,
         "out_dir": str(out_dir),
     }
     summary_path = _write_summary(out_dir=out_dir, params=params, report_stdout=report_out)

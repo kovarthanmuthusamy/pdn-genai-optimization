@@ -14,22 +14,34 @@ The dataset root you pass is already in VAE-compatible, normalized format:
 Run
 ---
     python evaluation/vae/run_vae_eval_heldout.py \
-        --checkpoint experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt \
-        --dataset-root datasets/data_eval_norm
 
 Outputs
 -------
 Default output directory: evaluation/vae/heldout/
 """
-
 from __future__ import annotations
 
-import argparse
 import importlib.util
 import os
 import sys
 from pathlib import Path
 
+
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python evaluation/vae/run_vae_eval_heldout.py
+# =============================================================================
+
+CHECKPOINT = Path("experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt")
+DATASET_ROOT = Path("datasets/data_eval_norm")
+OUT_DIR = Path("evaluation/vae/heldout")
+BATCH_SIZE = 64
+N_GEN = 2048
+SHARED_TEMP = 1.5
+SEED = 0
+FORCE_CPU = False
+
+# =============================================================================
 
 def _project_root() -> Path:
     here = Path(__file__).resolve()
@@ -60,34 +72,10 @@ def _import_run_vae_eval(project_root: Path):
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--checkpoint",
-        type=Path,
-        default=Path("experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt"),
-    )
-
-    ap.add_argument(
-        "--dataset-root",
-        type=Path,
-        default=Path("datasets/data_eval_norm"),
-        help="Path to a held-out dataset root that is already normalized for the VAE.",
-    )
-
-    ap.add_argument("--out-dir", type=Path, default=Path("evaluation/vae/heldout"))
-    ap.add_argument("--batch-size", type=int, default=64)
-    ap.add_argument("--n-gen", type=int, default=2048)
-    ap.add_argument("--shared-temp", type=float, default=1.5)
-    ap.add_argument("--seed", type=int, default=0)
-
-    ap.add_argument("--force-cpu", action="store_true")
-
-    args = ap.parse_args()
-
     project_root = _project_root()
     os.chdir(project_root)
 
-    dataset_root: Path = args.dataset_root
+    dataset_root: Path = DATASET_ROOT
 
     if not _dataset_ready(dataset_root):
         raise SystemExit(f"Held-out dataset is missing or empty: {dataset_root}")
@@ -95,20 +83,20 @@ def main() -> None:
     print("Running VAE evaluation on FULL held-out set")
     run_vae_eval = _import_run_vae_eval(project_root)
     cfg = run_vae_eval.EvalConfig(
-        checkpoint=args.checkpoint,
+        checkpoint=CHECKPOINT,
         dataset_root=dataset_root,
-        out_dir=args.out_dir,
+        out_dir=OUT_DIR,
         n_eval=10**9,
-        batch_size=int(args.batch_size),
-        n_gen=int(args.n_gen),
-        shared_temp=float(args.shared_temp),
-        seed=int(args.seed),
-        force_cpu=bool(args.force_cpu),
+        batch_size=int(BATCH_SIZE),
+        n_gen=int(N_GEN),
+        shared_temp=float(SHARED_TEMP),
+        seed=int(SEED),
+        force_cpu=bool(FORCE_CPU),
     )
     run_vae_eval.run_eval(cfg)
 
     print("\n✓ Held-out evaluation complete")
-    print(f"  Outputs: {args.out_dir}")
+    print(f"  Outputs: {OUT_DIR}")
 
 
 if __name__ == "__main__":

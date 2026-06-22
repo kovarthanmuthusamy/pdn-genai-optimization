@@ -1,7 +1,0 @@
-{
-  "mode": "batch",
-  "K": 28,
-  "batch_size": 32,
-  "num_steps": 1200,
-  "seconds": 12.155746398959309
-}

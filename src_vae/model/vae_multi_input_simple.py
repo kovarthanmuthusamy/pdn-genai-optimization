@@ -1,4 +1,6 @@
+"""Simplified multi-input VAE (heatmap + occupancy + impedance).
 
+Run: ``from src_vae.model.vae_multi_input_simple import MultiInputVAE`` in training scripts."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

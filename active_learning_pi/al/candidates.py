@@ -1,3 +1,7 @@
+"""Random decap-layout × PI-frequency candidate pool generation.
+
+Run:
+    python active_learning_pi/al/candidates.py"""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass

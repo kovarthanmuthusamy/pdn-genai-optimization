@@ -16,7 +16,7 @@ experiment = "exp012"
 
 
 def build_occupancy_grid_dict():
-    """Build the same grid_dict as in Data_Creation/occ_grid.py"""
+    """Build the same grid_dict as in pipelines/data/occ_grid.py"""
     H, W = 7, 8
     all_coords = [(i, j) for i in range(H) for j in range(W)]
     invalid_coords = [(0, 3), (0, 4), (6, 3), (6, 4)]

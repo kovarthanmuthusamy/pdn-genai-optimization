@@ -1,33 +1,19 @@
-"""exp038 — PI frequency sweep at **fixed K** (heatmap / PI-Distribution only).
+"""Multifreq Heatmap Sweep at Fixed K.
 
-Tests whether the multifreq-trained VAE generalizes across PI frequency for spatial
-PI maps (PI-Distribution). K is held constant; only PI_freq is swept.
-
-Workflow
---------
-Full pipeline (generate + ECADStar + move/compare/report)::
-
-    python scrap/run_multifreq_sweep_pipeline.py
-
-Or step-by-step:
-1. ``python scrap/generation/run_multifreq_heatmap_sweep.py``
-   or ``python scrap/generation/run_multifreq_heatmap_sweep.py --mhz 80 250``
-   → samples under ``{OUTPUT_ROOT}/freq_*MHz/K{K}/`` + combined ``.peb`` (PI-Distribution only)
-2. Run the ``.peb`` in ECADStar (manual batch simulate), or use the pipeline script.
-3. ``python scrap/multifreq_move_and_compare.py``  (move PI-* + heatmap compare)
-   — or separately: ``move_pi_to_real.py`` then ``comparison/compare.py``
-
-Does **not** replace ``scrap/generation/run_all_k.py`` (K sweep + spectrum PEB).
-
-Modes:
-    generate — decode at each MHz (fixed K), write PEB, summary plots
-    val      — val-set heatmap recon (optional offline metric)
-    both     — generate then val
+Purpose: Decode VAE samples at multiple PI frequencies (fixed K) for PI-Distribution
+    heatmaps; write per-freq folders, combined .peb, sweep manifest, and summary plots.
+Run: python scrap/generation/run_multifreq_heatmap_sweep.py
+Inputs / outputs: CHECKPOINT_PATH, DATA_DIR, SWEEP, K_VALUE → {OUTPUT_ROOT}/freq_*MHz/K{K}/;
+    PEB_OUT_FILE (.peb), sweep_freq_manifest.json; optional PEB_COPY_DEST.
+Dependencies: torch, matplotlib, numpy; dynamic VAEInference from EXPERIMENT_DIR.
+Agent notes:
+    - Type: CLI generator (does not replace run_all_k K-sweep workflow)
+    - Key symbols: main, run_generate, run_val, exported_freq_mhz_list,
+    - Config keys: ``MODE``, ``EXPERIMENT_DIR``, ``CHECKPOINT_PATH``, ``DATA_DIR``, ``OUTPUT_ROOT``, ``DENSE_N_POINTS``, ``K_VALUE``, ``NUM_SAMPLES``, ``SHARED_TEMP``, ``SEED``, ``HEATMAP_ONLY_PEB``, ``PEB_OUT_FILE``, ``POWERBUS``, ``FORCE_CPU``, ``VAL_MAX_BATCHES``, ``BACKGROUND_MARGIN``, ``INFERENCE_MODE``, ``PI_REF_MHZ``, ``CALIBRATE_FG_MAX``, ``INFERENCE_FACTORIZED_ONLY``
+      write_sweep_freq_manifest, HEATMAP_ONLY_PEB, K_VALUE, OUTPUT_ROOT
 """
-
 from __future__ import annotations
 
-import argparse
 import csv
 import importlib
 import json
@@ -44,42 +30,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-# ── Configuration (edit here or override via CLI) ─────────────────────────────
-EXPERIMENT_DIR = "experiments/exp043"
-CHECKPOINT_PATH = f"{EXPERIMENT_DIR}/checkpoints/last_model.pt"
-DATA_DIR = "datasets/data_multifreq_gmax"
-OUTPUT_ROOT = f"{EXPERIMENT_DIR}/multifreq_heatmap_sweep_29"  # updated by CLI args; also encoded in PEB filename
-
-# PI sweep: "anchors" (training bins), "dense" (log-spaced 1–600 MHz), or explicit list
-SWEEP = [10, 70, 120, 270, 400]  # "anchors" | "dense" | [10, 63, 100, ...]
-DENSE_N_POINTS = 24
-
-K_VALUE = 29  # fixed — this sweep does not vary K
-NUM_SAMPLES = 2
-SHARED_TEMP = 1.5
-SEED = 42
-
-# PEB: PI-Distribution only (no CreatePISpectrum) — one PI-* output per sample in CAD
-HEATMAP_ONLY_PEB = True
-PEB_OUT_FILE = f"{OUTPUT_ROOT}/pi_distribution_K{K_VALUE}_freq_sweep.peb"
-POWERBUS = "Power_GND"
-PEB_COPY_DEST: str | None = r"C:\Users\muthusamy\Desktop\design\PEB"
-REPORT_COPY_DEST: str | None = r"C:\Users\muthusamy\Desktop\reports"
-
-FORCE_CPU = False
-VAL_MAX_BATCHES = 0  # 0 = full val loader
-BACKGROUND_MARGIN = 0.5
-
-# Inference: "anchor_blend" (off-anchor MHz) | "layout" | "marginal" | "encode" (val only)
-INFERENCE_MODE = "anchor_blend"
-PI_REF_MHZ = 200.0  # layout occ/imp reference before per-MHz decode
-# Scale physical heatmap FG max toward anchor statistics (helps unseen MHz e.g. 80, 250).
-# Set False when debugging — calibration can amplify a wrong single-pixel blob to ~anchor max.
-CALIBRATE_FG_MAX = False
-# Only used when the loaded model defines inference_factorized_only (exp040); ignored for exp039.
-INFERENCE_FACTORIZED_ONLY = False
-# ─────────────────────────────────────────────────────────────────────────────
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -90,6 +40,20 @@ from experiments.exp038_true_multi.codes.dataloader_multifreq import (  # noqa: 
 )
 from scrap.generation.generate_peb import generate_peb  # noqa: E402
 from scrap.peb_copy import copy_peb_to_folder  # noqa: E402
+from scrap.generation.sweep_latent_opt_rules import (  # noqa: E402
+    SweepQCConfig,
+    SweepQCError,
+    build_hybrid_z,
+    decode_heatmap_sweep_mhz,
+    load_explicit_npy_bundle,
+    load_latent_run_bundle,
+    get_sweep_val_loader,
+    load_val_layout_samples,
+    qc_manifest_extra,
+    topk_occ_binary,
+    validate_sweep_qc,
+)
+from scrap.generation.sweep_qc_eval import run_sweep_qc_eval  # noqa: E402
 from experiments.exp038_true_multi.codes.freq_inference_utils import (  # noqa: E402
     calibrate_heatmap_physical,
     interp_anchor_value,
@@ -100,7 +64,67 @@ from src_vae.others.pi_freq_utils import (  # noqa: E402
     _LOG10_MIN,
     _LOG10_RANGE,
     pi_freq_mhz_to_norm,
+    pi_freq_norm_for_model,
 )
+
+# =============================================================================
+# CONFIGURATION — edit these before running
+# =============================================================================
+
+# MODE = "generate"  # generate | val | both
+MODE = "generate"
+
+EXPERIMENT_DIR = "experiments/exp050"
+CHECKPOINT_PATH = f"{EXPERIMENT_DIR}/checkpoints/last_model.pt"
+DATA_DIR = "data_multi_norm_unbounded"
+OUTPUT_ROOT = f"{EXPERIMENT_DIR}/multifreq_heatmap_sweep_30"
+
+# SWEEP = "anchors"  # anchors | dense | explicit MHz list
+# SWEEP = "dense"
+SWEEP: list[float] | str = [10, 70, 120, 270, 400]
+DENSE_N_POINTS = 24
+
+K_VALUE = 30
+NUM_SAMPLES = 2
+SHARED_TEMP = 1.5
+SEED = 42
+
+HEATMAP_ONLY_PEB = True
+PEB_OUT_FILE = f"{OUTPUT_ROOT}/pi_distribution_K{K_VALUE}_freq_sweep.peb"
+POWERBUS = "Power_GND"
+PEB_COPY_DEST: str | None = r"C:\Users\muthusamy\Desktop\design\PEB"
+REPORT_COPY_DEST: str | None = r"C:\Users\muthusamy\Desktop\reports"
+
+FORCE_CPU = False
+VAL_MAX_BATCHES = 0  # 0 = full val loader
+BACKGROUND_MARGIN = 0.5
+
+# QC sweep — aligned with pipelines/latent/optimize.py (no random marginal layouts)
+QC_SWEEP = True
+# layout_qc: real val (occ, imp) → encode_layout@PI_REF → decode@each MHz  [model QC]
+# latent_z:   best_latent.npy → decode@each MHz only                        [post-opt path]
+# layout_hybrid: encode_layout_full + shared z from optimize                [post-opt hybrid]
+INFERENCE_MODE = "layout_qc"
+LAYOUT_SOURCE = "val"  # val | latent_run | npy
+LATENT_RUN_DIR: str | None = None  # e.g. data/latent_runs/exp050/0
+EXPLICIT_Z_NPY: str | None = None
+EXPLICIT_OCC_NPY: str | None = None
+EXPLICIT_IMP_NPY: str | None = None
+ALLOW_RANDOM_LAYOUT = False  # must be True to use marginal / anchor_blend / layout w/o val
+
+RUN_SWEEP_QC_EVAL = True  # write sweep_qc_report.md + print agent copy block
+
+PI_REF_MHZ = 200.0
+CALIBRATE_FG_MAX = False
+INFERENCE_FACTORIZED_ONLY = False
+
+# =============================================================================
+
+
+def _sync_derived_paths() -> None:
+    """Keep PEB_OUT_FILE aligned with OUTPUT_ROOT and K_VALUE."""
+    global PEB_OUT_FILE
+    PEB_OUT_FILE = f"{OUTPUT_ROOT}/pi_distribution_K{K_VALUE}_freq_sweep.peb"
 
 
 SWEEP_FREQ_MANIFEST = "sweep_frequencies_mhz.json"
@@ -113,15 +137,19 @@ def sweep_freq_manifest_path(out_root: str | Path | None = None) -> Path:
 def write_sweep_freq_manifest(
     mhz_list: list[float],
     out_root: str | Path | None = None,
+    *,
+    extra: dict[str, Any] | None = None,
 ) -> Path:
     """Persist MHz list used by the last generate run (move/compare read this)."""
     path = sweep_freq_manifest_path(out_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, Any] = {
         "mhz": [float(m) for m in mhz_list],
         "k": int(K_VALUE),
         "num_samples": int(NUM_SAMPLES),
     }
+    if extra:
+        payload.update(extra)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -174,9 +202,10 @@ def _load_experiment_config(path: Path) -> dict[str, Any]:
     return json.loads("\n".join(lines))
 
 
-def _load_vae_inference():
-    """Import VAEInference from the experiment package (creates module if missing)."""
-    exp_mod = EXPERIMENT_DIR.replace("/", ".").replace("\\", ".") + ".codes.inference_vae"
+def _load_vae_inference(experiment_dir: str | None = None):
+    """Import VAEInference from the experiment package."""
+    exp = experiment_dir or EXPERIMENT_DIR
+    exp_mod = exp.replace("/", ".").replace("\\", ".") + ".codes.inference_vae"
     try:
         return importlib.import_module(exp_mod).VAEInference
     except ModuleNotFoundError:
@@ -185,7 +214,9 @@ def _load_vae_inference():
         return importlib.import_module(fallback).VAEInference
 
 
-VAEInference = _load_vae_inference()
+def _resolve_vae_inference():
+    """Resolve VAEInference for current EXPERIMENT_DIR (re-read after config overrides)."""
+    return _load_vae_inference(EXPERIMENT_DIR)
 
 
 def _build_mhz_list(sweep: str | list[int] | tuple[float, ...]) -> list[float]:
@@ -202,21 +233,31 @@ def _freq_tag(mhz: float) -> str:
     return f"freq_{int(round(mhz))}MHz"
 
 
-def _hm_physical(hm_z: torch.Tensor, engine: Any) -> torch.Tensor:
-    """Denorm heatmap tensor to Ω (supports exp043 global-max and exp042 z-score)."""
+def _hm_physical(hm_z: torch.Tensor, engine: Any, mhz: float | None = None) -> torch.Tensor:
+    """Denorm heatmap tensor to Ω (robust per-MHz, global-max, or legacy z-score)."""
     if hasattr(engine, "denorm_heatmap_physical"):
-        return engine.denorm_heatmap_physical(hm_z)
+        return engine.denorm_heatmap_physical(hm_z, mhz=mhz)
     from src_vae.others.heatmap_z_clip import heatmap_norm_to_physical, heatmap_z_to_physical
 
     hm_stats = getattr(engine, "hm_stats", None)
+    if hm_stats is None:
+        hm_stats = getattr(getattr(engine, "norm_stats", None), "heatmap", None)
     clip = getattr(engine, "hm_z_clip", None)
     lo, hi = (clip[0], clip[1]) if clip is not None else (None, None)
-    if hm_stats is not None and (
-        hm_stats.get("norm_mode") == "global_max" or hm_stats.get("global_max_ohm") is not None
-    ):
-        return heatmap_norm_to_physical(hm_z, hm_stats, clip_lo=lo, clip_hi=hi)
+    if hm_stats is not None and getattr(hm_stats, "is_global_max", lambda: False)():
+        raw = hm_stats if isinstance(hm_stats, dict) else None
+        if raw is None and hasattr(hm_stats, "global_max_ohm"):
+            raw = {"norm_mode": "global_max", "global_max_ohm": hm_stats.global_max_ohm}
+        if raw is not None:
+            return heatmap_norm_to_physical(hm_z, raw, clip_lo=lo, clip_hi=hi)
     return heatmap_z_to_physical(
-        hm_z, engine.hm_log_mean, engine.hm_log_std, clip_lo=lo, clip_hi=hi,
+        hm_z,
+        engine.hm_log_mean,
+        engine.hm_log_std,
+        hm_stats=hm_stats,
+        mhz=mhz,
+        clip_lo=lo,
+        clip_hi=hi,
     )
 
 
@@ -253,6 +294,8 @@ def _load_engine(device: torch.device) -> Any:
     ckpt = Path(CHECKPOINT_PATH)
     if not ckpt.is_file():
         raise SystemExit(f"Checkpoint not found: {ckpt}")
+    VAEInference = _resolve_vae_inference()
+    print(f"  VAEInference : {VAEInference.__module__}.{VAEInference.__qualname__}")
     engine = VAEInference(
         checkpoint_path=str(ckpt),
         device=device,
@@ -267,6 +310,8 @@ def _load_engine(device: torch.device) -> Any:
             f"  Heatmap norm: global-max  gmax={engine.global_max_ohm:.4f} Ω  "
             f"fg_thr={engine.fg_threshold():.4f}"
         )
+    elif hasattr(engine, "hm_stats"):
+        print(f"  Heatmap norm: {engine.hm_stats.describe()}")
     else:
         print(
             f"  Heatmap norm: z-score  log_mean={engine.hm_log_mean:.4f}  "
@@ -285,8 +330,53 @@ def _copy_peb_if_configured(peb_file: Path) -> None:
         print(f"  ⚠ PEB copy skipped: {exc}")
 
 
+def _build_qc_config() -> SweepQCConfig:
+    return SweepQCConfig(
+        qc_sweep=bool(QC_SWEEP),
+        inference_mode=str(INFERENCE_MODE),
+        layout_source=str(LAYOUT_SOURCE),
+        k_value=int(K_VALUE),
+        num_samples=int(NUM_SAMPLES),
+        pi_ref_mhz=float(PI_REF_MHZ),
+        seed=int(SEED),
+        latent_run_dir=LATENT_RUN_DIR,
+        explicit_z_npy=EXPLICIT_Z_NPY,
+        explicit_occ_npy=EXPLICIT_OCC_NPY,
+        explicit_imp_npy=EXPLICIT_IMP_NPY,
+        allow_random_layout=bool(ALLOW_RANDOM_LAYOUT),
+    )
+
+
+def _legacy_marginal_layout_draw(
+    engine: Any,
+    device: torch.device,
+    num_samples: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Random occ/imp from marginal z — only when ALLOW_RANDOM_LAYOUT=True."""
+    with torch.no_grad():
+        _, occ_prob0, imp0 = engine.model.inference(
+            num_samples,
+            device,
+            K=K_VALUE,
+            PI_freq=PI_REF_MHZ,
+            pi_freq_unit="mhz",
+            latent_stats=engine.latent_stats,
+            per_K_latent_stats=engine.per_K_latent_stats,
+            shared_temp=SHARED_TEMP,
+            mode="marginal",
+        )
+    return occ_prob0, imp0
+
+
 def run_generate(engine: Any, mhz_list: list[float], out_root: Path, device: torch.device) -> Path:
     """Decode at each MHz with fixed K; save heatmaps, occupancy, and combined PEB."""
+    qc_cfg = _build_qc_config()
+    try:
+        validate_sweep_qc(qc_cfg)
+    except SweepQCError as exc:
+        raise SystemExit(f"Sweep QC config error: {exc}") from exc
+
+    mode = qc_cfg.inference_mode.strip().lower()
     out_root.mkdir(parents=True, exist_ok=True)
     mask = engine.binary_mask
     rows: list[dict[str, Any]] = []
@@ -296,27 +386,79 @@ def run_generate(engine: Any, mhz_list: list[float], out_root: Path, device: tor
     torch.manual_seed(SEED)
     print(
         f"\n=== Generate PI-freq sweep: K={K_VALUE} (fixed), {len(mhz_list)} frequencies, "
-        f"{NUM_SAMPLES} sample(s) each, inference={INFERENCE_MODE} ==="
+        f"{NUM_SAMPLES} sample(s), qc_mode={mode}, layout_source={qc_cfg.layout_source} ==="
     )
 
     shared_occ: torch.Tensor | None = None
     shared_imp: torch.Tensor | None = None
-    fg_max_table = load_anchor_fg_max_table() if CALIBRATE_FG_MAX else {}
-    if INFERENCE_MODE in ("layout", "anchor_blend"):
-        with torch.no_grad():
-            _, occ_prob0, imp0 = engine.model.inference(
-                NUM_SAMPLES,
+    shared_k: torch.Tensor | None = None
+    z_fixed: torch.Tensor | None = None
+    n_batch = int(NUM_SAMPLES)
+    exp_cfg: dict[str, Any] | None = None
+    sweep_val_ld = None
+
+    if mode == "layout_qc":
+        exp_cfg = _load_experiment_config(PROJECT_ROOT / EXPERIMENT_DIR / "config.yaml")
+        sweep_val_ld = get_sweep_val_loader(
+            data_dir=PROJECT_ROOT / DATA_DIR,
+            experiment_cfg=exp_cfg,
+            device=device,
+        )
+        shared_occ, shared_imp, shared_k = load_val_layout_samples(
+            data_dir=PROJECT_ROOT / DATA_DIR,
+            experiment_cfg=exp_cfg,
+            k_value=K_VALUE,
+            num_samples=n_batch,
+            seed=SEED,
+            device=device,
+            val_ld=sweep_val_ld,
+        )
+        n_batch = int(shared_occ.shape[0])
+        print(f"  layout_qc: {n_batch} val layout(s) at K={K_VALUE}")
+
+    elif mode in ("latent_z", "layout_hybrid"):
+        if qc_cfg.layout_source == "latent_run":
+            bundle = load_latent_run_bundle(
+                qc_cfg.latent_run_dir or "",
+                K_VALUE,
                 device,
-                K=K_VALUE,
-                PI_freq=PI_REF_MHZ,
-                pi_freq_unit="mhz",
-                latent_stats=engine.latent_stats,
-                per_K_latent_stats=engine.per_K_latent_stats,
-                shared_temp=SHARED_TEMP,
-                mode="marginal",
+                imp_log_mean=float(engine.imp_log_mean),
+                imp_log_std=float(engine.imp_log_std),
             )
-            shared_occ = occ_prob0
-            shared_imp = imp0
+        else:
+            bundle = load_explicit_npy_bundle(
+                z_npy=qc_cfg.explicit_z_npy,
+                occ_npy=qc_cfg.explicit_occ_npy,
+                imp_npy=qc_cfg.explicit_imp_npy,
+                k=K_VALUE,
+                device=device,
+                imp_log_mean=float(engine.imp_log_mean),
+                imp_log_std=float(engine.imp_log_std),
+            )
+        z_fixed = bundle["z"]
+        shared_occ = bundle["occ_prob"]
+        shared_imp = bundle["imp_norm"]
+        shared_k = bundle["K"]
+        n_batch = int(z_fixed.shape[0])
+        print(f"  {mode}: loaded z {tuple(z_fixed.shape)} from {qc_cfg.layout_source}")
+
+        if mode == "layout_hybrid":
+            if shared_imp is None:
+                raise SystemExit(
+                    "layout_hybrid requires impedance (best_impedance_log.npy or EXPLICIT_IMP_NPY)"
+                )
+            z_fixed = build_hybrid_z(
+                engine.model,
+                z_fixed,
+                shared_occ,
+                shared_imp,
+                shared_k,
+                PI_REF_MHZ,
+                device,
+            )
+            print(f"  layout_hybrid: merged optimized shared + layout private head")
+
+    fg_max_table = load_anchor_fg_max_table() if CALIBRATE_FG_MAX else {}
 
     for mhz in mhz_list:
         tag = _freq_tag(mhz)
@@ -324,47 +466,87 @@ def run_generate(engine: Any, mhz_list: list[float], out_root: Path, device: tor
         out_dir.mkdir(parents=True, exist_ok=True)
 
         with torch.no_grad():
-            inf_kw: dict[str, Any] = dict(
-                latent_stats=engine.latent_stats,
-                per_K_latent_stats=engine.per_K_latent_stats,
-                shared_temp=SHARED_TEMP,
-                mode=INFERENCE_MODE,
-                pi_ref_mhz=PI_REF_MHZ,
-            )
-            if INFERENCE_MODE in ("layout", "anchor_blend") and shared_occ is not None:
-                inf_kw["occupancy"] = shared_occ
-                inf_kw["impedance"] = shared_imp
-            hm_z, occ_prob, imp_norm = engine.model.inference(
-                NUM_SAMPLES,
-                device,
-                K=K_VALUE,
-                PI_freq=mhz,
-                pi_freq_unit="mhz",
-                **inf_kw,
-            )
+            if mode == "layout_qc":
+                assert shared_occ is not None and shared_imp is not None
+                hm_z, occ_prob, imp_norm = engine.model.inference(
+                    n_batch,
+                    device,
+                    K=K_VALUE,
+                    PI_freq=mhz,
+                    pi_freq_unit="mhz",
+                    latent_stats=engine.latent_stats,
+                    per_K_latent_stats=engine.per_K_latent_stats,
+                    shared_temp=SHARED_TEMP,
+                    mode="layout",
+                    pi_ref_mhz=PI_REF_MHZ,
+                    occupancy=shared_occ,
+                    impedance=shared_imp,
+                )
+            elif mode in ("latent_z", "layout_hybrid"):
+                assert z_fixed is not None and shared_k is not None
+                occ_decode = shared_occ
+                hm_list = decode_heatmap_sweep_mhz(
+                    engine.model,
+                    z_fixed,
+                    shared_k,
+                    [mhz],
+                    device,
+                    occ_for_decode=occ_decode,
+                )
+                hm_z = hm_list[0]
+                pi_t = pi_freq_norm_for_model(mhz, n_batch, unit="mhz", device=device)
+                _, occ_logits, imp_norm = engine.model.decode(
+                    z_fixed, shared_k, pi_t, occupancy=occ_decode,
+                )
+                occ_prob = torch.sigmoid(occ_logits)
+            elif mode in ("layout", "anchor_blend", "marginal", "encode"):
+                if not ALLOW_RANDOM_LAYOUT:
+                    raise SystemExit(f"Mode {mode!r} blocked — set ALLOW_RANDOM_LAYOUT=True")
+                inf_kw: dict[str, Any] = dict(
+                    latent_stats=engine.latent_stats,
+                    per_K_latent_stats=engine.per_K_latent_stats,
+                    shared_temp=SHARED_TEMP,
+                    mode=mode,
+                    pi_ref_mhz=PI_REF_MHZ,
+                )
+                if mode in ("layout", "anchor_blend"):
+                    occ0, imp0 = _legacy_marginal_layout_draw(engine, device, n_batch)
+                    inf_kw["occupancy"] = occ0
+                    inf_kw["impedance"] = imp0
+                hm_z, occ_prob, imp_norm = engine.model.inference(
+                    n_batch,
+                    device,
+                    K=K_VALUE,
+                    PI_freq=mhz,
+                    pi_freq_unit="mhz",
+                    **inf_kw,
+                )
+            else:
+                raise SystemExit(f"Unhandled inference mode: {mode!r}")
 
-        occ_bin = torch.zeros_like(occ_prob)
-        if K_VALUE > 0:
-            topk_idx = occ_prob.topk(min(K_VALUE, occ_prob.shape[-1]), dim=-1).indices
-            occ_bin.scatter_(-1, topk_idx, 1.0)
+        occ_bin = topk_occ_binary(occ_prob, K_VALUE).cpu().numpy().astype(np.int8)
 
-        hm_phys = _hm_physical(hm_z, engine).cpu().numpy()
+        hm_phys = _hm_physical(hm_z, engine, mhz=mhz).cpu().numpy()
         if CALIBRATE_FG_MAX and fg_max_table and not is_training_anchor(mhz):
             target_max = interp_anchor_value(mhz, fg_max_table)
             for i in range(hm_phys.shape[0]):
                 hm_phys[i] = calibrate_heatmap_physical(
                     hm_phys[i], mask, target_max,
                 )
-        occ_np = occ_bin.cpu().numpy().astype(np.int8)
+        occ_np = occ_bin
         np.save(out_dir / "occupancy.npy", occ_np)
         all_occupancies.append(occ_np)
         mhz_int = int(round(mhz))
-        all_peb_freqs.extend([f"{mhz_int}e6"] * NUM_SAMPLES)
+        all_peb_freqs.extend([f"{mhz_int}e6"] * n_batch)
 
-        for i in range(NUM_SAMPLES):
+        for i in range(n_batch):
             sd = out_dir / f"data_sample_{i}"
             sd.mkdir(parents=True, exist_ok=True)
-            hm_norm_np = hm_z[i].cpu().numpy()
+            hm_norm_np = (
+                engine.heatmap_train_to_disk(hm_z[i]).cpu().numpy()
+                if hasattr(engine, "heatmap_train_to_disk")
+                else hm_z[i].cpu().numpy()
+            )
             np.save(sd / "heatmap_norm.npy", hm_norm_np)
             np.save(sd / "heatmap_zscore.npy", hm_norm_np)
             np.save(sd / "heatmap_physical.npy", hm_phys[i])
@@ -415,8 +597,35 @@ def run_generate(engine: Any, mhz_list: list[float], out_root: Path, device: tor
     fig.savefig(out_root / "generate_heatmap_vs_mhz.png", dpi=200)
     plt.close(fig)
 
-    manifest = write_sweep_freq_manifest(mhz_list, out_root)
+    manifest = write_sweep_freq_manifest(mhz_list, out_root, extra=qc_manifest_extra(qc_cfg))
     print(f"  Freq manifest: {manifest}")
+
+    if RUN_SWEEP_QC_EVAL:
+        if exp_cfg is None:
+            exp_cfg = _load_experiment_config(PROJECT_ROOT / EXPERIMENT_DIR / "config.yaml")
+        if (
+            sweep_val_ld is None
+            and qc_cfg.inference_mode == "layout_qc"
+            and qc_cfg.layout_source == "val"
+        ):
+            sweep_val_ld = get_sweep_val_loader(
+                data_dir=PROJECT_ROOT / DATA_DIR,
+                experiment_cfg=exp_cfg,
+                device=device,
+            )
+        run_sweep_qc_eval(
+            engine,
+            device,
+            out_root=out_root,
+            experiment_dir=EXPERIMENT_DIR,
+            checkpoint_path=CHECKPOINT_PATH,
+            data_dir=PROJECT_ROOT / DATA_DIR,
+            experiment_cfg=exp_cfg,
+            qc_cfg=qc_cfg,
+            gen_rows=rows,
+            sweep_mhz=mhz_list,
+            val_ld=sweep_val_ld,
+        )
 
     print(f"\n  Samples under: {out_root}")
     print(f"  Summary CSV : {csv_path}")
@@ -609,47 +818,9 @@ def write_report(out_root: Path, mhz_list: list[float], modes: list[str]) -> Non
     (out_root / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="exp038 PI_freq heatmap sweep at fixed K")
-    ap.add_argument("--mode", choices=("generate", "val", "both"), default="generate")
-    ap.add_argument("--sweep", default=None, help="anchors | dense | ignored if SWEEP is a list in file")
-    ap.add_argument(
-        "--mhz",
-        nargs="+",
-        type=float,
-        default=None,
-        metavar="MHZ",
-        help="Explicit PI frequencies in MHz (overrides SWEEP and --sweep), e.g. --mhz 80 250",
-    )
-    ap.add_argument("--max-batches", type=int, default=VAL_MAX_BATCHES)
-    ap.add_argument("--k", type=int, default=None, help="fixed K (default from config)")
-    ap.add_argument("--out", default=None)
-    ap.add_argument(
-        "--inference-mode",
-        choices=("marginal", "layout", "anchor_blend", "encode"),
-        default=None,
-    )
-    ap.add_argument("--no-calibrate-fg", action="store_true", help="Disable FG max calibration")
-    ap.add_argument("--pi-ref-mhz", type=float, default=None)
-    args = ap.parse_args()
-
-    global K_VALUE, SWEEP, OUTPUT_ROOT, PEB_OUT_FILE, INFERENCE_MODE, PI_REF_MHZ, CALIBRATE_FG_MAX
-    if args.k is not None:
-        K_VALUE = args.k
-    if args.out:
-        OUTPUT_ROOT = args.out
-    if args.mhz is not None:
-        SWEEP = [float(m) for m in args.mhz]
-    elif args.sweep:
-        SWEEP = args.sweep
-    if args.inference_mode:
-        INFERENCE_MODE = args.inference_mode
-    if args.pi_ref_mhz is not None:
-        PI_REF_MHZ = args.pi_ref_mhz
-    if args.no_calibrate_fg:
-        CALIBRATE_FG_MAX = False
-    PEB_OUT_FILE = f"{OUTPUT_ROOT}/pi_distribution_K{K_VALUE}_freq_sweep.peb"
-
+def run_from_config() -> None:
+    """Run sweep using module-level CONFIG constants (also used by pipeline orchestrator)."""
+    _sync_derived_paths()
     os.chdir(PROJECT_ROOT)
     mhz_list = _build_mhz_list(SWEEP)
     out_root = Path(OUTPUT_ROOT)
@@ -667,16 +838,20 @@ def main() -> None:
 
     engine = _load_engine(device)
     modes_run: list[str] = []
-    if args.mode in ("generate", "both"):
+    if MODE in ("generate", "both"):
         run_generate(engine, mhz_list, out_root, device)
         modes_run.append("generate")
-    if args.mode in ("val", "both"):
-        run_val(engine, mhz_list, out_root, device, args.max_batches)
+    if MODE in ("val", "both"):
+        run_val(engine, mhz_list, out_root, device, VAL_MAX_BATCHES)
         modes_run.append("val")
 
     write_report(out_root, mhz_list, modes_run)
     print(f"\nDone → {out_root.resolve()}")
     print(f"  Report: {out_root / 'README.md'}")
+
+
+def main() -> None:
+    run_from_config()
 
 
 if __name__ == "__main__":

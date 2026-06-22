@@ -1,13 +1,18 @@
-"""Compare generated vs real outputs for K=K_MIN..K_MAX (and optional PI-freq subfolders).
+"""Compare Generated vs Real (Workflow-Aware).
 
-Workflows (set ``WORKFLOW`` below):
-- ``run_all_k`` — heatmap + impedance + occupancy
-- ``multifreq_heatmap_sweep`` — fixed K, PI-freq sweep; **heatmap only** vs CAD PI-Distribution
-
-Edit the CONFIGURATION block, then run:
-    python scrap/comparison/compare.py
+Purpose: Plot heatmap, impedance, and/or occupancy comparisons for each K (and optional
+    freq_*MHz subfolders) using generated samples vs ECADStar Real/ outputs.
+Run: python scrap/comparison/compare.py  (set WORKFLOW in CONFIGURATION first)
+Inputs / outputs: BASE_GENERATED_DIR / OUTPUT_ROOT from run_all_k or run_multifreq_heatmap_sweep;
+    reads configs/{Frequency_data_hz,target_impedance,binary_mask}.npy;
+    writes generated_vs_real_*.png per K folder.
+Dependencies: matplotlib, numpy, scipy; imports generation config by WORKFLOW.
+Agent notes:
+    - Type: CLI script with WORKFLOW switch (run_all_k | multifreq_heatmap_sweep)
+    - Key symbols: main, _run_single_k, HEATMAP_OUT_NAME, WORKFLOW, _plot_heatmap_comparisons,
+    - Config keys: ``WORKFLOW``, ``K_MIN``, ``_freq_src``, ``_FREQ_LIST``, ``_FREQ_LIST``, ``_FREQ_LIST``, ``FREQ_LABEL``, ``RUN_HEATMAP``, ``RUN_IMPEDANCE``, ``RUN_OCCUPANCY``, ``FAIL_FAST``, ``FREQUENCY_PATH``, ``TARGET_IMPEDANCE_PATH``, ``MASK_PATH``, ``HEATMAP_OUT_NAME``, ``IMPEDANCE_OUT_NAME``, ``OCCUPANCY_OUT_NAME``, ``HEATMAP_CMAP``, ``HEATMAP_LEVELS``, ``HEATMAP_DIFF_TOLERANCE``, ``HEATMAP_PATTERN_DIFF_TOLERANCE``, ``HEATMAP_SHARED_COLOR_SCALE``, ``HEATMAP_VMAX_PERCENTILE_FG``, ``MAP_GLOB_PREFERENCE``, ``IMPEDANCE_CSV_GLOB_PREFERENCE``, ``ACTIVE_POLICY``, ``THRESHOLD``
+      _plot_impedance_comparisons, _plot_checkboxes
 """
-
 from __future__ import annotations
 
 import os
@@ -103,11 +108,19 @@ HEATMAP_LEVELS         = 22
 HEATMAP_DIFF_TOLERANCE = 0.25   # suppress sub-tolerance noise in diff panel (Ohms)
 # Pattern diff: suppress noise below this (normalised [0,1] space)
 HEATMAP_PATTERN_DIFF_TOLERANCE = 0.05
-# Use real heatmap color scale for generated panel (avoids misleading autoscale when gen is flat)
+# vmax mode: "percentile" (per-panel p99.9) | "stats_percentile" | "global_max" (legacy)
+HEATMAP_VMAX_MODE = "percentile"
+# Use real heatmap color scale for generated panel (legacy; set True with stats_percentile)
 HEATMAP_SHARED_COLOR_SCALE = False
-# Use per-heatmap local percentile for vmax (avoid single-pixel outliers).
-# Each heatmap panel computes its own foreground percentile locally.
+# Per-panel foreground percentile when HEATMAP_VMAX_MODE == "percentile".
 HEATMAP_VMAX_PERCENTILE_FG = 99.9
+# Dataset stats percentile of per-map FG max → shared colorbar vmax (Ω).
+HEATMAP_VMAX_STATS_PERCENTILE = 99.9
+# Manual override for shared vmax (Ω); None → derive from HEATMAP_STATS_DATA_DIR stats.
+HEATMAP_VMAX_GLOBAL_MAX_OHM: float | None = None
+HEATMAP_STATS_DATA_DIR: str | None = None
+# Number of tick marks on Real/Generated colorbars (cmap resampling uses HEATMAP_LEVELS).
+HEATMAP_COLORBAR_TICKS = 6
 
 # Real heatmap .map file chooser (inside Heatmap_real_* directory)
 MAP_GLOB_PREFERENCE = ("Z_*.map", "*.map")
@@ -123,6 +136,61 @@ THRESHOLD     = 0.5
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def _load_heatmap_stats() -> dict:
+    data_dir = HEATMAP_STATS_DATA_DIR
+    if data_dir is None:
+        data_dir = str(_project_root() / "datasets" / "data_multifreq_gmax")
+    stats_path = Path(data_dir) / "normalization_stats.json"
+    if not stats_path.is_file():
+        raise FileNotFoundError(
+            f"Heatmap stats vmax requires normalization_stats.json: {stats_path}"
+        )
+    import json
+
+    raw = json.loads(stats_path.read_text(encoding="utf-8"))
+    return raw.get("Heatmap") or {}
+
+
+def _resolve_heatmap_vmax_ohm() -> float:
+    """Shared colorbar vmax in Ω from normalization stats."""
+    if HEATMAP_VMAX_GLOBAL_MAX_OHM is not None:
+        return float(HEATMAP_VMAX_GLOBAL_MAX_OHM)
+
+    hm = _load_heatmap_stats()
+    gmax = hm.get("global_max_ohm")
+    if gmax is None:
+        raise KeyError("global_max_ohm missing in normalization Heatmap stats")
+
+    pct = float(HEATMAP_VMAX_STATS_PERCENTILE)
+    for key in (
+        f"per_map_max_p{pct:g}",
+        f"per_map_max_p{int(pct)}",
+        f"per_map_max_p{str(pct).replace('.', '_')}",
+    ):
+        if key in hm:
+            return float(hm[key])
+
+    gmax_f = float(gmax)
+    clip_max = float(hm.get("clip_max", 1.0))
+    gmax_pct = hm.get("gmax_percentile")
+    if gmax_pct is not None and abs(float(gmax_pct) - pct) < 0.05:
+        return gmax_f
+    # p99.9+ of per-map max ≈ clip ceiling in physical Ω (maps are clipped at clip_max * gmax).
+    if pct >= 99.9 - 1e-6:
+        return clip_max * gmax_f
+    return gmax_f
+
+
+def _resolve_global_max_ohm() -> float:
+    """Backward-compatible alias."""
+    return _resolve_heatmap_vmax_ohm()
+
+
+def _colorbar_ticks(vmin: float, vmax: float) -> list[float]:
+    n = max(2, int(HEATMAP_COLORBAR_TICKS))
+    return np.linspace(vmin, vmax, n).tolist()
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -327,6 +395,21 @@ def _plot_heatmap_comparisons(
     cmap = mpl.colormaps[HEATMAP_CMAP].resampled(HEATMAP_LEVELS).copy()
     cmap.set_bad("white")
 
+    use_shared = HEATMAP_VMAX_MODE in ("global_max", "stats_percentile") or HEATMAP_SHARED_COLOR_SCALE
+    shared_vmax: float | None = None
+    shared_label: str | None = None
+    if use_shared:
+        shared_vmax = _resolve_heatmap_vmax_ohm()
+        pct = float(HEATMAP_VMAX_STATS_PERCENTILE)
+        if HEATMAP_VMAX_MODE == "stats_percentile":
+            shared_label = f"p{pct:g} max={shared_vmax:.2f}Ω"
+        else:
+            shared_label = f"gmax={shared_vmax:.2f}Ω"
+        print(
+            f"  Heatmap color scale: shared {shared_label}  "
+            f"(levels={HEATMAP_LEVELS}, ticks={HEATMAP_COLORBAR_TICKS})",
+        )
+
     for row_idx, item in enumerate(comparisons):
         real = item["real"]
         gen = item["generated"]
@@ -359,34 +442,53 @@ def _plot_heatmap_comparisons(
         vmaxp_real = float(np.percentile(real_fg, pctl)) if real_fg.size else vmax_real
         vmaxp_gen  = float(np.percentile(gen_fg, pctl)) if gen_fg.size else vmax_gen
 
+        if shared_vmax is not None:
+            plot_vmax = shared_vmax
+            scale_label = shared_label or f"max={plot_vmax:.2f}Ω"
+        else:
+            plot_vmax_real = vmaxp_real
+            plot_vmax_gen = vmaxp_gen if not HEATMAP_SHARED_COLOR_SCALE else vmaxp_real
+            scale_label = None
+
         ax0, ax1, ax2 = axes[row_idx]
 
+        real_vmax = shared_vmax if shared_vmax is not None else plot_vmax_real
         im0 = ax0.imshow(
             real_m, cmap=cmap, interpolation="bicubic", aspect="auto", origin="lower",
-            vmin=0.0, vmax=vmaxp_real,
+            vmin=0.0, vmax=real_vmax,
         )
-        ax0.set_title(
-            f"{label} - Real (p{pctl:g}={vmaxp_real:.2f}, max={vmax_real:.2f})",
-            fontsize=12,
-        )
+        if shared_vmax is not None:
+            ax0.set_title(
+                f"{label} - Real ({scale_label}, max={vmax_real:.2f})",
+                fontsize=12,
+            )
+        else:
+            ax0.set_title(
+                f"{label} - Real (p{pctl:g}={vmaxp_real:.2f}, max={vmax_real:.2f})",
+                fontsize=12,
+            )
         ax0.set_xlabel("X"); ax0.set_ylabel("Y")
         cb0 = fig.colorbar(im0, ax=ax0, fraction=0.046, pad=0.04)
         vmin0, vmax0 = im0.get_clim()
-        cb0.set_ticks(np.linspace(vmin0, vmax0, 6).tolist())
+        cb0.set_ticks(_colorbar_ticks(vmin0, vmax0))
 
-        gen_vmax_plot = vmaxp_gen
+        gen_vmax_plot = shared_vmax if shared_vmax is not None else plot_vmax_gen
         im1 = ax1.imshow(
             gen_m, cmap=cmap, interpolation="bicubic", aspect="auto", origin="lower",
             vmin=0.0, vmax=gen_vmax_plot,
         )
-        scale_note = (
-            f"p{pctl:g}={vmaxp_gen:.2f}"
+        if shared_vmax is not None:
+            scale_note = scale_label
+        else:
+            scale_note = f"p{pctl:g}={vmaxp_gen:.2f}"
+        ax1.set_title(
+            f"{label} - Generated ({scale_note}, max={vmax_gen:.2f}, p95={p95_gen:.2f})",
+            fontsize=12,
         )
-        ax1.set_title(f"{label} - Generated ({scale_note}, max={vmax_gen:.2f}, p95={p95_gen:.2f})", fontsize=12)
         ax1.set_xlabel("X"); ax1.set_ylabel("Y")
         cb1 = fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
         vmin1, vmax1 = im1.get_clim()
-        cb1.set_ticks(np.linspace(vmin1, vmax1, 6).tolist())
+        cb1.set_ticks(_colorbar_ticks(vmin1, vmax1))
 
         im2 = ax2.imshow(pattern_diff_m, cmap="RdYlGn_r", interpolation="bicubic", aspect="auto", origin="lower", vmin=0.0, vmax=1.0)
         pearson_r = float(np.corrcoef(real_vals, gen_vals)[0, 1]) if len(real_vals) > 1 else float("nan")

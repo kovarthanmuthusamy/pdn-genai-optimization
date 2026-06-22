@@ -1473,6 +1473,17 @@ def train_vae() -> None:
                     out_csv=metrics_dir / f"off_anchor_eval_epoch_{ep}.csv",
                 )
 
+        if getattr(c, "_early_stopped", False):
+            # Guard: experiment-specific early-stop may set the flag, but we must not
+            # terminate before the configured minimum epoch (prevents epoch-1 stops).
+            min_ep = int(getattr(c, "early_stop_min_epoch", 0) or 0)
+            if ep >= min_ep:
+                print(f"\n  Early stop — ending training at epoch {ep}")
+                break
+            # If triggered too early, clear and continue training.
+            c._early_stopped = False
+            print(f"\n  Early stop flag ignored (ep {ep} < min_ep {min_ep})")
+
     total_s = prev_t + int(time.time() - t0)
     n_ep = max(len(train_times), 1)
     avg_train = sum(train_times) / n_ep

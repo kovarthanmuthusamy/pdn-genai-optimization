@@ -1,3 +1,7 @@
+"""ECADSTAR batch simulation bridge (Windows PowerShell + AutoHotkey).
+
+Run:
+    Not run directly — called from ``active_learning_pi.al.pipeline`` ``simulate`` step."""
 from __future__ import annotations
 
 import os
@@ -21,7 +25,7 @@ def run_ecadstar_batch(
     if not peb_path.is_file():
         raise FileNotFoundError(f"PEB not found: {peb_path}")
 
-    ps_script = groot / "scripts" / "run_ecadstar_piemi_batch.ps1"
+    ps_script = groot / "tools" / "ecadstar" / "run_ecadstar_piemi_batch.ps1"
     if not ps_script.is_file():
         raise FileNotFoundError(f"AHK runner not found: {ps_script}")
 

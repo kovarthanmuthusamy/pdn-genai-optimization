@@ -1,7 +1,6 @@
-"""Clip log-z heatmaps to dataset tail bounds (minimal data loss).
+"""Log-z heatmap clipping and denormalization helpers.
 
-Uses ``Heatmap.clip_min`` / ``clip_max`` from ``normalization_stats.json``
-(typically ~1st–99th percentile of foreground z, not the full z_min/z_max).
+Delegates scale/denorm to ``norm_stats`` (single source of truth from normalization_stats.json).
 """
 
 from __future__ import annotations
@@ -13,25 +12,19 @@ from typing import Any
 import numpy as np
 import torch
 
+from src_vae.others.norm_stats import (
+    HeatmapNormStats,
+    load_heatmap_clip_bounds as _load_clip_from_norm_stats,
+    load_heatmap_stats,
+)
+
 
 def load_heatmap_z_clip_bounds(
     data_dir: str | Path,
     *,
     stats_path: str | Path | None = None,
 ) -> tuple[float, float] | None:
-    """Return (clip_min, clip_max) or None if stats missing."""
-    if stats_path is None:
-        stats_path = Path(data_dir) / "normalization_stats.json"
-    p = Path(stats_path)
-    if not p.is_file():
-        return None
-    raw = json.loads(p.read_text(encoding="utf-8"))
-    hm = raw.get("Heatmap") or {}
-    lo = hm.get("clip_min")
-    hi = hm.get("clip_max")
-    if lo is None or hi is None:
-        return None
-    return float(lo), float(hi)
+    return _load_clip_from_norm_stats(data_dir, stats_path=stats_path)
 
 
 def clip_heatmap_z(
@@ -45,7 +38,6 @@ def clip_heatmap_z(
 
 
 def clip_fraction(x: torch.Tensor | np.ndarray, lo: float, hi: float) -> float:
-    """Fraction of elements that would change under clip (for logging)."""
     if isinstance(x, torch.Tensor):
         a = x.detach().float()
         n = a.numel()
@@ -67,8 +59,27 @@ def heatmap_z_to_physical(
     *,
     clip_lo: float | None = None,
     clip_hi: float | None = None,
+    hm_stats: HeatmapNormStats | dict[str, Any] | None = None,
+    mhz: float | torch.Tensor | None = None,
+    pi_norm: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Denorm log-z heatmap to Ω with optional z clip before ``exp``."""
+    """Denorm heatmap to physical Ω.
+
+    Prefer ``hm_stats`` (or pass ``HeatmapNormStats`` via dict with norm_mode).
+    Legacy ``log_mean``/``log_std`` used when ``hm_stats`` is None.
+    """
+    if hm_stats is not None:
+        if isinstance(hm_stats, dict):
+            stats = HeatmapNormStats.from_json({"Heatmap": hm_stats, "background_value": hm_stats.get("background_value", -3.0)})
+        else:
+            stats = hm_stats
+        apply = clip_lo is not None and clip_hi is not None
+        if not apply:
+            apply = True
+        return stats.norm_to_physical(
+            hm_z, mhz=mhz, pi_norm=pi_norm, apply_clip=apply,
+        )
+
     z = hm_z
     if clip_lo is not None and clip_hi is not None:
         z = z.clamp(clip_lo, clip_hi)
@@ -77,43 +88,31 @@ def heatmap_z_to_physical(
 
 def heatmap_norm_to_physical(
     hm_norm: torch.Tensor,
-    hm_stats: dict[str, Any],
+    hm_stats: dict[str, Any] | HeatmapNormStats,
     *,
     clip_lo: float | None = None,
     clip_hi: float | None = None,
+    mhz: float | torch.Tensor | None = None,
+    pi_norm: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Denorm heatmap tensor to Ω (z-score or global-max)."""
-    if hm_stats.get("norm_mode") == "global_max" or hm_stats.get("global_max_ohm") is not None:
-        gmax = float(hm_stats["global_max_ohm"])
-        z = hm_norm
-        if clip_lo is not None and clip_hi is not None:
-            z = z.clamp(clip_lo, clip_hi)
-        return z.clamp(min=0.0) * gmax
-    log_mean = float(hm_stats["log_mean"])
-    log_std = float(hm_stats["log_std"])
-    return heatmap_z_to_physical(
-        hm_norm, log_mean, log_std, clip_lo=clip_lo, clip_hi=clip_hi,
+    """Denorm heatmap tensor to Ω (z-score, robust per-MHz, or global-max)."""
+    if isinstance(hm_stats, HeatmapNormStats):
+        stats = hm_stats
+    else:
+        stats = HeatmapNormStats.from_json({"Heatmap": hm_stats})
+    apply = clip_lo is not None and clip_hi is not None
+    if not apply and stats.is_robust_per_mhz() and mhz is not None:
+        b = stats.bin_stats(float(mhz) if not isinstance(mhz, torch.Tensor) else float(mhz.item()))
+        clip_lo, clip_hi = b.clip_min, b.clip_max
+        apply = True
+    return stats.norm_to_physical(
+        hm_norm, mhz=mhz, pi_norm=pi_norm, apply_clip=apply,
     )
 
 
 def describe_clip_bounds(data_dir: str | Path) -> str:
-    """Human-readable summary vs full z range in stats."""
-    p = Path(data_dir) / "normalization_stats.json"
-    if not p.is_file():
+    try:
+        hm = load_heatmap_stats(data_dir)
+        return f"heatmap norm: {hm.describe()}"
+    except (FileNotFoundError, KeyError, json.JSONDecodeError):
         return "heatmap clip: no normalization_stats.json"
-    raw = json.loads(p.read_text(encoding="utf-8"))
-    hm: dict[str, Any] = raw.get("Heatmap") or {}
-    lo, hi = hm.get("clip_min"), hm.get("clip_max")
-    if lo is None or hi is None:
-        return "heatmap clip: clip_min/max missing in stats"
-    if hm.get("norm_mode") == "global_max" or hm.get("global_max_ohm") is not None:
-        gmax = float(hm.get("global_max_ohm", 0.0))
-        return (
-            f"heatmap global-max: norm∈[{lo:.4f}, {hi:.4f}]  "
-            f"global_max_ohm={gmax:.4f}  bg={hm.get('background_value', 0.0)}"
-        )
-    zmin, zmax = hm.get("z_min"), hm.get("z_max")
-    parts = [f"clip z∈[{lo:.4f}, {hi:.4f}]"]
-    if zmin is not None and zmax is not None:
-        parts.append(f"full data z∈[{zmin:.4f}, {zmax:.4f}]")
-    return "heatmap z-clip: " + "  ".join(parts)

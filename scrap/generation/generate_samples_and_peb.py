@@ -1,22 +1,21 @@
-"""Generate new VAE samples and a matching ECADStar batch .peb.
+"""Generate VAE samples and PEB for one K.
 
-What it does
-- Loads a trained VAE checkpoint (exp027-style MultiInputVAE).
-- Generates N samples with exactly K occupied capacitor slots per sample.
-- Saves each sample under: <out_dir>/data_sample_<i>/ (same filenames as existing inference scripts).
-- Writes <out_dir>/occupancy.npy containing the stacked (N,52) binary occupancy vectors.
-- Calls `scrap/generate_peb.generate_peb()` to write a batch .peb for the generated occupancies.
-    The default output file name is `K{K_VALUE}.peb` inside `OUTPUT_DIR`.
+Purpose:
+    Load VAE checkpoint, generate N samples with exactly K active decaps, save ``data_sample_*``
+    folders, and write a matching ECADStar ``.peb``.
 
-Typical usage
-    Edit the CONFIGURATION block below, then run:
-        python scrap/generate_samples_and_peb.py
+Run:
+    python scrap/generation/generate_samples_and_peb.py
 
-Notes
-- This script intentionally does not launch any interactive viewer.
-- Output impedance is saved in log scale (consistent with the repo's inference outputs).
+Agent notes:
+    - What: Single-K VAE sample export + PEB builder (legacy exp030 path).
+    - Usage: Set ``K_VALUE``, ``NUM_SAMPLES``, checkpoint paths, ``OUTPUT_DIR`` → run.
+    - Config keys:
+        - ``CHECKPOINT_PATH``, ``LATENT_STATS_PATH``, ``MODEL_LATENT_DIM`` — VAE load
+        - ``K_VALUE``, ``NUM_SAMPLES``, ``SHARED_TEMP`` — generation
+        - ``OUTPUT_DIR``, ``PEB_PATH`` — where ``.npy`` and ``.peb`` are written
+    - Key symbols: ``generate_save``, ``main``
 """
-
 from __future__ import annotations
 
 import os
@@ -27,9 +26,9 @@ import numpy as np
 import torch
 
 
-# ============================================================
-# CONFIGURATION (edit these)
-# ============================================================
+# =============================================================================
+# CONFIGURATION — edit these before running: python scrap/generation/generate_samples_and_peb.py
+# =============================================================================
 CHECKPOINT_PATH = "experiments/exp030_adding_physic/checkpoints/checkpoint_epoch_400.pt"
 
 # Optional: if empty, inference will use checkpoint-embedded latent stats (if present)
@@ -53,6 +52,8 @@ FREQ = "63e6"
 COMPONENTS = "IC1_Port1"
 
 FORCE_CPU = False
+
+# =============================================================================
 
 
 def _add_project_root_to_syspath() -> Path:

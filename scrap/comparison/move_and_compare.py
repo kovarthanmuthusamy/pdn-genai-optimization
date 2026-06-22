@@ -1,21 +1,12 @@
-"""Move PI-* outputs from an ECADStar .emc directory into Real/ folders, then
-compare generated vs real outputs (heatmap, impedance, occupancy).
+"""Move PI Outputs and Compare (run_all_k).
 
-Run parameters (K_MIN, K_MAX, NUM_SAMPLES, OUTPUT_ROOT, PI_FREQ_MHZ) are
-imported automatically from scrap/generation/run_all_k.py -- edit that file
-to change them.
-
-Run
-    python scrap/move_and_compare.py
-"""
-
+Run: python scrap/comparison/move_and_compare.py"""
 from __future__ import annotations
 
 import os
 import re
 import shutil
 import sys
-import argparse
 import base64
 import traceback
 from datetime import datetime
@@ -49,7 +40,7 @@ from scrap.generation.run_all_k import (  # noqa: E402
 BASE_GENERATED_DIR = _OUTPUT_ROOT
 
 # ============================================================
-# CONFIGURATION (edit these)
+# CONFIGURATION — edit these before running
 # ============================================================
 SOURCE_EMC_DIR = r"C:\Users\muthusamy\Desktop\design\H-shape.emc"
 
@@ -95,7 +86,10 @@ IMPEDANCE_CSV_GLOB_PREFERENCE = ("*PIPinZ*.csv", "*.csv")
 # -- Occupancy settings ------------------------------------------------------
 ACTIVE_POLICY = "topk"  # "topk" or "threshold"
 THRESHOLD     = 0.5
-# ============================================================
+
+# REPORT_ONLY = True  # skip move and compare; only rebuild HTML report
+REPORT_ONLY = False
+# =============================================================================
 
 # Resolved frequency list from PI_FREQ_OVERRIDE or run_all_k
 _freq_src = PI_FREQ_OVERRIDE if PI_FREQ_OVERRIDE is not None else _RUN_PI_FREQ_MHZ
@@ -1274,14 +1268,6 @@ def build_report(*, report_copy_dest: str | None = None) -> Path:
 # ============================================================
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Move PI outputs, compare, and build HTML report.")
-    ap.add_argument(
-        "--report-only",
-        action="store_true",
-        help="Skip move and compare steps; only (re)build the HTML report from existing PNGs.",
-    )
-    args = ap.parse_args()
-
     if not (0 <= K_MIN <= K_MAX <= 52):
         raise SystemExit("Expected 0 <= K_MIN <= K_MAX <= 52")
 
@@ -1289,7 +1275,7 @@ def main() -> None:
     multi_freq = _FREQ_LIST != [None]
     os.chdir(repo_root)
 
-    if args.report_only:
+    if REPORT_ONLY:
         print(f"\n{'='*60}")
         print("Report-only mode: skipping move and compare steps")
         print(f"{'='*60}")

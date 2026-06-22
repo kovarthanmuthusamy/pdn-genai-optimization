@@ -1,39 +1,44 @@
 # Evaluation
 
-This folder is the canonical home for evaluation code and run artifacts.
+Evaluation code and run artifacts for VAE quality and novelty checks.
 
-## Novelty
+## Novelty (memorization / nearest-neighbour)
 
-- Code: `evaluation/novelty/scripts/`
-- Run artifacts / reports: `evaluation/novelty/runs/`
-- Backwards-compatible wrappers: `scripts/*.py` dispatch to the new locations.
-- Legacy artifacts previously under `scrap/generated_samples/` were moved to `evaluation/novelty/runs/legacy_generated_samples/` (and `scrap/generated_samples` is kept as a symlink for compatibility).
+- Scripts: `evaluation/novelty/scripts/`
+- Outputs: `evaluation/novelty/runs/`
 
-## VAE (reconstruction + latent diagnostics)
+Edit the CONFIG block at the top of each script, then run:
 
-Edit the config block at the top of `evaluation/vae/run_vae_eval.py`, then run:
+```bash
+python evaluation/novelty/scripts/run_vae_novelty_test.py
+python evaluation/novelty/scripts/run_vae_novelty_sweep.py
+python evaluation/novelty/scripts/vae_novelty_report.py
+python evaluation/novelty/scripts/summarize_novelty_sweep.py
+```
+
+Legacy sample folders may appear under `evaluation/novelty/runs/legacy_generated_samples/`.
+
+## VAE reconstruction & latent diagnostics
+
+Edit CONFIG in `evaluation/vae/run_vae_eval.py`, then:
 
 ```bash
 python evaluation/vae/run_vae_eval.py
 ```
 
-Outputs (default `evaluation/vae/`):
+Default outputs under `evaluation/vae/`:
 
-- `vae_eval_report.md` (compact markdown report with plots)
+- `vae_eval_report.md`
 - `plots/*.png`
-- `vae_eval_metrics.json` (aggregated metrics)
-- `vae_eval_per_sample.csv` (per-sample metrics)
+- `vae_eval_metrics.json`
+- `vae_eval_per_sample.csv`
 
-### Held-out full test (non-training combinations)
+### Held-out full test
 
-If you created a held-out dataset via `Data_Creation/Data_processing_eval.py`, run:
+After building a held-out dataset with `pipelines/data/processing_eval.py` and normalizing it, edit CONFIG in `run_vae_eval_heldout.py`:
 
 ```bash
-python evaluation/vae/run_vae_eval_heldout.py \
-  --checkpoint experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt \
-  --dataset-root datasets/data_eval_norm
+python evaluation/vae/run_vae_eval_heldout.py
 ```
 
-This assumes you have already normalized the held-out dataset into a VAE-compatible dataset root
-(e.g. `datasets/data_eval_norm`). If your normalized dataset is in a different location, pass
-`--dataset-root`.
+Set `CHECKPOINT`, `DATASET_ROOT`, and `OUT_DIR` in the CONFIG block.

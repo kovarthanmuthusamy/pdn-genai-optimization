@@ -1,3 +1,7 @@
+"""Load/save active-learning pipeline configuration (JSON or YAML).
+
+Run:
+    Import only — path set via ``CONFIG_PATH`` in ``pipelines/active_learning/run.py``."""
 from __future__ import annotations
 
 import json

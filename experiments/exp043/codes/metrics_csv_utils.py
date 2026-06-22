@@ -1,8 +1,15 @@
-"""Read/write exp042 metrics CSVs (dedupe by epoch, sorted).
+"""Dedupe and sort exp043 training metrics CSVs by epoch.
 
-This experiment can produce duplicate epoch rows when training is resumed or a
-run restarts mid-epoch. These helpers rewrite CSVs keeping the *last* row per
-epoch and sorting by epoch.
+Purpose:
+    Remove duplicate epoch rows after training resume; keep last row per epoch, sorted.
+
+Run:
+    Import only — ``from experiments.exp043.codes.metrics_csv_utils import update_all_metrics_csv``.
+
+Agent notes:
+    - What: Post-training CSV hygiene for ``metrics/loss.csv`` and timing files after checkpoint resume.
+    - Usage: Call ``update_all_metrics_csv(metrics_dir)`` after interrupted training or before replotting.
+    - Key symbols: ``dedupe_csv_by_epoch``, ``update_all_metrics_csv``, ``insert_epoch_row``
 """
 from __future__ import annotations
 

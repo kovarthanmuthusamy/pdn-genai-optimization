@@ -1,22 +1,9 @@
-"""
-visualize_latent.py — Latent space visualizations for exp042 (PI_freq-conditioned VAE).
+"""Latent-space visualizations for exp043 PI_freq-conditioned VAE.
 
-Encodes a multifreq dataset subset and writes:
-  - t-SNE / PCA colored by K and by PI frequency (MHz)
-  - PCA variance, per-dim mu/sigma, KL diagnostics
-  - Decoder grids along top-2 PCs at several PI_freq (MHz)
-  - Linear probes: K←mu and MHz←mu
-  - Expert-vs-fused disagreement vs K and vs MHz
-
-Usage:
-    cd ~/gan
-    python experiments/exp042/codes/visualize_latent.py
-    python experiments/exp042/codes/visualize_latent.py --ckpt checkpoints/last_model.pt
-"""
-
+Run:
+    python experiments/exp043/codes/visualize_latent.py"""
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -51,6 +38,17 @@ TSNE_PERPLEXITY = 40
 MAX_SAMPLES_DEFAULT = 30_000
 GRID_MHZ = (63.0, 200.0, 400.0)
 GRID_K = 26
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python experiments/exp043/codes/visualize_latent.py
+# =============================================================================
+
+CHECKPOINT: str | None = None  # None = config.yaml / last_model.pt
+MAX_SAMPLES = MAX_SAMPLES_DEFAULT
+OUTPUT_DIR: str | None = None  # None = experiments/exp043/latent_visuals
+GRID_MHZ_LIST = list(GRID_MHZ)  # MHz for decoder PC grids
+
+# =============================================================================
 
 
 def _k_cmap(K_arr):
@@ -286,24 +284,17 @@ def plot_kl_by_buckets(mu, logvar, bucket_fn, out_path: Path, title: str):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="exp042 latent visualization (PI_freq)")
-    ap.add_argument("--ckpt", default=None, help="Checkpoint .pt (default: config / last_model)")
-    ap.add_argument("--max-samples", type=int, default=MAX_SAMPLES_DEFAULT)
-    ap.add_argument("--output", default=None, help="Output directory")
-    ap.add_argument("--grid-mhz", nargs="*", type=float, default=list(GRID_MHZ))
-    args = ap.parse_args()
-
     cfg = load_exp_config()
     paths = resolve_paths(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ckpt = Path(args.ckpt) if args.ckpt else Path(paths["checkpoint"])
-    out_dir = Path(args.output or (paths["exp_dir"] / "latent_visuals"))
+    ckpt = Path(CHECKPOINT) if CHECKPOINT else Path(paths["checkpoint"])
+    out_dir = Path(OUTPUT_DIR or (paths["exp_dir"] / "latent_visuals"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Device: {device}\nCheckpoint: {ckpt}\nData: {paths['data_dir']}\nOutput: {out_dir}\n")
 
     model, _, _, _ = load_model(ckpt, device)
-    enc = encode_dataset(model, paths["data_dir"], device, max_samples=args.max_samples)
+    enc = encode_dataset(model, paths["data_dir"], device, max_samples=MAX_SAMPLES)
     mu, logvar, sigma = enc["mu"], enc["logvar"], enc["sigma"]
     K_arr, mhz_arr = enc["K"], enc["mhz"]
 
@@ -319,7 +310,7 @@ def main():
                      "PCA of fused μ (colored by MHz)", "MHz")
 
     plot_per_dim(mu, sigma, out_dir)
-    for mhz in args.grid_mhz:
+    for mhz in GRID_MHZ_LIST:
         plot_decoder_grid(model, pca_full, device, paths, mhz, GRID_K, 8, out_dir)
 
     plot_sigma_by_buckets(sigma, K_arr, lambda: _k_buckets(K_arr),

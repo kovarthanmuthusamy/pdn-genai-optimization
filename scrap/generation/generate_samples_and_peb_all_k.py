@@ -1,18 +1,19 @@
-"""Generate new VAE samples + a single ECADStar batch .peb for K=1..52.
+"""Generate samples and combined PEB for all K (legacy wrapper).
 
-This is a thin wrapper around `scrap/generate_samples_and_peb.py`.
+Purpose:
+    Loop ``K_MIN``..``K_MAX`` calling single-K generation; stack occupancies into one combined PEB.
 
-Typical usage
-    Edit the CONFIGURATION block below (optional), then run:
-        python scrap/generate_samples_and_peb_all_k.py
+Run:
+    python scrap/generation/generate_samples_and_peb_all_k.py
 
-Notes
-- Creates one output folder per K:
-    scrap/generated_samples/K{K}/
-- Writes one combined .peb containing all samples (in K order):
-    scrap/PEB/K1_to_K52.peb
+Agent notes:
+    - What: Multi-K wrapper around ``generate_samples_and_peb`` (legacy). Prefer ``run_all_k.py`` for new sweeps.
+    - Usage: Set ``K_MIN``, ``K_MAX``, ``OUT_ROOT``; inherits VAE settings from ``gsp`` module CONFIG.
+    - Config keys:
+        - ``K_MIN``, ``K_MAX`` — decap budget range
+        - ``OUT_ROOT``, ``PEB_OUT_FILE`` — per-K folders and combined PEB output
+    - Key symbols: ``main``, ``gsp`` (imported generate module)
 """
-
 from __future__ import annotations
 
 import os
@@ -29,9 +30,9 @@ if str(SCRAP_DIR) not in sys.path:
 from scrap.generation import generate_samples_and_peb as gsp
 
 
-# ============================================================
-# CONFIGURATION (optional overrides)
-# ============================================================
+# =============================================================================
+# CONFIGURATION — edit these before running: python scrap/generation/generate_samples_and_peb_all_k.py
+# =============================================================================
 K_MIN = 1
 K_MAX = 52
 
@@ -43,6 +44,8 @@ OUT_ROOT = Path("scrap/generated_samples_v2")  # will contain subfolders K1, K2,
 # Defaults to the same setting as `generate_samples_and_peb.py`.
 PEB_OUT_DIR = Path(gsp.PEB_PATH) if getattr(gsp, "PEB_PATH", "") else Path("scrap/PEB")
 PEB_OUT_FILE = PEB_OUT_DIR / f"K{K_MIN}_to_K{K_MAX}.peb"
+
+# =============================================================================
 
 
 def main() -> None:

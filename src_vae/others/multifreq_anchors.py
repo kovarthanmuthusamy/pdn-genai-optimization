@@ -1,5 +1,6 @@
-"""Shared PI anchor MHz list for multifreq dataset build, normalization, and training."""
+"""Shared PI frequency anchor MHz list and label helpers.
 
+Run: Imported by dataset build, normalization, and training scripts."""
 from __future__ import annotations
 
 from pathlib import Path

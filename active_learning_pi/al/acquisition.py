@@ -1,3 +1,7 @@
+"""Acquisition functions — select worst/uncertain candidates for ECADSTAR simulation.
+
+Run:
+    python active_learning_pi/al/acquisition.py"""
 from __future__ import annotations
 
 from typing import Any

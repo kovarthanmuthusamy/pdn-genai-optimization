@@ -46,7 +46,7 @@ def plot_impedance(frequency, real_imp_freq, real_imp,target_imp, gen_imp, out_p
         plt.close()
 
 if __name__ == "__main__":
-    npy_path = "Latent_opm/runs/latent_opt_checkpoint_epoch_400_20260420_120119/K10/batch/seed000/best_impedance_ohm.npy"  # <-- set this
+    npy_path = "data/latent_runs/latent_opt_checkpoint_epoch_400_20260420_120119/K10/batch/seed000/best_impedance_ohm.npy"  # <-- set this
     csv_path = "Real_Imp_seed001.csv"  # <-- set this
     out_path = "impedance_comparison.png"
 

@@ -1,6 +1,9 @@
+"""Active-learning orchestrator — full generate→simulate→ingest→normalize loop.
+
+Run:
+    Prefer ``python pipelines/active_learning/run.py`` (CONFIG at top)."""
 from __future__ import annotations
 
-import argparse
 import csv
 from pathlib import Path
 from typing import Any
@@ -191,7 +194,7 @@ def cmd_finetune_hint(cfg: dict, groot: Path) -> None:
     exp = groot / ft["experiment_dir"]
     print(f"\n=== Fine-tune ===")
     print(f"  cd {groot}")
-    print(f"  python {exp}/codes/train_vae_simple.py --config {ft.get('config_path')}")
+    print(f"  python {exp}/codes/train_vae_simple.py  # config: {ft.get('config_path')}")
 
 
 def run_cycle(
@@ -229,96 +232,60 @@ def run_cycle(
     return rc
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="Active learning: infer all → simulate worst once → fine-tune",
-    )
-    ap.add_argument("--config", default=None)
-    sub = ap.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("generate", help="Create candidate pool only")
-    p_inf = sub.add_parser("infer", help="Score every candidate (one-by-one inference)")
-    p_inf.add_argument("--iteration", type=int, default=None)
-
-    p_sel = sub.add_parser("select-bad", help="Pick worst cases for simulation")
-    p_sel.add_argument("--iteration", type=int, default=None)
-
-    p_peb = sub.add_parser("build-peb", help="Single combined PEB for selected worst")
-    p_peb.add_argument("--iteration", type=int, default=None)
-
-    p_sim = sub.add_parser("simulate", help="One ECADSTAR Load Batch run")
-    p_sim.add_argument("--iteration", type=int, default=None)
-
-    p_ing = sub.add_parser("ingest", help="Ingest PI-* after simulation")
-    p_ing.add_argument("--iteration", type=int, default=None)
-
-    p_norm = sub.add_parser(
-        "normalize",
-        help="Package raw + normalize with training stats (scripts/Normalization.py rules)",
-    )
-    p_norm.add_argument("--iteration", type=int, default=None)
-
-    p_ev = sub.add_parser("evaluate", help="Off-anchor metrics")
-    p_ev.add_argument("--iteration", type=int, default=None)
-
-    p_cycle = sub.add_parser(
-        "cycle",
-        help="generate → infer all → select worst → one PEB → simulate → ingest → eval",
-    )
-    p_cycle.add_argument("--skip-simulate", action="store_true")
-    p_cycle.add_argument("--skip-ingest", action="store_true")
-
-    sub.add_parser("finetune-hint", help="Print fine-tune command")
-
-    # Legacy alias
-    p_it = sub.add_parser("iteration", help="Alias for cycle")
-    p_it.add_argument("--skip-simulate", action="store_true")
-    p_it.add_argument("--skip-ingest", action="store_true")
-
-    args = ap.parse_args(argv)
-    cfg = load_config(args.config)
+def main_from_config(
+    *,
+    command: str,
+    config_path: str | Path | None = None,
+    iteration: int | None = None,
+    skip_simulate: bool = False,
+    skip_ingest: bool = False,
+) -> int:
+    """Run pipeline from CONFIG. Called by pipelines/active_learning/run.py."""
+    cfg = load_config(config_path)
     groot = Path(cfg["gan_root"])
 
     def _it() -> int:
-        return args.iteration if getattr(args, "iteration", None) is not None else current_iteration(cfg, groot)
+        return iteration if iteration is not None else current_iteration(cfg, groot)
 
-    if args.command == "generate":
+    if command == "generate":
         it = bump_iteration(cfg, groot)
         cmd_generate(cfg, groot, it)
         return 0
-    if args.command == "infer":
+    if command == "infer":
         cmd_infer(cfg, groot, _it())
         return 0
-    if args.command == "select-bad":
+    if command == "select-bad":
         cmd_select_bad(cfg, groot, _it())
         return 0
-    if args.command == "build-peb":
+    if command == "build-peb":
         cmd_build_peb(cfg, groot, _it())
         return 0
-    if args.command == "simulate":
+    if command == "simulate":
         return cmd_simulate(cfg, groot, _it())
-    if args.command == "ingest":
+    if command == "ingest":
         cmd_ingest(cfg, groot, _it())
         return 0
-    if args.command == "normalize":
+    if command == "normalize":
         cmd_normalize(cfg, groot, _it())
         return 0
-    if args.command == "evaluate":
+    if command == "evaluate":
         cmd_evaluate(cfg, groot, _it())
         return 0
-    if args.command == "finetune-hint":
+    if command == "finetune-hint":
         cmd_finetune_hint(cfg, groot)
         return 0
-    if args.command in ("cycle", "iteration"):
+    if command in ("cycle", "iteration"):
         return run_cycle(
             cfg,
             groot,
-            do_simulate=not args.skip_simulate,
-            do_ingest=not args.skip_ingest,
+            do_simulate=not skip_simulate,
+            do_ingest=not skip_ingest,
         )
-
-    return 1
+    raise ValueError(f"Unknown command: {command!r}")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(
+        "Edit CONFIG in pipelines/active_learning/run.py and run:\n"
+        "  python pipelines/active_learning/run.py"
+    )

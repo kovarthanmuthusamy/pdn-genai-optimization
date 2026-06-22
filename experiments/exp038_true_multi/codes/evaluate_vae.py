@@ -635,21 +635,33 @@ def plot_model_scorecard(var_results, nn_results, prior_results, out_dir: Path):
 
 # ─── MAIN ────────────────────────────────────────────────────────────────────
 def main():
-    out_dir = Path(OUTPUT_DIR)
+    cfg = load_exp_config()
+    paths = resolve_paths(cfg)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ckpt = Path(CHECKPOINT) if CHECKPOINT else Path(paths["checkpoint"])
+    out_dir = Path(OUTPUT_DIR or (paths["exp_dir"] / "eval_results"))
     out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Device: {DEVICE}")
-    print(f"Output: {out_dir}")
 
-    model, latent_stats, per_K_stats = load_model(CHECKPOINT_PATH, LATENT_DIM, DEVICE)
-    model.eval()
+    print(f"Device: {device}\nCheckpoint: {ckpt}\nOutput: {out_dir}\n")
 
-    var_results   = test_variation(model, latent_stats, DEVICE, out_dir)
-    nn_results    = test_nn_distance(model, latent_stats, DEVICE, out_dir)
-    test_interpolation(model, DEVICE, out_dir)
-    prior_results = test_prior_sampling(model, latent_stats, DEVICE, out_dir)
+    model, _, latent_stats, _ = load_model(ckpt, device)
+    mhz_list = tuple(TEST_MHZ_LIST)
 
-    print_summary(var_results, nn_results, prior_results)
-    plot_model_scorecard(var_results, nn_results, prior_results, out_dir)
+    test_variation(model, latent_stats, device, out_dir, mhz_list)
+    test_nn_distance(model, latent_stats, device, paths["data_dir"], out_dir, mhz=mhz_list[1] if len(mhz_list) > 1 else 200.0)
+    for mhz in mhz_list[:2]:
+        test_interpolation(model, device, paths["data_dir"], paths, mhz, out_dir)
+    for mhz in mhz_list[:1]:
+        test_prior_sampling(model, latent_stats, device, paths, mhz, out_dir)
+    off = tuple(OFF_ANCHOR_MHZ_LIST)
+    if len(off) >= 2:
+        test_cross_freq_same_z(model, device, paths["data_dir"], out_dir, mhz_native=200.0, mhz_alt=off[0])
+    if not SKIP_OFF_ANCHOR and off:
+        run_off_anchor(model, cfg, device, out_dir, off, MAX_VAL_BATCHES)
+
+    print("\n" + "=" * 60)
+    print("Done. Results →", out_dir)
+    print("=" * 60)
 
 
 if __name__ == "__main__":

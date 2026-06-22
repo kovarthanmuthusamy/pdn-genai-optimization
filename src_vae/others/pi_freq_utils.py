@@ -1,10 +1,6 @@
-"""PI frequency conditioning: MHz (user-facing) → model scalar in [0, 1].
+"""PI frequency conditioning: MHz/Hz → model scalar in [0, 1].
 
-Training data (dataloader) stores Hz on disk and yields log10-normalised tensors.
-Inference / scripts pass frequency in **MHz**; use ``pi_freq_to_norm(..., unit='mhz')``.
-
-Range matches multifreq training: 1 MHz … 600 MHz.
-"""
+Run: ``from src_vae.others.pi_freq_utils import pi_freq_to_norm, pi_freq_norm_for_model``."""
 from __future__ import annotations
 
 import math

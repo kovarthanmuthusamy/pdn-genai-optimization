@@ -8,7 +8,6 @@ at epoch 25 and final plots omit epoch 1.
   python experiments/exp039_improved_heatmap/codes/save_epoch1_losses.py
 
   # Only dedupe CSV and rebuild plots (epoch 1 already in loss.csv):
-  python experiments/exp039_improved_heatmap/codes/save_epoch1_losses.py --plots-only
 
 Writes / updates:
   - metrics/loss.csv  (epoch=1 row when backfilled)
@@ -17,7 +16,6 @@ Writes / updates:
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import random
@@ -59,6 +57,15 @@ from experiments.exp039_improved_heatmap.codes.metrics_csv_utils import (  # noq
 )
 from src_vae.others.vae_logger import CSV_HEADER, LATENT_CSV_HEADER, VAETrainingLogger
 
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python experiments/exp040/codes/save_epoch1_losses.py
+# =============================================================================
+
+PLOTS_ONLY = False  # True = skip GPU backfill; rebuild plots from loss.csv only
+
+# =============================================================================
+
 _BACKFILL_RAM = os.getenv("EXP039_BACKFILL_RAM", "0").strip().lower() in ("1", "true", "yes")
 
 
@@ -92,7 +99,7 @@ def rebuild_plots_from_loss_csv(c: Config) -> None:
     ep_lo, ep_hi = logger.epochs[0], logger.epochs[-1]
     print(f"\n=== Rebuild plots from loss.csv (epochs {ep_lo}–{ep_hi}, n={len(logger.epochs)}) ===")
     if ep_lo > 1:
-        print(f"  WARNING: first epoch is {ep_lo}, not 1 — run without --plots-only to backfill epoch 1.")
+        print(f"  WARNING: first epoch is {ep_lo}, not 1 — set PLOTS_ONLY=False to backfill epoch 1.")
 
     logger.plot(save_path=str(plots_dir / "convergence_final.png"))
     logger.plot_loss_components(save_path=str(plots_dir / "loss_components_final.png"))
@@ -230,14 +237,6 @@ def backfill_epoch1(c: Config) -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Backfill epoch 1 and/or rebuild exp039 plots from loss.csv")
-    ap.add_argument(
-        "--plots-only",
-        action="store_true",
-        help="Skip GPU backfill; dedupe metrics CSVs and rebuild *_final.png only",
-    )
-    args = ap.parse_args()
-
     c = Config()
     _apply_yaml_config(c)
     _adapt_amp_for_gpu(c)
@@ -246,7 +245,7 @@ def main() -> None:
     print("=== Clean metrics CSVs (dedupe resume duplicates) ===")
     info = update_all_metrics_csv(Path(c.experiment_dir) / "metrics", backup=True)
 
-    if args.plots_only:
+    if PLOTS_ONLY:
         rebuild_plots_from_loss_csv(c)
         return
 

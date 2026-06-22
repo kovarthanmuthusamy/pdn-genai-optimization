@@ -1,10 +1,6 @@
-"""
-Logging utilities for Variational Autoencoder training
+"""VAE training metrics logger (CSV, plots, checkpoints, console).
 
-Reference: src/logger.py
-Adapted for VAE with multi-input, multi-output architecture
-"""
-
+Run: Instantiated in experiment training scripts as ``VAETrainingLogger(log_dir=...)``."""
 import csv
 import yaml
 import matplotlib

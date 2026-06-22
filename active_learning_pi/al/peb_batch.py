@@ -1,3 +1,7 @@
+"""Build a single combined ECADSTAR .peb for all selected worst-case candidates.
+
+Run:
+    python active_learning_pi/al/peb_batch.py"""
 from __future__ import annotations
 
 import sys

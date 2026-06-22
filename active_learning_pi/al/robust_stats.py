@@ -1,3 +1,7 @@
+"""Robust foreground peak statistics on physical heatmaps.
+
+Run:
+    Import only — used by ``inference_pool`` and ``evaluate_off_anchor``."""
 from __future__ import annotations
 
 import numpy as np

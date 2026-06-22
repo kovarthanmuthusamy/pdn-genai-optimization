@@ -26,15 +26,10 @@ Additional novelty method (discrete)
 
 Example
   python scripts/vae_novelty_report.py \
-    --gen-dir scrap/generated_samples/K5 \
-    --dataset-root datasets/data_norm \
     --K 5 \
-    --hm-pool 16
 """
-
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 import re
@@ -45,6 +40,23 @@ from typing import Iterable, Optional, TypedDict
 
 import numpy as np
 
+
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python evaluation/novelty/scripts/vae_novelty_report.py
+# =============================================================================
+
+GEN_DIR = Path("evaluation/novelty/runs/K5_noveltyN50")
+DATASET_ROOT = Path("datasets/data_norm")
+K_FILTER: int | None = 5  # None = infer from gen-dir path
+MAX_GEN: int | None = None
+MAX_TRAIN: int | None = None
+HM_POOL = 16
+BASELINE_N = 200
+SEED = 0
+OUT_CSV: Path | None = None  # None = <gen-dir>/novelty_report.csv
+
+# =============================================================================
 
 class Quantiles(TypedDict):
     min: float | None
@@ -424,7 +436,7 @@ def score_generated_against_dataset(
     max_train: int | None = None,
     out_csv: Path | None = None,
 ) -> ScoreSummary:
-    """Compute novelty scores and optionally write a CSV (same format as CLI)."""
+    """Compute novelty scores and optionally write a CSV (same format as ``vae_novelty_report.py`` main)."""
     if out_csv is None:
         out_csv = gen_dir / "novelty_report.csv"
 
@@ -631,49 +643,29 @@ def _describe_dist(x: np.ndarray) -> str:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--gen-dir",
-        type=Path,
-        default=Path("evaluation/novelty/runs/K5_noveltyN50"),
-        help="Folder containing data_sample_* (e.g. evaluation/novelty/runs/K5_noveltyN50)",
-    )
-    ap.add_argument("--dataset-root", type=Path, default=Path("datasets/data_norm"), help="Dataset root with heatmap/Imp/Occ_map")
-    ap.add_argument("--K", type=int, default=None, help="If set, filter dataset to this K (recommended). If omitted, inferred from --gen-dir when possible.")
-    ap.add_argument("--max-gen", type=int, default=None, help="Limit number of generated samples")
-    ap.add_argument("--max-train", type=int, default=None, help="Subsample training set (after K filtering)")
-    ap.add_argument("--hm-pool", type=int, default=16, help="Heatmap mean-pool size (e.g. 8, 16, 32). Must divide 64.")
-    ap.add_argument("--baseline-n", type=int, default=200, help="How many train samples to use for train→train NN baseline")
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out-csv", type=Path, default=None, help="Output CSV path (default: <gen-dir>/novelty_report.csv)")
-    args = ap.parse_args()
+    gen_dir: Path = GEN_DIR
+    dataset_root: Path = DATASET_ROOT
 
-    gen_dir: Path = args.gen_dir
-    dataset_root: Path = args.dataset_root
+    out_csv = OUT_CSV if OUT_CSV is not None else gen_dir / "novelty_report.csv"
 
-    if args.out_csv is None:
-        out_csv = gen_dir / "novelty_report.csv"
-    else:
-        out_csv = args.out_csv
-
-    k_filter = args.K
+    k_filter = K_FILTER
     if k_filter is None:
         k_filter = _infer_k_from_path(gen_dir)
 
     print(f"gen-dir:       {gen_dir}")
     print(f"dataset-root:  {dataset_root}")
     print(f"K filter:      {k_filter if k_filter is not None else '(none)'}")
-    print(f"hm-pool:       {args.hm_pool}x{args.hm_pool}")
+    print(f"hm-pool:       {HM_POOL}x{HM_POOL}")
 
     summary = score_generated_against_dataset(
         gen_dir=gen_dir,
         dataset_root=dataset_root,
         k_filter=k_filter,
-        hm_pool=args.hm_pool,
-        baseline_n=args.baseline_n,
-        seed=args.seed,
-        max_gen=args.max_gen,
-        max_train=args.max_train,
+        hm_pool=HM_POOL,
+        baseline_n=BASELINE_N,
+        seed=SEED,
+        max_gen=MAX_GEN,
+        max_train=MAX_TRAIN,
         out_csv=out_csv,
     )
 

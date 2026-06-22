@@ -1,18 +1,20 @@
-"""Plot generated occupancy vectors as compact checkbox grids for one K folder.
+"""Occupancy checkbox plot for one K.
 
-This reads occupancy vectors from:
-- Preferred: scrap/generated_samples/K{K}/occupancy.npy (shape: (N,52) or (52,))
-- Fallback:  scrap/generated_samples/K{K}/data_sample_{i}/occupancy_map.npy
+Purpose:
+    Visualize generated 52-slot occupancy vectors (C1..C52) for one K using top-K or threshold policy.
 
-It produces a compact visualization (no raw values), with 52 labeled checkboxes
-(C1..C52). By default, it marks exactly the top-K entries active per vector
-(K = the folder K), matching the binarization used in
-experiments/exp029_heat_private/codes/inference_vae.py.
+Run:
+    python scrap/comparison/compare_generated_vs_real_occupancy.py
 
-Run
-    python scrap/compare_generated_vs_real_occupancy.py
+Agent notes:
+    - What: Renders which decap slots are active per generated sample (bar/checkbox view).
+    - Usage: Set ``K_VALUE``, ``BASE_GENERATED_DIR``, ``ACTIVE_POLICY`` → run.
+    - Config keys:
+        - ``K_VALUE``, ``BASE_GENERATED_DIR`` — which K folder to read
+        - ``NUM_SAMPLES`` — rows to plot
+        - ``ACTIVE_POLICY`` — ``"topk"`` or ``"threshold"``; ``THRESHOLD`` when threshold mode
+        - ``OCCUPANCY_OUT_NAME`` — output PNG name
 """
-
 from __future__ import annotations
 
 import os
@@ -27,9 +29,9 @@ from matplotlib.patches import FancyBboxPatch
 import numpy as np
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+# =============================================================================
+# CONFIGURATION — edit these before running: python scrap/comparison/compare_generated_vs_real_occupancy.py
+# =============================================================================
 K_VALUE = 1
 BASE_GENERATED_DIR = Path("scrap/generated_samples")
 
@@ -44,6 +46,8 @@ OCCUPANCY_OUT_NAME = "generated_occupancy.png"
 # - "threshold": mark entries active if value > THRESHOLD
 ACTIVE_POLICY: str = "topk"
 THRESHOLD: float = 0.5
+
+# =============================================================================
 
 
 def _project_root() -> Path:

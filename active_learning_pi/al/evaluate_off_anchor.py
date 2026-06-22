@@ -1,3 +1,7 @@
+"""Evaluate model predictions vs ECADSTAR labels at off-anchor MHz frequencies.
+
+Run:
+    python active_learning_pi/al/evaluate_off_anchor.py"""
 from __future__ import annotations
 
 from pathlib import Path

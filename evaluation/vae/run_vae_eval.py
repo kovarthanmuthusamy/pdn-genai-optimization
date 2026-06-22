@@ -12,7 +12,6 @@ Default target checkpoint:
 Run:
   python evaluation/vae/run_vae_eval.py
 """
-
 from __future__ import annotations
 
 import csv

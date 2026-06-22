@@ -1,7 +1,6 @@
-"""
-Loss function for Multi-Input Variational Autoencoder
-"""
+"""Extended multi-input VAE loss (backup / reference implementation).
 
+Run: ``from src_vae.loss.vae_loss_backup import VAELoss`` when experimenting with extra losses."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

@@ -2,8 +2,8 @@
 
 Checkpoint: `experiments/exp043/checkpoints/last_model.pt`
 Fixed K: **30**
-PI frequencies (5): 10, 70, 120, 270, 400
-Training anchors: [10.0, 63.0, 80.0, 130.0, 150.0, 200.0, 250.0, 270.0, 330.0, 400.0, 500.0] MHz
+PI frequencies (5): 10, 63, 300, 330, 400
+Training anchors: [10.0, 63.0, 80.0, 130.0, 150.0, 200.0, 230.0, 250.0, 270.0, 300.0, 330.0, 400.0, 500.0] MHz
 
 ## CAD workflow
 

@@ -1,5 +1,7 @@
-"""Shared paths, model loading, and PI_freq helpers for exp043 evaluation scripts."""
+"""Shared model loading, paths, and PI_freq helpers for exp043 eval scripts.
 
+Run:
+    Import only — ``from experiments.exp043.codes.exp043_eval_common import load_model``."""
 from __future__ import annotations
 
 import json
@@ -83,7 +85,7 @@ def load_model(
     cfg = ckpt.get("config", {})
     ld = int(cfg.get("latent_dim", 42))
     cond = int(cfg.get("cond_dim", 8))
-    hm_priv = int(cfg.get("heatmap_private_dim", 8))
+    hm_priv = int(cfg.get("heatmap_private_dim", 0))
     model = MultiInputVAEPoeFreq(
         latent_dim=ld,
         cond_dim=cond,

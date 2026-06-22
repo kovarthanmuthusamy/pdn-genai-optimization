@@ -1,45 +1,6 @@
-"""
-Variational Autoencoder (VAE) with multi-input, multi-output architecture
-featuring mid-layer fusion at 8x8 resolution and hierarchical decoding with residual connections.
+"""Multi-input VAE with mid-layer fusion and hierarchical decoder.
 
-Architecture Overview:
-    ENCODER (Mid-Layer Fusion):
-    - Three independent branches process to 8x8x128:
-      * Heatmap: 64x64x2 → Conv layers → 8x8x128
-      * Occupancy: 7x8x1 → Conv + Upsample → 8x8x128
-      * Impedance: 231 → MLP (231→512→8192) → reshape → 8x8x128
-    - Feature concatenation at 8x8: 384 channels (3 * 128)
-    - Fusion conv: 384 → 128 channels (1x1 conv)
-    - Self-attention at 8x8 with layer normalization: captures cross-modal spatial relationships
-    - Continue encoding: 8x8x128 → 4x4x256 → latent space
-    
-    DECODER (Hierarchical with Shared Master Grid):
-    - Master Feature Grid: latent → 16x16x128 shared spatial understanding
-      * Self-attention with layer norm for global scene understanding
-      * Residual conv blocks for feature refinement
-    - Spatial branches start from shared grid (prevents misalignment):
-      * Heatmap: 16x16 → residual + attention blocks → 64x64x2
-      * Occupancy: 16x16 → adaptive pool to 7x8 → residual + attention blocks → 7x8x1
-    - Impedance: independent MLP with residual connections → 231x1
-
-Inputs:
-    1. Heatmap: 64x64x2
-    2. Occupancy Map: 7x8x1 (binary)
-    3. Impedance Vector: 231x1
-
-Outputs:
-    1. Heatmap: 64x64x2
-    2. Occupancy Map: 7x8x1
-    3. Impedance Vector: 231x1
-
-Key Benefits:
-    - Hierarchical decoder ensures spatial alignment between heatmap and occupancy
-    - Residual connections with layer normalization improve gradient flow and stability
-    - Shared master grid provides common geometric understanding
-    - Each modality preserves its inductive biases through specialized processing
-    - 38.7% fewer parameters than early fusion while maintaining expressiveness
-"""
-
+Run: ``from src_vae.model.vae_multi_input import MultiInputVAE`` in experiment training scripts."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

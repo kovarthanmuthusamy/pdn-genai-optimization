@@ -1,11 +1,20 @@
-"""Validation reconstruction metrics for exp038 (occ accuracy + impedance peaks).
+"""Validation reconstruction metrics for exp038.
 
+Purpose:
+    Report occupancy BCE, slot accuracy, K-match, and impedance peak MSE on the val set.
+
+Run:
     python experiments/exp038_true_multi/codes/eval_val_recon.py
-    python experiments/exp038_true_multi/codes/eval_val_recon.py --ckpt last_model.pt --max-batches 50
+
+Agent notes:
+    - What: Full val-set reconstruction diagnostic (occ + imp heads) for a saved checkpoint.
+    - Usage: Set ``CHECKPOINT_NAME`` in CONFIG → run. Prints per-metric summary to stdout.
+    - Config keys:
+        - ``CHECKPOINT_NAME`` — filename under ``checkpoints/`` (e.g. ``last_model.pt``)
+        - ``MAX_BATCHES`` — limit val batches; ``0`` = all
 """
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -24,6 +33,15 @@ if PROJECT_ROOT not in sys.path:
 from experiments.exp038_true_multi.codes.dataloader_multifreq import create_multifreq_data_loaders
 from experiments.exp038_true_multi.codes.impedance_spectrum_loss import local_peak_indices
 from experiments.exp038_true_multi.codes.vae_multi_input_simple import MultiInputVAE
+
+# =============================================================================
+# CONFIGURATION — edit these before running
+# =============================================================================
+
+CHECKPOINT_NAME = "last_model.pt"
+MAX_BATCHES = 0  # 0 = full val set
+
+# =============================================================================
 
 
 def _imp_ch0(x: torch.Tensor) -> torch.Tensor:
@@ -47,13 +65,8 @@ def _predict_k(logits: torch.Tensor) -> torch.Tensor:
 
 @torch.inference_mode()
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", default="last_model.pt")
-    ap.add_argument("--max-batches", type=int, default=0, help="0 = full val set")
-    args = ap.parse_args()
-
     exp = Path(PROJECT_ROOT) / "experiments/exp038_true_multi"
-    ckpt_path = exp / "checkpoints" / args.ckpt
+    ckpt_path = exp / "checkpoints" / CHECKPOINT_NAME
     cfg = json.loads((exp / "config.yaml").read_text())
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -126,7 +139,7 @@ def main() -> None:
         peak_idx_err += ((ti_s / denom) - (ri_s / denom)).abs().mean().item() * B
 
         n_b += B
-        if args.max_batches > 0 and n_b >= args.max_batches * 64:
+        if MAX_BATCHES > 0 and n_b >= MAX_BATCHES * 64:
             break
 
     n = max(n_b, 1)

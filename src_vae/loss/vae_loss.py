@@ -1,5 +1,6 @@
-"""Loss function for Multi-Input VAE"""
+"""Active multi-input VAE loss with uncertainty weighting.
 
+Run: ``from src_vae.loss.vae_loss import VAELoss`` in experiment training loops."""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

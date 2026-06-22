@@ -1,8 +1,7 @@
-"""
-Inference script for Multi-Input VAE — exp043 (global-max heatmaps).
+"""VAE inference for exp043 — generate heatmap, occupancy, impedance samples.
 
-Uses the shared model from exp038; reads data_dir / background from this experiment's config.yaml.
-"""
+Run:
+    python experiments/exp043/codes/inference_vae.py"""
 from __future__ import annotations
 
 import json
@@ -64,11 +63,11 @@ def _norm_stats_path() -> Path:
 
 
 from experiments.exp043.codes.vae_poe_freq import MultiInputVAEPoeFreq  # noqa: E402
-from Data_Creation.csv_to_occupancy import labels_v1  # noqa: E402
+from libs.data_creation.csv_to_occupancy import labels_v1  # noqa: E402
 
-# ============================================================
-# CONFIGURATION (standalone CLI defaults)
-# ============================================================
+# =============================================================================
+# CONFIGURATION — edit these before running: python experiments/exp043/codes/inference_vae.py
+# =============================================================================
 CHECKPOINT_PATH = str(_EXP_DIR / "checkpoints/last_model.pt")
 LATENT_STATS_PATH = str(_EXP_DIR / "metrics/latent_stats.json")
 MODEL_LATENT_DIM = 42
@@ -81,6 +80,8 @@ SAVE_DATA = True
 SAVE_PLOTS = True
 USE_CUDA = True
 SHARED_TEMP = 1.5
+
+# =============================================================================
 
 
 class VAEInference:
@@ -113,16 +114,19 @@ class VAEInference:
             if hm.get("clip_min") is not None and hm.get("clip_max") is not None
             else None
         )
+        self._hm_z_clip_disk = self.hm_z_clip
         self.background_value = ns.get(
             "background_value",
             ns.get("Heatmap", {}).get("background_value", -2.9669),
         )
         self.heatmap_fg_threshold = float(hm.get("fg_norm_threshold", 0.01))
+        self.heatmap_train_space = "linear"
         if _CONFIG_PATH.is_file():
             cfg = load_experiment_config(_CONFIG_PATH)
             self.background_value = float(cfg.get("background_value", self.background_value))
             if cfg.get("heatmap_fg_threshold") is not None:
                 self.heatmap_fg_threshold = float(cfg["heatmap_fg_threshold"])
+            self.heatmap_train_space = str(cfg.get("heatmap_train_space", self.heatmap_train_space))
 
         print(f"Norm stats: {stats_path}")
         print(f"Impedance (log): mean={self.imp_log_mean:.4f}, std={self.imp_log_std:.4f}")
@@ -139,12 +143,18 @@ class VAEInference:
         print(f"\nLoading: {checkpoint_path}")
         ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         cfg = ckpt.get("config", {})
+        self.heatmap_train_space = str(cfg.get("heatmap_train_space", self.heatmap_train_space))
+        if cfg.get("heatmap_fg_threshold") is not None:
+            self.heatmap_fg_threshold = float(cfg["heatmap_fg_threshold"])
+        if cfg.get("heatmap_z_clip_min") is not None and cfg.get("heatmap_z_clip_max") is not None:
+            self.hm_z_clip = (float(cfg["heatmap_z_clip_min"]), float(cfg["heatmap_z_clip_max"]))
         ld = cfg.get("latent_dim", latent_dim)
         cond = cfg.get("cond_dim", 8)
-        hm_priv = cfg.get("heatmap_private_dim", 8)
+        hm_priv = int(cfg.get("heatmap_private_dim", 0))
         mod_drop = cfg.get("modality_dropout", 0.0)
+        latent_note = f"unified {ld}d" if hm_priv == 0 else f"shared+private({hm_priv})"
         print(
-            f"Model: latent_dim={ld}  cond_dim={cond}  heatmap_private_dim={hm_priv}  "
+            f"Model: latent_dim={ld} ({latent_note})  cond_dim={cond}  "
             f"modality_dropout={mod_drop}"
         )
 
@@ -156,6 +166,8 @@ class VAEInference:
             freq_fourier_features=int(cfg.get("freq_fourier_features", 8)),
             use_heatmap_film=bool(cfg.get("use_heatmap_film", True)),
             use_freq_poe_expert=bool(cfg.get("use_freq_poe_expert", True)),
+            use_heatmap_unet_skips=bool(cfg.get("use_heatmap_unet_skips", True)),
+            use_occ_spatial_decoder=bool(cfg.get("use_occ_spatial_decoder", True)),
         )
 
         ckpt_state = ckpt["model_state_dict"]
@@ -169,8 +181,17 @@ class VAEInference:
 
         required_prefixes = (
             "heatmap_fc.",
-            "heatmap_dec_deconv1.",
-            "heatmap_dec_deconv2.",
+            "heatmap_enc2_conv.",
+            "heatmap_enc2_res.",
+            "heatmap_enc2_head.",
+            "heatmap_dec_res.",
+            "heatmap_dec_up1.",
+            "heatmap_dec_skip16.",
+            "heatmap_dec_up2.",
+            "heatmap_dec_skip32.",
+            "heatmap_dec_up3.",
+            "heatmap_dec_refine64.",
+            "heatmap_dec_out.",
             "occupancy_decoder.",
             "impedance_decoder.",
             "heatmap_mu.",
@@ -215,18 +236,42 @@ class VAEInference:
         return z_raw * self.imp_log_std + self.imp_log_mean
 
     def fg_threshold(self) -> float:
-        """Foreground mask threshold in normalized heatmap space."""
+        """Foreground mask threshold in model train space."""
         if self.use_global_max:
-            return float(self.heatmap_fg_threshold)
+            thr = float(self.heatmap_fg_threshold)
+            if self.heatmap_train_space == "log1p_gmax":
+                from src_vae.others.heatmap_gmax_norm import linear_threshold_to_train
+                return linear_threshold_to_train(thr, float(self.global_max_ohm))
+            return thr
         return float(self.background_value) + 0.5
 
     def denorm_heatmap_physical(self, hm_norm: torch.Tensor) -> torch.Tensor:
         """Denorm model heatmap output to physical Ω (global-max or log-z)."""
+        from src_vae.others.heatmap_gmax_norm import (
+            LOG1P_TRAIN_SPACE,
+            log1p_train_to_physical,
+        )
         from src_vae.others.heatmap_z_clip import heatmap_norm_to_physical
 
         clip = self.hm_z_clip
         lo, hi = (clip[0], clip[1]) if clip is not None else (None, None)
+        if self.use_global_max and self.heatmap_train_space == LOG1P_TRAIN_SPACE:
+            z = hm_norm
+            if lo is not None and hi is not None:
+                z = z.clamp(lo, hi)
+            return log1p_train_to_physical(z, float(self.global_max_ohm))
         return heatmap_norm_to_physical(hm_norm, self.hm_stats, clip_lo=lo, clip_hi=hi)
+
+    def heatmap_train_to_disk(self, hm_train: torch.Tensor) -> torch.Tensor:
+        """Model train space → on-disk linear gmax norm (for sweep/compare)."""
+        from src_vae.others.heatmap_gmax_norm import (
+            LOG1P_TRAIN_SPACE,
+            log1p_train_to_linear_norm,
+        )
+
+        if self.use_global_max and self.heatmap_train_space == LOG1P_TRAIN_SPACE:
+            return log1p_train_to_linear_norm(hm_train, float(self.global_max_ohm))
+        return hm_train
 
     def generate_save(self, num_samples=1, out_dir="temp_visuals", K=26, PI_freq_mhz=200.0):
         with torch.no_grad():
@@ -252,8 +297,8 @@ class VAEInference:
         plots = out / "plots"
         plots.mkdir(exist_ok=True)
 
-        hm_z_np = hm_z.cpu().numpy()
-        hm_phys_np = hm_phys.cpu().numpy()
+        hm_z_np = self.heatmap_train_to_disk(hm_z).cpu().numpy()
+        hm_phys_np = self.denorm_heatmap_physical(hm_z).cpu().numpy()
         occ_prob_np = occ.cpu().numpy()
         occ_np = occ_bin.cpu().numpy()
         imp_np = imp.cpu().numpy()

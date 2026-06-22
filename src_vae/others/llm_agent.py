@@ -1,14 +1,6 @@
-"""
-DeepSeek LLM Agent for autonomous training analysis and fix suggestions.
+"""DeepSeek LLM agent for autonomous training analysis and config fixes.
 
-Uses the OpenAI-compatible DeepSeek API (https://platform.deepseek.com/).
-Set DEEPSEEK_API_KEY in environment or .env file.
-
-Usage:
-    from src_vae.others.llm_agent import analyze_training_issues
-    result = analyze_training_issues(issues, history, config, model_file)
-"""
-
+Run: ``python -m src_vae.others.llm_agent`` (smoke test) or import ``analyze_training_issues``."""
 from __future__ import annotations
 
 import json

@@ -1,3 +1,7 @@
+"""VAE Monte-Carlo inference over the candidate pool (uncertainty scoring).
+
+Run:
+    python active_learning_pi/al/inference_pool.py"""
 from __future__ import annotations
 
 import importlib

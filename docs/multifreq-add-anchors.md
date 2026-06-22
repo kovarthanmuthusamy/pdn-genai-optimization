@@ -12,10 +12,10 @@ Raw ECADStar folders must exist as `heatmap_<MHz>/` under your Raw root (e.g. `h
 
 ```bash
 # Only the four new MHz (example)
-python Data_Creation/Data_processing_multifreq.py --append --freqs-mhz 80 150 250 330
+python pipelines/data/Data_processing_multifreq.py --append --freqs-mhz 80 150 250 330
 
 # Or process all anchors in YAML (slower; use for full rebuild)
-# python Data_Creation/Data_processing_multifreq.py
+# python pipelines/data/Data_processing_multifreq.py
 ```
 
 Output: new `sample_*.npy` under `datasets/data_multifreq/` (existing samples kept).
@@ -39,6 +39,6 @@ Point `data_dir` at `datasets/data_multifreq_norm` (unchanged).
 If you changed anchors globally or want new heatmap stats:
 
 ```bash
-python Data_Creation/Data_processing_multifreq.py
+python pipelines/data/Data_processing_multifreq.py
 python scripts/Normalization.py
 ```

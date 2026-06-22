@@ -20,7 +20,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from experiments.exp037_lat_change.codes.vae_multi_input_simple import MultiInputVAE
-from Data_Creation.csv_to_occupancy import labels_v1
+from libs.data_creation.csv_to_occupancy import labels_v1
 
 # ============================================================
 # CONFIGURATION

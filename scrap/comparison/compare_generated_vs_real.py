@@ -1,27 +1,21 @@
-"""Compare generated vs real heatmaps + impedance for one K folder.
+"""Compare generated vs real for one K.
 
-This script combines the functionality of:
-- visualization/compare_heatmap.py
-- visualization/compare_impedance.py
+Purpose:
+    Plot heatmap and impedance overlays for one K folder (generated ``.npy`` vs ECADStar ``Real/`` exports).
 
-but uses the exp027 inference visualization conventions for plotting (see:
-experiments/exp027_sigma_reg_tuning/codes/inference_vae.py), namely:
-- Heatmap: `jet` resampled to 22 levels + binary mask + `origin='lower'`.
-- Impedance: log-log plot with Target (red dashed) + curves in Ohms.
+Run:
+    python scrap/comparison/compare_generated_vs_real.py
 
-Expected folder structure (after generation + moving ECADStar PI outputs)
-- Generated:
-    scrap/generated_samples/K{K}/data_sample_{i}/heatmap_physical.npy
-    scrap/generated_samples/K{K}/data_sample_{i}/impedance_profile.npy  (log Ohm)
-    (optional) impedance_raw.npy / impedance_integrated.npy / impedance_integrated2.npy
-- Real (from move_pi_to_real.py):
-    scrap/generated_samples/K{K}/Real/Heatmap_real_{i}*   (file or directory containing a .map)
-    scrap/generated_samples/K{K}/Real/Imp_Real{i}*.csv
-
-Run
-    python scrap/compare_generated_vs_real.py
+Agent notes:
+    - What: Visual QA — generated VAE samples vs ground-truth PI simulation for a single decap budget.
+    - Usage: Set ``K_VALUE`` and ``BASE_GENERATED_DIR`` → run. Also see ``comparison/compare.py``.
+    - Config keys:
+        - ``K_VALUE`` — decap budget folder ``K{n}`` under base dir
+        - ``BASE_GENERATED_DIR`` — root containing ``K1/``, ``K2/``, …
+        - ``NUM_SAMPLES`` — how many ``data_sample_*`` to plot
+        - ``FREQUENCY_PATH``, ``TARGET_IMPEDANCE_PATH``, ``MASK_PATH`` — shared config arrays
+        - ``HEATMAP_OUT_NAME``, ``IMPEDANCE_OUT_NAME`` — output PNG filenames
 """
-
 from __future__ import annotations
 
 import os
@@ -38,9 +32,9 @@ from scipy.interpolate import griddata, RBFInterpolator
 from scipy.stats import pearsonr
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+# =============================================================================
+# CONFIGURATION — edit these before running: python scrap/comparison/compare_generated_vs_real.py
+# =============================================================================
 K_VALUE = 5
 BASE_GENERATED_DIR = Path("scrap/generated_samples_v2")
 
@@ -70,6 +64,8 @@ MAP_GLOB_PREFERENCE = ("Z_*.map", "*.map")
 
 # Real impedance CSV chooser (inside the moved Imp_Real* directory)
 IMPEDANCE_CSV_GLOB_PREFERENCE = ("*PIPinZ*.csv", "*.csv")
+
+# =============================================================================
 
 
 def _project_root() -> Path:

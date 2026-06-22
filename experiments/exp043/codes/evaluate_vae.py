@@ -1,22 +1,9 @@
-"""
-evaluate_vae.py — Post-training evaluation for exp042 (PI_freq-conditioned VAE).
+"""Post-training VAE diagnostics for exp043 (PI_freq-conditioned multifreq model).
 
-Diagnostics:
-  1. Variation within K at several PI_freq (MHz)
-  2. Nearest-neighbour distance (generated vs training)
-  3. Latent interpolation (fixed K + PI_freq)
-  4. Prior / layout sampling sanity
-  5. Cross-frequency decode: same layout z, native vs off-anchor MHz
-  6. Off-anchor val metrics (encode_cross vs layout_cross) via eval_cross_freq
-
-Usage:
-    python experiments/exp042/codes/evaluate_vae.py
-    python experiments/exp042/codes/evaluate_vae.py --ckpt checkpoints/last_model.pt
-"""
-
+Run:
+    python experiments/exp043/codes/evaluate_vae.py"""
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -43,7 +30,7 @@ from exp043_eval_common import (  # noqa: E402
     pi_tensor_mhz,
     resolve_paths,
 )
-from experiments.exp038_true_multi.codes.dataloader_multifreq import create_multifreq_data_loaders  # noqa: E402
+from experiments.exp043.codes.dataloader_multifreq import create_multifreq_data_loaders  # noqa: E402
 from experiments.exp038_true_multi.codes.eval_cross_freq import run_off_anchor_eval  # noqa: E402
 from src_vae.others.dataloader import VAEDataset  # noqa: E402
 from src_vae.others.pi_freq_utils import pi_freq_mhz_to_norm  # noqa: E402
@@ -57,6 +44,19 @@ N_NN_TRAIN = 500
 N_PRIOR = 200
 INTERP_STEPS = 8
 TEMPS = [0.6, 0.8, 1.0, 1.2, 1.5]
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python experiments/exp043/codes/evaluate_vae.py
+# =============================================================================
+
+CHECKPOINT: str | None = None  # None = use config.yaml default / last_model.pt
+OUTPUT_DIR: str | None = None  # None = experiments/exp043/eval_results
+TEST_MHZ_LIST = list(TEST_MHZ)  # MHz for tests 1–5
+OFF_ANCHOR_MHZ_LIST = list(OFF_ANCHOR_MHZ)  # MHz for off-anchor val (test 6)
+MAX_VAL_BATCHES = 30  # val batches for test 6 (0 = all)
+SKIP_OFF_ANCHOR = False
+
+# =============================================================================
 
 
 def test_variation(model, latent_stats, device, out_dir: Path, mhz_list: tuple[float, ...]):
@@ -339,26 +339,17 @@ def run_off_anchor(model, cfg, device, out_dir: Path, mhz_list: tuple[float, ...
 
 
 def main():
-    ap = argparse.ArgumentParser(description="exp042 VAE evaluation (PI_freq)")
-    ap.add_argument("--ckpt", default=None)
-    ap.add_argument("--output", default=None)
-    ap.add_argument("--mhz", nargs="*", type=float, default=list(TEST_MHZ))
-    ap.add_argument("--off-anchor", nargs="*", type=float, default=list(OFF_ANCHOR_MHZ))
-    ap.add_argument("--max-batches", type=int, default=30, help="Val batches for test 6 (0=all)")
-    ap.add_argument("--skip-off-anchor", action="store_true")
-    args = ap.parse_args()
-
     cfg = load_exp_config()
     paths = resolve_paths(cfg)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ckpt = Path(args.ckpt) if args.ckpt else Path(paths["checkpoint"])
-    out_dir = Path(args.output or (paths["exp_dir"] / "eval_results"))
+    ckpt = Path(CHECKPOINT) if CHECKPOINT else Path(paths["checkpoint"])
+    out_dir = Path(OUTPUT_DIR or (paths["exp_dir"] / "eval_results"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Device: {device}\nCheckpoint: {ckpt}\nOutput: {out_dir}\n")
 
     model, _, latent_stats, _ = load_model(ckpt, device)
-    mhz_list = tuple(args.mhz)
+    mhz_list = tuple(TEST_MHZ_LIST)
 
     test_variation(model, latent_stats, device, out_dir, mhz_list)
     test_nn_distance(model, latent_stats, device, paths["data_dir"], out_dir, mhz=mhz_list[1] if len(mhz_list) > 1 else 200.0)
@@ -366,11 +357,11 @@ def main():
         test_interpolation(model, device, paths["data_dir"], paths, mhz, out_dir)
     for mhz in mhz_list[:1]:
         test_prior_sampling(model, latent_stats, device, paths, mhz, out_dir)
-    off = tuple(args.off_anchor)
+    off = tuple(OFF_ANCHOR_MHZ_LIST)
     if len(off) >= 2:
         test_cross_freq_same_z(model, device, paths["data_dir"], out_dir, mhz_native=200.0, mhz_alt=off[0])
-    if not args.skip_off_anchor and off:
-        run_off_anchor(model, cfg, device, out_dir, off, args.max_batches)
+    if not SKIP_OFF_ANCHOR and off:
+        run_off_anchor(model, cfg, device, out_dir, off, MAX_VAL_BATCHES)
 
     print("\n" + "=" * 60)
     print("Done. Results →", out_dir)

@@ -83,5 +83,5 @@ The IC location is taken from the `<Location>` tag in `ProKI_design.xml`:
 | File | Grid | Coordinate bounds | Row/Col convention |
 |------|------|-------------------|--------------------|
 | `Rules/mask_creator.py` | 64×64 | polygon min/max from `coord_ext.py` | row = y, col = x |
-| `Data_Creation/heatmap.py` | 64×64 | data min/max (same physical space) | row = y, col = x |
+| `pipelines/data/heatmap.py` | 64×64 | data min/max (same physical space) | row = y, col = x |
 | `Rules/ic_inverse_mask_creator.py` | 64×64 | polygon min/max from `coord_ext.py` | row = y, col = x |

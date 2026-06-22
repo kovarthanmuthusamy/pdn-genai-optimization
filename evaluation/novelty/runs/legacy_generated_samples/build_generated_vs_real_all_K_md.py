@@ -13,7 +13,6 @@ It writes `generated_vs_real_all_K.md` next to this script.
 Run:
     python scrap/generated_samples/build_generated_vs_real_all_K_md.py
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass

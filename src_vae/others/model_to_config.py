@@ -1,24 +1,12 @@
-"""
-Generic Model-to-Config Converter
+"""Convert PyTorch model checkpoints to YAML experiment configs.
 
-Converts any trained PyTorch model checkpoint or model file to a YAML config file.
-Automatically extracts architecture information, hyperparameters, and metadata.
-
-Usage:
-    python model_to_config.py <input_file> <output_file>
-    
-    Examples:
-        python model_to_config.py models/vae.pt experiments/exp009/config.yaml
-        python model_to_config.py checkpoints/epoch_50.pt config.yaml
-"""
-
+Run: ``python src_vae/others/model_to_config.py`` (edit ``INPUT_FILE``/``OUTPUT_FILE`` at top)"""
 import yaml
 import torch
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
-import argparse
 
 # ==================== CONFIGURATION ====================
 # Set your parameters here instead of command-line arguments

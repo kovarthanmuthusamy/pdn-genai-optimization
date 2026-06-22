@@ -1,3 +1,7 @@
+"""Package and normalize ingested ECADSTAR labels for VAE fine-tuning.
+
+Run:
+    python active_learning_pi/al/normalize_labels.py"""
 from __future__ import annotations
 
 import json
@@ -21,7 +25,7 @@ def _load_training_stats(stats_json: Path) -> tuple[dict, dict, float]:
 
 
 def denormalize_impedance_from_model(z: np.ndarray, imp_stats: dict) -> np.ndarray:
-    """Invert log z-score used in scripts/Normalization.py → raw |Z| (231,)."""
+    """Invert log z-score used in pipelines/normalize/multifreq.py → raw |Z| (231,)."""
     z = np.asarray(z, dtype=np.float64).reshape(-1)
     if z.size != EXPECTED_IMP_LEN:
         raise ValueError(f"Expected {EXPECTED_IMP_LEN} impedance points, got {z.size}")
@@ -32,7 +36,7 @@ def denormalize_impedance_from_model(z: np.ndarray, imp_stats: dict) -> np.ndarr
 
 
 def normalize_heatmap_raw(raw: np.ndarray, hm_stats: dict) -> np.ndarray:
-    """Same as scripts/Normalization.py — (2,H,W) raw → (1,H,W) normalized."""
+    """Same as pipelines/normalize/multifreq.py — (2,H,W) raw → (1,H,W) normalized."""
     raw = np.asarray(raw, dtype=np.float32)
     if raw.ndim == 3 and raw.shape[0] == 1:
         return raw.astype(np.float32, copy=False)
@@ -54,7 +58,7 @@ def normalize_heatmap_raw(raw: np.ndarray, hm_stats: dict) -> np.ndarray:
 
 
 def normalize_impedance_raw(raw: np.ndarray, imp_stats: dict) -> np.ndarray:
-    """Same as scripts/Normalization.py — raw (231,) → (1, 231) log z-score."""
+    """Same as pipelines/normalize/multifreq.py — raw (231,) → (1, 231) log z-score."""
     raw = np.asarray(raw, dtype=np.float32).reshape(-1)
     if raw.size != EXPECTED_IMP_LEN:
         raise ValueError(f"Unexpected impedance length: {raw.size}")
@@ -88,7 +92,7 @@ def package_raw_dataset(
     """
     if str(groot) not in sys.path:
         sys.path.insert(0, str(groot))
-    from Data_Creation.impedance import read_impedance_file  # noqa: E402
+    from libs.data_creation.impedance import read_impedance_file  # noqa: E402
 
     hm_out = raw_root / "heatmap"
     imp_out = raw_root / "Imp"
@@ -150,7 +154,7 @@ def normalize_raw_tree(
     *,
     overwrite: bool = False,
 ) -> dict[str, Any]:
-    """Apply training stats (scripts/Normalization.py rules) to raw_root → norm_root."""
+    """Apply training stats (pipelines/normalize/multifreq.py rules) to raw_root → norm_root."""
     if not stats_json.is_file():
         raise FileNotFoundError(f"Training stats not found: {stats_json}")
 

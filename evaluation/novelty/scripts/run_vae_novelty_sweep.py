@@ -11,15 +11,12 @@ Outputs
     <out-root>/novelty_sweep_summary.csv
 
 Example
-  python scripts/run_vae_novelty_sweep.py --N 100 --k-start 1 --k-end 52
 
 Tip
-- Use `--max-train` to cap dataset size per K for speed.
+- Set MAX_TRAIN in CONFIG to cap dataset size per K for speed.
 """
-
 from __future__ import annotations
 
-import argparse
 import csv
 import importlib.util
 import os
@@ -28,6 +25,28 @@ from pathlib import Path
 
 import numpy as np
 import torch
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python evaluation/novelty/scripts/run_vae_novelty_sweep.py
+# =============================================================================
+
+CHECKPOINT = "experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt"
+LATENT_DIM = 32
+NUM_SAMPLES_PER_K = 100
+K_START = 1
+K_END = 52
+K_STEP = 1
+SHARED_TEMP = 1.5
+DATASET_ROOT = Path("datasets/data_norm")
+HM_POOL = 16
+BASELINE_N = 200
+MAX_TRAIN: int | None = None
+SEED = 0
+SCORE_ONLY = False  # True = skip generation; rescore existing K folders
+FORCE_CPU = False
+OUT_ROOT: Path | None = None  # None → evaluation/novelty/runs/novelty_sweep_N{N}
+
+# =============================================================================
 
 
 def _project_root() -> Path:
@@ -92,50 +111,17 @@ def _generate_one_k(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--checkpoint", default="experiments/exp027_sigma_reg_tuning/checkpoints/checkpoint_epoch_400.pt")
-    ap.add_argument("--latent-dim", type=int, default=32)
-    ap.add_argument("--N", type=int, default=100, help="Generated samples per K")
-    ap.add_argument("--k-start", type=int, default=1)
-    ap.add_argument("--k-end", type=int, default=52)
-    ap.add_argument("--k-step", type=int, default=1)
-    ap.add_argument("--shared-temp", type=float, default=1.5)
-
-    ap.add_argument("--dataset-root", type=Path, default=Path("datasets/data_norm"))
-    ap.add_argument("--hm-pool", type=int, default=16)
-    ap.add_argument("--baseline-n", type=int, default=200)
-    ap.add_argument("--max-train", type=int, default=None)
-    ap.add_argument("--seed", type=int, default=0)
-
-    ap.add_argument(
-        "--score-only",
-        action="store_true",
-        help="Do not generate; only (re)score existing K folders under out-root",
-    )
-
-    ap.add_argument("--force-cpu", action="store_true")
-    ap.add_argument(
-        "--out-root",
-        type=Path,
-        default=None,
-        help="Output root (default: evaluation/novelty/runs/novelty_sweep_N{N})",
-    )
-    args = ap.parse_args()
-
-    if not args.score_only and args.N <= 0:
-        raise SystemExit("--N must be > 0 unless --score-only is set")
-    if not (0 <= args.k_start <= 52 and 0 <= args.k_end <= 52 and args.k_step > 0):
+    if not SCORE_ONLY and NUM_SAMPLES_PER_K <= 0:
+        raise SystemExit("NUM_SAMPLES_PER_K must be > 0 unless SCORE_ONLY is True")
+    if not (0 <= K_START <= 52 and 0 <= K_END <= 52 and K_STEP > 0):
         raise SystemExit("Invalid K range")
 
-    out_root = args.out_root
-    if out_root is None:
-        out_root = Path("evaluation/novelty/runs") / f"novelty_sweep_N{args.N}"
+    out_root = OUT_ROOT or (Path("evaluation/novelty/runs") / f"novelty_sweep_N{NUM_SAMPLES_PER_K}")
 
     project_root = _project_root()
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    # Import scorer (uses K cache internally; building once makes the sweep faster)
     report_path = project_root / "evaluation" / "novelty" / "scripts" / "vae_novelty_report.py"
     spec = importlib.util.spec_from_file_location("vae_novelty_report", report_path)
     if spec is None or spec.loader is None:
@@ -148,23 +134,23 @@ def main() -> None:
 
     print(f"Out root: {out_root}")
     print("Building / loading dataset K cache...")
-    _load_or_build_k_cache(args.dataset_root)
+    _load_or_build_k_cache(DATASET_ROOT)
 
     engine = None
-    if not args.score_only:
+    if not SCORE_ONLY:
         print("Loading VAE inference engine...")
-        engine = _load_engine(checkpoint=args.checkpoint, latent_dim=args.latent_dim, force_cpu=bool(args.force_cpu))
+        engine = _load_engine(checkpoint=CHECKPOINT, latent_dim=LATENT_DIM, force_cpu=FORCE_CPU)
 
-    ks = list(range(args.k_start, args.k_end + 1, args.k_step))
+    ks = list(range(K_START, K_END + 1, K_STEP))
     out_root.mkdir(parents=True, exist_ok=True)
 
     summary_rows: list[dict] = []
 
     for idx, k in enumerate(ks, start=1):
         k_dir = out_root / f"K{k}"
-        if not args.score_only:
-            print(f"\n[{idx}/{len(ks)}] K={k}: generating N={args.N}")
-            _generate_one_k(engine=engine, out_dir=k_dir, k_value=k, n=args.N, shared_temp=args.shared_temp)
+        if not SCORE_ONLY:
+            print(f"\n[{idx}/{len(ks)}] K={k}: generating N={NUM_SAMPLES_PER_K}")
+            _generate_one_k(engine=engine, out_dir=k_dir, k_value=k, n=NUM_SAMPLES_PER_K, shared_temp=SHARED_TEMP)
         else:
             if not k_dir.exists():
                 print(f"\n[{idx}/{len(ks)}] K={k}: missing folder, skipping: {k_dir}")
@@ -173,13 +159,13 @@ def main() -> None:
         print(f"[{idx}/{len(ks)}] K={k}: scoring")
         summary = score_generated_against_dataset(
             gen_dir=k_dir,
-            dataset_root=args.dataset_root,
+            dataset_root=DATASET_ROOT,
             k_filter=int(k),
-            hm_pool=args.hm_pool,
-            baseline_n=args.baseline_n,
-            seed=args.seed,
+            hm_pool=HM_POOL,
+            baseline_n=BASELINE_N,
+            seed=SEED,
             max_gen=None,
-            max_train=args.max_train,
+            max_train=MAX_TRAIN,
             out_csv=k_dir / "novelty_report.csv",
         )
 
@@ -217,7 +203,7 @@ def main() -> None:
         )
 
     if not summary_rows:
-        raise SystemExit("No K folders were scored (check --out-root and K range)")
+        raise SystemExit("No K folders were scored (check OUT_ROOT and K range in CONFIG)")
 
     summary_path = out_root / "novelty_sweep_summary.csv"
     with open(summary_path, "w", newline="") as f:

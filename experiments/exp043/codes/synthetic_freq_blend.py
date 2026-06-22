@@ -1,5 +1,16 @@
-"""Synthetic between-anchor heatmap targets for multifreq training (exp042)."""
+"""Synthetic between-anchor heatmap blending for multifreq training.
 
+Purpose:
+    Training augmentation: interpolate heatmap + PI_freq between anchor pairs for off-anchor supervision.
+
+Run:
+    Import only — called from ``train_vae_simple._prepare_batch`` when ``synthetic_blend_prob > 0``.
+
+Agent notes:
+    - What: Stochastic freq/heatmap blend augmentation during VAE training.
+    - Usage: Set ``synthetic_blend_prob`` in experiment ``config.yaml``; batch must include ``heatmap_norm_alt``, ``PI_freq_alt``.
+    - Key symbol: ``maybe_apply_synthetic_blend(batch, cfg)``
+"""
 from __future__ import annotations
 
 import torch

@@ -1,31 +1,27 @@
 #!/usr/bin/env python3
+"""Visualize occupancy vectors from .npy files or folders.
+
+Purpose:
+    Render bar charts of 52-slot occupancy vectors; compare multiple folders or single files.
+
+Run:
+    python visualization/visualize_occupancy.py
+
+Agent notes:
+    - What: Standalone occupancy bar-chart viewer (not tied to VAE comparison pipeline).
+    - Usage: Set ``FOLDERS`` (``.npy`` files or directories) and ``OUTPUT_PATH`` → run.
+    - Config keys:
+        - ``FOLDERS`` — list of paths to ``.npy`` files or folders of ``*.npy``
+        - ``OUTPUT_PATH`` — PNG save path; script always saves (no interactive show)
+    - Key symbols: ``load_vector``, ``plot_folders``
 """
-Visualize Occupancy Vectors from folders of .npy files
-=======================================================
-Pass one or more folders that contain occupancy .npy files.
-Each folder is shown as a separate section; each file in the
-folder is one row/bar-chart.
-
-Usage examples
---------------
-# Single folder
-python visualization/visualize_occupancy.py datasets/data/Occ_map
-
-# Multiple folders (side-by-side comparison)
-python visualization/visualize_occupancy.py datasets/data/Occ_map datasets/data_norm/Occ_map
-
-# Save output
-python visualization/visualize_occupancy.py folder1 folder2 --save out.png
-"""
-
-import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from pathlib import Path
 
 # ============================================================
-# CONFIGURATION — update paths here if you prefer not to use CLI
+# CONFIGURATION — edit folders and output path below
 # ============================================================
 
 FOLDERS = [
@@ -140,31 +136,16 @@ def plot_folders(folder_data, output_path=None):
 # ---- entry point -----------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Visualize occupancy vectors (.npy) from one or more folders."
-    )
-    parser.add_argument(
-        "folders", nargs="*",
-        help="One or more folder paths containing .npy occupancy files."
-    )
-    parser.add_argument(
-        "--save", "-s", metavar="FILE",
-        help="Save figure to this path instead of showing it."
-    )
-    args = parser.parse_args()
-
-    # CLI args take priority; fall back to in-script FOLDERS list
-    raw_folders = [Path(p) for p in args.folders] if args.folders else list(FOLDERS)
-    save_path   = Path(args.save) if args.save else OUTPUT_PATH
+    raw_folders = list(FOLDERS)
+    save_path = OUTPUT_PATH
 
     if not raw_folders:
-        parser.error("Provide at least one folder path (CLI or FOLDERS list in script).")
+        raise SystemExit("Set FOLDERS in the CONFIG block at the top of this script.")
 
     folder_data = {}
     for p in raw_folders:
         p = Path(p)
         if p.is_file() and p.suffix == ".npy":
-            # Single .npy file — group by parent folder name
             group = p.parent.name
             folder_data.setdefault(group, []).append((p.name, load_vector(p)))
         elif p.is_dir():
@@ -174,7 +155,6 @@ def main():
             raise ValueError(f"Path is neither a .npy file nor a directory: {p}")
 
     plot_folders(folder_data, output_path=save_path)
-
 
 if __name__ == "__main__":
     main()

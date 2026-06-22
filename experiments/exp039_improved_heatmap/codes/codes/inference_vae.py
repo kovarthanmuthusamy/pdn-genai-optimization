@@ -45,7 +45,7 @@ def _norm_stats_path() -> Path:
     )
 
 from experiments.exp038_true_multi.codes.vae_multi_input_simple import MultiInputVAE
-from Data_Creation.csv_to_occupancy import labels_v1
+from libs.data_creation.csv_to_occupancy import labels_v1
 
 # ============================================================
 # CONFIGURATION

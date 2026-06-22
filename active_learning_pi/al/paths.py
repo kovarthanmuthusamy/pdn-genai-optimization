@@ -1,3 +1,7 @@
+"""Project and run-directory path resolution for active learning.
+
+Run:
+    Import only — ``from active_learning_pi.al.paths import gan_root, iteration_dir``."""
 from __future__ import annotations
 
 from pathlib import Path

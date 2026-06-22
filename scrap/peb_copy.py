@@ -1,5 +1,7 @@
-"""Copy generated .peb files to a Windows folder (WSL-safe path resolution)."""
+"""Copy PEB Files (WSL-Safe).
 
+Run: import and call ``copy_peb_to_folder`` (library helper, not a standalone entry script).
+"""
 from __future__ import annotations
 
 import re

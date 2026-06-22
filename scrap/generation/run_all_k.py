@@ -1,9 +1,6 @@
-"""Generate VAE samples for every K and produce a combined ECADStar .peb file.
+"""Generate VAE Samples for K Sweep.
 
-Edit the CONFIGURATION block, then run:
-    python scrap/run_all_k.py
-"""
-
+Run: python scrap/generation/run_all_k.py"""
 from __future__ import annotations
 
 import importlib

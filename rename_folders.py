@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
-"""Rename folders PI-19500..PI-38998 to PI-1..PI-19499 (rename only)."""
+"""Rename folders PI-19500..PI-38998 to PI-1..PI-19499 (rename only).
 
-import argparse
+Run: python rename_folders.py
+
+Run: python rename_folders.py"""
+from __future__ import annotations
+
 import re
 import sys
 from pathlib import Path
+
+# =============================================================================
+# CONFIGURATION — edit these before running: python rename_folders.py
+# =============================================================================
+
+ROOT = Path(r"C:\Users\muthusamy\Desktop\Raw\heatmap_450MHz")
+DRY_RUN = True
+
+# =============================================================================
 
 SOURCE_START = 19500
 SOURCE_END = 38998
@@ -68,34 +81,15 @@ def apply_renames(renames: list[tuple[Path, Path]], dry_run: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=(
-            f"Rename {PREFIX}{SOURCE_START}..{PREFIX}{SOURCE_END} "
-            f"to {PREFIX}1..{PREFIX}{SOURCE_END - SOURCE_START + 1}."
-        )
-    )
-    parser.add_argument(
-        "root",
-        nargs="?",
-        default=r"C:\Users\muthusamy\Desktop\Raw\heatmap_450MHz",
-        help="Directory containing the folders to rename",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Print planned renames without changing anything",
-    )
-    args = parser.parse_args()
-
-    root = Path(args.root)
+    root = ROOT.resolve()
     if not root.is_dir():
         print(f"Error: not a directory: {root}", file=sys.stderr)
         return 1
 
     renames = collect_renames(root)
-    count = apply_renames(renames, dry_run=args.dry_run)
+    count = apply_renames(renames, dry_run=DRY_RUN)
 
-    action = "Would rename" if args.dry_run else "Renamed"
+    action = "Would rename" if DRY_RUN else "Renamed"
     print(f"\n{action} {count} folder(s) in {root}")
     return 0
 

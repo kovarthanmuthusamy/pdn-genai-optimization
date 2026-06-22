@@ -1,3 +1,7 @@
+"""Ingest ECADSTAR PI-Distribution .map outputs into per-sample label directories.
+
+Run:
+    python active_learning_pi/al/ingest_labels.py"""
 from __future__ import annotations
 
 import re
@@ -34,7 +38,7 @@ def ingest_simulation_outputs(
     if str(groot) not in sys.path:
         sys.path.insert(0, str(groot))
 
-    from Data_Creation.heatmap import create_Heatmaps, load_mask_board  # noqa: E402
+    from libs.data_creation.heatmap import create_Heatmaps, load_mask_board  # noqa: E402
 
     emc_dir = Path(cfg["ecadstar"]["emc_output_dir"])
     mask_path = groot / cfg.get("mask_board", "configs/binary_mask.npy")

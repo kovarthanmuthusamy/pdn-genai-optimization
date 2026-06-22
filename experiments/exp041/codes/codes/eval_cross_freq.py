@@ -1,13 +1,12 @@
 """Evaluate native vs cross-frequency heatmap reconstruction on the val set.
 
 Run:
-    python experiments/exp038_true_multi/codes/eval_cross_freq.py
-    python experiments/exp038_true_multi/codes/eval_cross_freq.py --ckpt last_model.pt --max-batches 50
-"""
+    python experiments/exp041/codes/eval_cross_freq.py
 
+Run:
+    python experiments/exp041/codes/eval_cross_freq.py"""
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 import sys
@@ -30,11 +29,21 @@ from experiments.exp038_true_multi.codes.dataloader_multifreq import (  # noqa: 
 from experiments.exp038_true_multi.codes.inference_vae import VAEInference  # noqa: E402
 from src_vae.others.pi_freq_utils import pi_freq_mhz_to_norm  # noqa: E402
 
-EXP_DIR = PROJECT_ROOT / "experiments/exp038_true_multi"
+EXP_DIR = PROJECT_ROOT / "experiments/exp041"
 DEFAULT_CKPT = EXP_DIR / "checkpoints/last_model.pt"
 OUT_CSV = EXP_DIR / "metrics/cross_freq_eval.csv"
 DEFAULT_OFF_ANCHOR_MHZ = (80.0, 250.0)
 
+# =============================================================================
+# CONFIGURATION — edit these before running
+# =============================================================================
+
+CHECKPOINT = DEFAULT_CKPT
+MAX_BATCHES = 0  # 0 = all
+OUTPUT_CSV = OUT_CSV
+OFF_ANCHOR_MHZ = list(DEFAULT_OFF_ANCHOR_MHZ)
+
+# =============================================================================
 
 def _fg_mse(recon: torch.Tensor, target: torch.Tensor, bg: float, margin: float = 0.5) -> torch.Tensor:
     fg = (target > bg + margin).float()
@@ -117,19 +126,12 @@ def run_off_anchor_eval(
 
 @torch.inference_mode()
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--ckpt", default=str(DEFAULT_CKPT))
-    ap.add_argument("--max-batches", type=int, default=0)
-    ap.add_argument("--out", default=str(OUT_CSV))
-    ap.add_argument("--off-anchor", nargs="*", type=float, default=list(DEFAULT_OFF_ANCHOR_MHZ))
-    args = ap.parse_args()
-
     cfg_path = EXP_DIR / "config.yaml"
     cfg = json.loads(cfg_path.read_text(encoding="utf-8")) if cfg_path.is_file() else {}
     bg = float(cfg.get("background_value", -2.8751))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    engine = VAEInference(checkpoint_path=args.ckpt, device=device)
+    engine = VAEInference(checkpoint_path=str(CHECKPOINT), device=device)
     stats_auto = EXP_DIR / "metrics/latent_stats.json"
     engine.load_latent_stats(str(stats_auto) if stats_auto.is_file() else None)
 
@@ -155,7 +157,7 @@ def main() -> None:
     base = getattr(model, "_orig_mod", model)
 
     for bi, batch in enumerate(val_ld):
-        if args.max_batches > 0 and bi >= args.max_batches:
+        if MAX_BATCHES > 0 and bi >= MAX_BATCHES:
             break
         hm = batch["heatmap_norm"].to(device)
         occ = batch["occupancy"].to(device)
@@ -204,7 +206,7 @@ def main() -> None:
                 "hm_fg_mse_mean": sum(crs) / len(crs),
             })
 
-    off_anchor = tuple(args.off_anchor) if args.off_anchor else DEFAULT_OFF_ANCHOR_MHZ
+    off_anchor = tuple(OFF_ANCHOR_MHZ) if OFF_ANCHOR_MHZ else DEFAULT_OFF_ANCHOR_MHZ
     if off_anchor:
         print(f"\nOff-anchor MHz: {list(off_anchor)}")
         rows.extend(
@@ -213,13 +215,13 @@ def main() -> None:
                 val_ld,
                 bg=bg + 0.5,
                 off_anchor_mhz=off_anchor,
-                max_batches=args.max_batches or 30,
+                max_batches=MAX_BATCHES or 30,
                 device=device,
                 out_csv=None,
             ),
         )
 
-    out = Path(args.out)
+    out = Path(OUTPUT_CSV)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["mhz", "kind", "n", "hm_fg_mse_mean"])

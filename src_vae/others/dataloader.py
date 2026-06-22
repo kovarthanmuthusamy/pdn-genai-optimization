@@ -1,11 +1,16 @@
-"""Data loader for Multi-Input VAE training.
+"""PyTorch dataset and data loaders for multi-input VAE training.
 
-Layout-centric multifreq (``data_multifreq*``):
-  - heatmap/sample_N.npy, PI_freq/sample_N.npy per row
-  - layouts/{design_id}/imp.npy, occ.npy once per layout (via manifest.csv)
-
-Legacy single-freq (``data_norm`` without layouts/):
-  - heatmap/, Imp/, Occ_map/ per sample
+Purpose: Load heatmap, occupancy, impedance, and optional PI_freq tensors from
+    layout-centric multifreq or legacy single-freq on-disk layouts.
+Run: ``from src_vae.others.dataloader import create_data_loaders`` in training scripts.
+Inputs / outputs: Dataset dirs (``data_multifreq*``, ``data_norm``); yields dicts with
+    ``heatmap_norm``, ``occupancy``, ``impedance``, ``K``, ``PI_freq``, ``filename``.
+Dependencies: ``torch``, ``numpy``; ``heatmap_z_clip``, ``multifreq_layout_store``.
+Agent notes:
+    - Type: library module (import-only).
+    - Key symbols: ``VAEDataset``, ``create_data_loaders``, ``collate_fn``.
+    - Multifreq layout: ``heatmap/sample_N.npy``, ``PI_freq/sample_N.npy`` per row;
+      ``layouts/{design_id}/imp.npy``, ``occ.npy`` via ``manifest.csv``.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
 
 from src_vae.others.heatmap_z_clip import clip_heatmap_z, load_heatmap_z_clip_bounds
+from src_vae.others.norm_stats import HeatmapNormStats, pi_norm_to_mhz
 from src_vae.others.multifreq_layout_store import (
     has_layout_store,
     layout_imp_path,
@@ -89,9 +95,18 @@ class VAEDataset(Dataset):
         print(f"Loaded {self.n_samples} samples from {data_dir}")
 
         self.heatmap_z_clip: tuple[float, float] | None = load_heatmap_z_clip_bounds(self.data_dir)
+        self._hm_norm_stats: HeatmapNormStats | None = None
+        stats_path = self.data_dir / "normalization_stats.json"
+        if stats_path.is_file():
+            try:
+                self._hm_norm_stats = HeatmapNormStats.load(self.data_dir)
+            except (KeyError, json.JSONDecodeError, TypeError):
+                self._hm_norm_stats = None
         if self.heatmap_z_clip is not None:
             lo, hi = self.heatmap_z_clip
             print(f"  Heatmap z-clip at load: [{lo:.4f}, {hi:.4f}] (tail trim from stats)")
+        if self._hm_norm_stats is not None:
+            print(f"  Heatmap norm: {self._hm_norm_stats.describe()}")
 
         self.k_values: Optional[list[int]] = None
         if precompute_k:
@@ -180,7 +195,20 @@ class VAEDataset(Dataset):
     def _load_sample(self, idx: int) -> dict:
         filename = self._get_filename(idx)
         heatmap_norm = np.load(self.heatmap_dir / f"{filename}.npy")
-        if self.heatmap_z_clip is not None:
+        pi_norm_val = None
+        if self.has_pifreq:
+            pifreq_path = self.pifreq_dir / f"{filename}.npy"
+            if pifreq_path.exists():
+                from src_vae.others.pi_freq_utils import pi_freq_hz_to_norm
+                pi_norm_val = float(pi_freq_hz_to_norm(float(np.load(pifreq_path))))
+
+        if self._hm_norm_stats is not None and self._hm_norm_stats.is_unbounded():
+            pass  # no clip — preserve peak spatial structure
+        elif self._hm_norm_stats is not None and self._hm_norm_stats.is_robust_per_mhz() and pi_norm_val is not None:
+            mhz = float(pi_norm_to_mhz(pi_norm_val))
+            lo, hi = self._hm_norm_stats.clip_bounds(mhz=mhz)
+            heatmap_norm = np.clip(heatmap_norm, lo, hi)
+        elif self.heatmap_z_clip is not None:
             lo, hi = self.heatmap_z_clip
             heatmap_norm = np.clip(heatmap_norm, lo, hi)
         heatmap_norm_t = torch.from_numpy(heatmap_norm).float()

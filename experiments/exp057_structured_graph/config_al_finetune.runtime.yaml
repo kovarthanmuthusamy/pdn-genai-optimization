@@ -1,0 +1,18 @@
+{
+  "resume_checkpoint": "experiments/exp057_structured_graph/checkpoints/last_model.pt",
+  "num_epochs": 1050,
+  "learning_rate": 1.5e-05,
+  "reset_lr_on_resume": true,
+  "train_samples_per_epoch": 48000,
+  "al_overlay_data_dir": "datasets/data_multifreq_al_overlay_exp057",
+  "al_overlay_sample_weight": 40.0,
+  "layout_train_prob": 0.5,
+  "heatmap_weight": 5.0,
+  "heatmap_focus_heatmap_weight": 6.5,
+  "heatmap_focus_start_frac": 0.0,
+  "heatmap_focus_start_epoch": 0,
+  "cross_freq_weight": 1.2,
+  "eval_off_anchor_interval": 10,
+  "checkpoint_interval": 25,
+  "epoch_print_interval": 1
+}

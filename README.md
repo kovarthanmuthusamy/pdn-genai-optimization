@@ -1,10 +1,6 @@
-<div align="center">
-
 # A Generative AI Framework for the Design Optimization and Performance Analysis of PCB Power Delivery Networks
 
-*A surrogate-driven inverse-design approach to decoupling-capacitor placement*
-
-</div>
+## A surrogate-driven inverse-design approach to decoupling-capacitor placement
 
 ---
 
@@ -57,7 +53,7 @@ locally in frequency and space, but their effect is coupled and non-linear. The 
 binary placement vector
 
 $$
-\mathbf{b}\in\{0,1\}^{52},\qquad \|\mathbf{b}\|_0 = K,
+\mathbf{b}\in0,1^{52},\qquad \mathbf{b}_0 = K,
 $$
 
 where each entry selects whether a slot is populated and $K$ is the **decap budget** (a cost/area
@@ -68,7 +64,7 @@ Z(f;\mathbf{b}) \le Z_\text{target}(f)\quad\forall f,
 $$
 
 while keeping $K$ small. Because the forward map $\mathbf{b}\mapsto Z(\cdot)$ is only available
-through an expensive field solver and the domain $\{0,1\}^{52}$ is astronomically large, exhaustive
+through an expensive field solver and the domain $0,1^{52}$ is astronomically large, exhaustive
 or even heuristic search is impractical. **This work replaces the forward solver with a learned,
 differentiable surrogate and the discrete search with continuous optimization.**
 
@@ -120,11 +116,11 @@ flowchart LR
     style S3 fill:#222e3c,color:#fff
 ```
 
-| Stage | Input | Output | Code |
-| ----- | ----- | ------ | ---- |
-| 1. Surrogate training | dataset (one design) | frozen VAE + impedance surrogate | [`experiments/exp043/`](experiments/exp043/) |
-| 2. Latent optimization | target $Z_\text{target}$ | best placement per $K$ | [`pipelines/latent/optimize.py`](pipelines/latent/optimize.py) |
-| 3. Analysis | a solution | PI-distribution hotspot maps | VAE heatmap decoder |
+| Stage                  | Input                    | Output                           | Code                                                           |
+| ---------------------- | ------------------------ | -------------------------------- | -------------------------------------------------------------- |
+| 1. Surrogate training  | dataset (one design)     | frozen VAE + impedance surrogate | `[experiments/exp043/](experiments/exp043/)`                   |
+| 2. Latent optimization | target $Z_\text{target}$ | best placement per $K$           | `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)` |
+| 3. Analysis            | a solution               | PI-distribution hotspot maps     | VAE heatmap decoder                                            |
 
 ---
 
@@ -137,10 +133,10 @@ posterior. Conditioning signals are the decap budget $K$ and (for the spatial he
 
 ### 4.1 Modalities
 
-| Modality | Tensor shape | Role |
-| -------- | ------------ | ---- |
-| Decap **occupancy** | `[52]` | binary placement (which slots are populated) |
-| **PI-spectrum** (magnitude) | `[231]` | impedance vs. frequency, 1–600 MHz |
+| Modality                      | Tensor shape    | Role                                                    |
+| ----------------------------- | --------------- | ------------------------------------------------------- |
+| Decap **occupancy**           | `[52]`          | binary placement (which slots are populated)            |
+| **PI-spectrum** (magnitude)   | `[231]`         | impedance vs. frequency, 1–600 MHz                      |
 | **PI-distribution** (heatmap) | `[64 × 64 × 1]` | spatial hotspot map at a frequency anchor (~20 anchors) |
 
 ### 4.2 Product-of-Experts encoder
@@ -178,10 +174,10 @@ flowchart TD
     style Zl fill:#33415c,color:#fff
 ```
 
-Architecture: [`vae_poe_freq.py`](experiments/exp043/codes/vae_poe_freq.py). Hyperparameters
+Architecture: `[vae_poe_freq.py](experiments/exp043/codes/vae_poe_freq.py)`. Hyperparameters
 (`latent_dim=42`, `heatmap_private_dim=8`, `cond_dim=8`, K-balanced and frequency-balanced sampling,
 FiLM-conditioned heatmap head, curriculum schedules) are in
-[`config.yaml`](experiments/exp043/config.yaml).
+`[config.yaml](experiments/exp043/config.yaml)`.
 
 ### 4.3 Impedance surrogate
 
@@ -218,8 +214,9 @@ spectrum loss cannot move $\mathbf z$ and the "optimization" degenerates into ra
 We restore the gradient with a **straight-through estimator**:
 
 $$
-\text{topK}_\text{STE}(\mathbf p) = \underbrace{\text{hard\_topK}(\mathbf p)}_{\text{forward value}}
-+ \underbrace{\mathbf p - \text{sg}(\mathbf p)}_{\text{identity gradient}},
+\text{topK}*\text{STE}(\mathbf p) = \underbrace{\text{hardtopK}(\mathbf p)}*{\text{forward value}}
+
+- \underbrace{\mathbf p - \text{sg}(\mathbf p)}_{\text{identity gradient}},
 $$
 
 where $\text{sg}(\cdot)$ is stop-gradient. The surrogate therefore always sees an in-distribution
@@ -232,10 +229,11 @@ For each budget $K$, multiple latent seeds are optimized in parallel with Adam. 
 balances target satisfaction, spectral shape, manifold adherence, and candidate diversity:
 
 $$
-\mathcal L = \underbrace{\lambda_\text{ex}\,\mathcal L_\text{exceed} - \lambda_\text{gap}\,\mathcal L_\text{gap}}_{\text{meet the target}}
-+ \underbrace{\lambda_\text{peak}\,\mathcal L_\text{peak} + \lambda_\text{track}\,\mathcal L_\text{track} + \lambda_\text{ar}\,\mathcal L_\text{anti-res}}_{\text{spectral shape \& physics}}
-+ \underbrace{\lambda_\text{z}\,\mathcal L_\text{prior} + \lambda_\text{b}\,\mathcal L_\text{boundary}}_{\text{stay on manifold}}
-+ \lambda_\text{div}\,\mathcal L_\text{div}.
+\mathcal L = \underbrace{\lambda_\text{ex}\mathcal L_\text{exceed} - \lambda_\text{gap}\mathcal L_\text{gap}}_{\text{meet the target}}
+
+- \underbrace{\lambda_\text{peak}\mathcal L_\text{peak} + \lambda_\text{track}\mathcal L_\text{track} + \lambda_\text{ar}\mathcal L_\text{anti-res}}_{\text{spectral shape  physics}}
+- \underbrace{\lambda_\text{z}\mathcal L_\text{prior} + \lambda_\text{b}\mathcal L_\text{boundary}}_{\text{stay on manifold}}
+- \lambda_\text{div}\mathcal L_\text{div}.
 $$
 
 - **Exceed / gap** — penalize any frequency above $Z_\text{target}-\text{margin}$; reward headroom below.
@@ -279,7 +277,7 @@ concentrates spatially.
 
 ## 7. Repository Structure
 
-Scripts are grouped under **`pipelines/`** and **`libs/`**. Legacy folders (`Data_Creation/`, `scripts/`, `New_heatmaps/`, `Latent_opm/`) have been removed — see [`REPO_LAYOUT.md`](REPO_LAYOUT.md) for the migration map.
+Scripts are grouped under `**pipelines/`** and `**libs/**`. Legacy folders (`Data_Creation/`, `scripts/`, `New_heatmaps/`, `Latent_opm/`) have been removed — see `[REPO_LAYOUT.md](REPO_LAYOUT.md)` for the migration map.
 
 ```text
 .
@@ -295,7 +293,7 @@ Scripts are grouped under **`pipelines/`** and **`libs/`**. Legacy folders (`Dat
 ├── libs/                        Shared import-only modules
 │   ├── data_creation/           heatmap, impedance, occupancy, csv_to_occupancy
 │   └── peb/                     PEB frequency regex helper
-├── experiments/                 Generative surrogate experiments (exp029 … exp043)
+├── experiments/                 Generative surrogate experiments (exp029 … exp050)
 │   ├── exp043/                  ← current model
 │   │   ├── codes/
 │   │   │   ├── vae_poe_freq.py        PoE VAE with frequency expert
@@ -315,7 +313,7 @@ Scripts are grouped under **`pipelines/`** and **`libs/`**. Legacy folders (`Dat
 │   └── latent_runs/             Latent optimization outputs
 ├── configs/                     target_impedance.npy, frequency grid, masks
 ├── tools/ecadstar/              ECADSTAR batch helpers (PowerShell + AutoHotkey)
-├── gan_paths.py                 Repo-root path helpers (REPO_ROOT, repo_path)
+├── repo_paths.py                 Repo-root path helpers (REPO_ROOT, repo_path)
 ├── evaluation/                  Novelty / quality evaluation of generated samples
 ├── src_vae/                     Shared VAE training library
 └── viewer/, visualization/      Result viewers and plotting
@@ -323,17 +321,17 @@ Scripts are grouped under **`pipelines/`** and **`libs/`**. Legacy folders (`Dat
 
 ### Common entry points
 
-| Task | Command |
-| ---- | ------- |
-| Build multifreq dataset | `python pipelines/data/processing_multifreq.py` |
-| Normalize dataset | `python pipelines/normalize/multifreq.py` |
-| Train surrogate (exp043) | `python experiments/exp043/codes/train_vae_simple.py` |
-| Latent optimization (Stage 2) | `python pipelines/latent/optimize.py` |
-| Feasibility sampling | `python pipelines/latent/find_feasible.py` |
-| Active-learning cycle | `python pipelines/active_learning/run.py` |
-| Multifreq sweep | `python scrap/orchestration/run_multifreq_sweep_pipeline.py` |
+| Task                          | Command                                                      |
+| ----------------------------- | ------------------------------------------------------------ |
+| Build multifreq dataset       | `python pipelines/data/processing_multifreq.py`              |
+| Normalize dataset             | `python pipelines/normalize/multifreq.py`                    |
+| Train surrogate (exp043)      | `python experiments/exp043/codes/train_vae_simple.py`        |
+| Latent optimization (Stage 2) | `python pipelines/latent/optimize.py`                        |
+| Feasibility sampling          | `python pipelines/latent/find_feasible.py`                   |
+| Active-learning cycle         | `python pipelines/active_learning/run.py`                    |
+| Multifreq sweep               | `python scrap/orchestration/run_multifreq_sweep_pipeline.py` |
 
-All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script’s docstring includes **Agent notes** (What, Usage, Config keys). See [`pipelines/README.md`](pipelines/README.md) and [`docs/CONFIG_ONLY_SCRIPTS.md`](docs/CONFIG_ONLY_SCRIPTS.md).
+All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script’s docstring includes **Agent notes** (What, Usage, Config keys). See `[pipelines/README.md](pipelines/README.md)` and `[docs/CONFIG_ONLY_SCRIPTS.md](docs/CONFIG_ONLY_SCRIPTS.md)`.
 
 ---
 
@@ -352,14 +350,14 @@ datasets/data_multifreq/
 └── Occ_map/             occupancy maps
 ```
 
-Normalized datasets (`data_multifreq_norm/`) include the same ``dataset_meta.json`` (updated at
-normalize time) plus ``normalization_stats.json``. The optimization target is
-``configs/target_impedance.npy`` (shape `[231]`).
+Normalized datasets (`data_multifreq_norm/`) include the same `dataset_meta.json` (updated at
+normalize time) plus `normalization_stats.json`. The optimization target is
+`configs/target_impedance.npy` (shape `[231]`).
 
 Build scripts: `pipelines/data/processing_multifreq.py` → `pipelines/normalize/multifreq.py`.
 PEB / combination assets live in `data/heatmaps/`.
 
-Example ``dataset_meta.json`` fields: `unique_layouts`, `manifest_rows`, `size.total_mb`,
+Example `dataset_meta.json` fields: `unique_layouts`, `manifest_rows`, `size.total_mb`,
 `pi_frequencies_mhz` (e.g. `[10, 80, 130, …, 600]`), `samples_per_mhz`.
 
 ---
@@ -375,7 +373,7 @@ Tested with **PyTorch 2.7 (CUDA 11.8)**; a GPU is recommended for training.
 
 ### Running scripts
 
-Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `# CONFIGURATION` block, then run `python path/to/script.py`. Module docstrings explain **What** each script does, **Usage**, and **Config keys** — see [`docs/CONFIG_ONLY_SCRIPTS.md`](docs/CONFIG_ONLY_SCRIPTS.md).
+Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `# CONFIGURATION` block, then run `python path/to/script.py`. Module docstrings explain **What** each script does, **Usage**, and **Config keys** — see `[docs/CONFIG_ONLY_SCRIPTS.md](docs/CONFIG_ONLY_SCRIPTS.md)`.
 
 ### Stage 1 — train the surrogate
 
@@ -393,7 +391,7 @@ python pipelines/normalize/multifreq.py
 
 ### Stage 2 — inverse design
 
-Edit the **CONFIGURATION** block at the top of [`pipelines/latent/optimize.py`](pipelines/latent/optimize.py), then:
+Edit the **CONFIGURATION** block at the top of `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)`, then:
 
 ```bash
 python pipelines/latent/optimize.py
@@ -405,15 +403,15 @@ auto-generated via `pipelines/latent/generate_run_report.py`.
 
 Selected knobs (constants in the CONFIG block):
 
-| Constant | Meaning | Default |
-| -------- | ------- | ------- |
-| `NUM_STEPS` | Adam steps per K | 1200 |
-| `LR` | learning rate | 5e-2 |
-| `NUM_CANDIDATE_SEEDS` | parallel latent seeds per K | 32 |
-| `K_LIST` | decap budgets to solve | 1 … 25 |
-| `BOUNDARY_MARGIN` | feasibility safety margin | 0.1 |
-| `SELECT_METRIC` | ranking metric (`max_ohm` = lowest peak) | `max_ohm` |
-| `USE_SURROGATE` | use impedance surrogate vs. VAE decoder | True |
+| Constant              | Meaning                                  | Default   |
+| --------------------- | ---------------------------------------- | --------- |
+| `NUM_STEPS`           | Adam steps per K                         | 1200      |
+| `LR`                  | learning rate                            | 5e-2      |
+| `NUM_CANDIDATE_SEEDS` | parallel latent seeds per K              | 32        |
+| `K_LIST`              | decap budgets to solve                   | 1 … 25    |
+| `BOUNDARY_MARGIN`     | feasibility safety margin                | 0.1       |
+| `SELECT_METRIC`       | ranking metric (`max_ohm` = lowest peak) | `max_ohm` |
+| `USE_SURROGATE`       | use impedance surrogate vs. VAE decoder  | True      |
 
 ### Stage 2 — export to ECADSTAR & compare
 
@@ -430,13 +428,13 @@ python pipelines/latent/compare_report.py
 ## 10. Limitations & Future Work
 
 - **Single design.** The surrogate is trained on one board; cross-design generalization (a
-  design-conditioned surrogate) is the natural next step.
+design-conditioned surrogate) is the natural next step.
 - **Surrogate fidelity.** Feasibility is asserted in surrogate space. A **closed-loop verification**
-  stage that re-simulates each proposed placement with the ground-truth solver — and optionally
-  feeds failures back as active-learning samples — would harden the claims.
+stage that re-simulates each proposed placement with the ground-truth solver — and optionally
+feeds failures back as active-learning samples — would harden the claims.
 - **Discrete read-out.** The STE relaxation makes the search gradient-guided, but the
-  occupancy and impedance decoders are separate heads; tightening their consistency (or optimizing
-  directly through the impedance surrogate on hard placements) is an avenue for improvement.
+occupancy and impedance decoders are separate heads; tightening their consistency (or optimizing
+directly through the impedance surrogate on hard placements) is an avenue for improvement.
 
 ---
 
@@ -455,7 +453,4 @@ Source code (`pipelines/`, `libs/`, `experiments/`, `src_vae/`), configuration, 
 
 ---
 
-<div align="center">
-<sub>Research prototype — decision-support for PDN decap placement. Proposed designs require
-ground-truth simulation before sign-off.</sub>
-</div>
+Research prototype — decision-support for PDN decap placement. Proposed designs require ground-truth simulation before sign-off.

@@ -194,10 +194,10 @@ class Config:
     # Allow starting new experiments without copying this code.
     # Use env vars to override where outputs are written/read.
     data_dir: str = field(
-        default_factory=lambda: os.environ.get("VAE_DATA_DIR", "/home/ubuntu/gan/datasets/data_multifreq_norm"),
+        default_factory=lambda: os.environ.get("VAE_DATA_DIR", "datasets/data_multifreq_norm"),
     )
     experiment_dir: str = field(
-        default_factory=lambda: os.environ.get("VAE_EXPERIMENT_DIR", "/home/ubuntu/gan/experiments/exp038_true_multi"),
+        default_factory=lambda: os.environ.get("VAE_EXPERIMENT_DIR", "experiments/exp038_true_multi"),
     )
     checkpoint_interval: int = 25   # CSV, plots, latent stats, and checkpoint_epoch_{N}.pt
     keep_last_n_checkpoints: int = 0  # 0 = keep every interval checkpoint (no pruning)
@@ -1294,6 +1294,10 @@ def train_vae() -> None:
             clamp_curriculum_for_resume_epoch(c, start)
             print_curriculum_summary(c)
 
+    cb_load = getattr(c, "on_after_checkpoint_load", None)
+    if callable(cb_load) and resume_path and start > 0:
+        cb_load(c, model, start)
+
     amp = _amp_dtype(c)
     use_grad_scaler = amp == torch.float16
     if use_grad_scaler:
@@ -1363,6 +1367,9 @@ def train_vae() -> None:
             and (epoch - start) % c.empty_cache_interval == 0
         ):
             torch.cuda.empty_cache()
+        cb = getattr(c, "on_train_epoch_start", None)
+        if callable(cb):
+            cb(epoch + 1, c, train_ld)
         t_ep0 = time.perf_counter()
         beta = compute_beta(epoch, c)
         md = compute_modality_dropout(epoch, c)

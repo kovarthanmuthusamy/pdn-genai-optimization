@@ -1,57 +1,96 @@
 """ECADSTAR batch simulation bridge (Windows PowerShell + AutoHotkey).
 
-Run:
-    Not run directly — called from ``active_learning_pi.al.pipeline`` ``simulate`` step."""
+Uses the same path resolution and wait logic as
+``pipelines/dataset_sim/ecadstar.py`` and ``run_multifreq_sweep_pipeline.py``.
+"""
 from __future__ import annotations
 
-import os
-import subprocess
+import time
 from pathlib import Path
+
+from pipelines.dataset_sim.ecadstar import (
+    clear_ecadstar_lock,
+    resolve_windows_path,
+    run_ecadstar_batch as _run_batch,
+    stage_peb_for_ecadstar,
+    wait_for_batch_started,
+    wait_for_pi_outputs,
+    windows_path_str,
+)
 
 
 def run_ecadstar_batch(
     cfg: dict,
     peb_path: Path,
     groot: Path,
+    *,
+    pi_count: int = 1,
 ) -> int:
     """
-    Invoke Windows PowerShell + AutoHotkey to Load Batch in PI/EMI.
-    Must run on Windows (or via powershell.exe from WSL calling Windows paths).
+    Stage PEB → launch ECADStar Load Batch → optionally wait for PI outputs.
+
+    ``ecadstar`` config keys (Windows paths, same as sweep pipeline):
+      erf_path, emc_output_dir, peb_copy_dest (optional),
+      skip_open_erf, ahk_exe, clear_lock_file,
+      wait_for_pi, wait_timeout_sec, wait_poll_sec
     """
     ec = cfg.get("ecadstar", {})
-    erf = Path(ec["erf_path"])
+    erf_path = str(ec["erf_path"])
+    emc_output_dir = str(ec["emc_output_dir"])
+
+    erf = resolve_windows_path(erf_path)
     if not erf.is_file():
-        raise FileNotFoundError(f"ERF not found: {erf}")
+        raise FileNotFoundError(
+            f"ERF not found: {erf_path}\n"
+            f"  Resolved: {erf}\n"
+            "  Edit active_learning_pi/config/exp057.json → ecadstar.erf_path "
+            "(use the same paths as scrap/orchestration/run_multifreq_sweep_pipeline.py)."
+        )
     if not peb_path.is_file():
         raise FileNotFoundError(f"PEB not found: {peb_path}")
 
-    ps_script = groot / "tools" / "ecadstar" / "run_ecadstar_piemi_batch.ps1"
-    if not ps_script.is_file():
-        raise FileNotFoundError(f"AHK runner not found: {ps_script}")
+    if bool(ec.get("clear_lock_file", True)):
+        clear_ecadstar_lock(erf_path)
 
-    ahk_exe = ec.get("ahk_exe")
-    skip = bool(ec.get("skip_open_erf", False))
+    staged_peb = stage_peb_for_ecadstar(
+        peb_path.resolve(),
+        erf_path=erf_path,
+        peb_copy_dest=ec.get("peb_copy_dest"),
+    )
 
-    cmd = [
-        "powershell.exe",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        str(ps_script),
-        "-ErfPath",
-        str(erf),
-        "-PebPath",
-        str(peb_path),
-    ]
-    if ahk_exe:
-        cmd.extend(["-AhkExe", str(ahk_exe)])
-    if skip:
-        cmd.append("-SkipOpenErf")
+    print(f"  ERF: {windows_path_str(erf)}")
+    print(f"  EMC: {windows_path_str(resolve_windows_path(emc_output_dir))}")
+    print(f"  PEB: {windows_path_str(staged_peb)}")
 
-    env = os.environ.copy()
-    log_hint = Path(os.environ.get("TEMP", "/tmp")) / "ecadstar_piemi_batch.log"
-    print(f"Running ECADSTAR automation: {' '.join(cmd)}")
-    print(f"  Log (Windows): {log_hint}")
-    proc = subprocess.run(cmd, cwd=str(groot))
-    return int(proc.returncode)
+    batch_start = time.time()
+    rc = _run_batch(
+        staged_peb,
+        erf_path=erf_path,
+        repo_root=groot,
+        ahk_exe=ec.get("ahk_exe"),
+        skip_open_erf=bool(ec.get("skip_open_erf", False)),
+    )
+    if rc != 0:
+        return rc
+
+    if bool(ec.get("wait_for_batch_started", True)):
+        wait_for_batch_started(
+            emc_output_dir,
+            peb_path=staged_peb,
+            batch_start_ts=batch_start,
+            timeout_sec=int(ec.get("wait_batch_start_timeout_sec", 600)),
+            poll_sec=int(ec.get("wait_poll_sec", 40)),
+        )
+
+    if bool(ec.get("wait_for_pi", True)) and pi_count > 0:
+        wait_for_pi_outputs(
+            emc_output_dir,
+            pi_count=pi_count,
+            batch_start_ts=batch_start,
+            mode="distribution",
+            timeout_sec=int(ec.get("wait_timeout_sec", 7200)),
+            poll_sec=int(ec.get("wait_poll_sec", 40)),
+            expected_mhz=None,
+        )
+
+    return 0

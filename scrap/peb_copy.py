@@ -10,13 +10,13 @@ from pathlib import Path, PureWindowsPath
 
 
 def resolve_windows_path(path_str: str) -> Path:
-    """Resolve a Windows path; on WSL use /mnt/<drive>/... when available."""
-    if re.match(r"^[A-Za-z]:\\", path_str):
-        win = PureWindowsPath(path_str)
+    """Resolve a Windows path; on WSL use /mnt/<drive>/... when the drive is mounted."""
+    if re.match(r"^[A-Za-z]:[\\/]", path_str):
+        win = PureWindowsPath(path_str.replace("/", "\\"))
         drive = win.drive.rstrip(":").lower()
-        wsl_path = Path("/mnt") / drive / Path(*win.parts[1:])
-        if wsl_path.exists():
-            return wsl_path
+        mount_root = Path("/mnt") / drive
+        if mount_root.is_dir():
+            return mount_root.joinpath(*win.parts[1:])
         return Path(path_str)
     return Path(path_str)
 

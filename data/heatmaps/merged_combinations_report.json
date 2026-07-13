@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-07-01T13:13:39.245630+00:00",
+  "old_csv": "/home/ubuntu/genai_pdn/data/heatmaps/all_combinations.csv",
+  "new_csv": "/home/ubuntu/genai_pdn/data/heatmaps/combinations.csv",
+  "legacy_map_csv": "/home/ubuntu/genai_pdn/data/heatmaps/decap_index_map.csv",
+  "n_old": 19499,
+  "n_new": 10000,
+  "n_merged": 29499,
+  "overlap_rows": 0,
+  "output_csv": "/home/ubuntu/genai_pdn/data/heatmaps/all_combinations_merged.csv",
+  "output_map": "/home/ubuntu/genai_pdn/data/heatmaps/merged_combinations_index_map.csv",
+  "pi_range_legacy": "PI-1..PI-19499",
+  "pi_range_combinations": "PI-19500..PI-29499",
+  "append_scripts": {
+    "legacy": "pipelines/data/append_peb_batch_raw.py (PI 1..N_old, decap_index_map)",
+    "combinations": "pipelines/data/append_combinations_multifreq.py (PI 1..N_new in combinations Raw)"
+  }
+}

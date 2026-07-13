@@ -1,0 +1,64 @@
+Append merged combinations -> multifreq dataset
+  Merged CSV  : /home/ubuntu/genai_pdn/data/heatmaps/peb_with_29k/all_combinations_merged.csv
+  Index map   : /home/ubuntu/genai_pdn/data/heatmaps/peb_with_29k/merged_combinations_index_map.csv
+  Raw root    : /mnt/c/Users/muthusamy/Desktop/Raw
+  Output      : /home/ubuntu/genai_pdn/datasets/data_multifreq_train
+  Rows        : 0..29498 (29,499 layouts)
+    legacy=19,499  combinations=10,000
+  PI range    : PI-1..PI-29499
+  MHz         : [470.0] (1 anchors)
+  Expected    : 29,499 manifest rows
+  Append tag  : merged_470
+  Workers     : 4
+  Legacy meta : 19,499 layout design_ids in manifest
+  Impedance: skip if missing (MHz-only append on existing layouts)
+  Impedance/ not found — will skip impedance read if layouts exist in dataset
+  Indexing 1 heatmap folder(s) (16 threads)...
+    heatmaps_470MHz/: 29,499 PI folders
+  Raw validation OK
+  Skip existing: 645,481 (design_id, freq) pairs
+  Building task list...
+    tasks 0/29,499...
+    tasks 2,000/29,499...
+    tasks 4,000/29,499...
+    tasks 6,000/29,499...
+    tasks 8,000/29,499...
+    tasks 10,000/29,499...
+    tasks 12,000/29,499...
+    tasks 14,000/29,499...
+    tasks 16,000/29,499...
+    tasks 18,000/29,499...
+    tasks 20,000/29,499...
+    tasks 22,000/29,499...
+    tasks 24,000/29,499...
+    tasks 26,000/29,499...
+    tasks 28,000/29,499...
+  Tasks to run: 29,499
+  Continue sample index from sample_1410346.npy
+  Progress: 1,474/29,499
+  Progress: 2,948/29,499
+  Progress: 4,422/29,499
+  Progress: 5,896/29,499
+  Progress: 7,370/29,499
+  Progress: 8,844/29,499
+  Progress: 10,318/29,499
+  Progress: 11,792/29,499
+  Progress: 13,266/29,499
+  Progress: 14,740/29,499
+  Progress: 16,214/29,499
+  Progress: 17,688/29,499
+  Progress: 19,162/29,499
+  Progress: 20,636/29,499
+  Progress: 22,110/29,499
+  Progress: 23,584/29,499
+  Progress: 25,058/29,499
+  Progress: 26,532/29,499
+  Progress: 28,006/29,499
+  Progress: 29,480/29,499
+  Batch registry: /home/ubuntu/genai_pdn/datasets/data_multifreq_train/append_batches/merged_470.json
+Wrote dataset meta: /home/ubuntu/genai_pdn/datasets/data_multifreq_train/dataset_meta.json
+  layouts=29499 samples=668477 size=40778.1 MB MHz=[10.0, 63.0, 80.0, 100.0, 120.0, 150.0, 170.0, 180.0, 200.0, 230.0, 250.0, 270.0, 280.0, 300.0, 330.0, 350.0, 370.0, 390.0, 400.0, 420.0, 430.0, 450.0, 470.0, 500.0]
+
+Appended 29,499 sample row(s)
+  manifest: /home/ubuntu/genai_pdn/datasets/data_multifreq_train/manifest.csv
+  Next: python pipelines/normalize/multifreq.py  (set APPEND=True)

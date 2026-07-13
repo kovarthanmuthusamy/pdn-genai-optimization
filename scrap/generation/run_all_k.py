@@ -53,9 +53,8 @@ FORCE_CPU = False
 
 
 # ── Bootstrap: make project root importable ─────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+from repo_paths import REPO_ROOT as PROJECT_ROOT, setup_path
+setup_path()
 
 # ── Dynamic import of VAEInference from the chosen experiment ─
 _exp_module = EXPERIMENT_DIR.replace("/", ".").replace("\\", ".") + ".codes.inference_vae"

@@ -1,0 +1,98 @@
+Loaded config overrides from config.yaml
+  Curriculum (of 700 epochs): cross_freq@20, protect_hm@200, heatmap_focus@200, imp_peak@300→300 (ramp 77), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  exp051 training (Tier A lean: FG huber + grad + phys blob + peak_loc):
+    layout_train_prob=0.55 (~45% encode)  cf_layout_mix=0.45  high_freq_pair_bias=0.55
+    spatial: peak_loc_w=0.75  peak_w=3.0  grad_vec_w=2.5  dyn_w=2.0
+    peak_topk=24  phys_w=3.0  phys_over=1.75  p99_train=off
+    hf_mult=2.0  private_h=384  freq_film=True
+    epochs=700  early_stop=disabled
+Loaded config overrides from config.yaml
+  Curriculum (of 700 epochs): cross_freq@20, protect_hm@200, heatmap_focus@200, imp_peak@300→300 (ramp 77), layout_train_prob=0.55, cross_freq_layout_z_only=False
+Fresh run — removed previous outputs under experiments/exp051_new_datas_appended
+  - checkpoints/
+  - logs/
+  - metrics/
+heatmap norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+================================================================================
+EXP051_NEW_DATAS_APPENDED — MULTI-INPUT VAE
+  device: cuda
+  batch: 160
+  epochs: 700
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: fp16
+  tf32: False
+  compile: False
+  ram_cache: True
+================================================================================
+  Central norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 29499 layouts, 471979 manifest rows
+Loaded 471979 samples from datasets/data_multifreq_train_norm_robust
+  Heatmap z-clip at load: [-1.7153, 6.8219] (tail trim from stats)
+  Heatmap norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+K-values loaded from cache (471979 samples)
+Caching 471979 samples in RAM …
+  RAM cache ready in 214.9s
+Building multifreq metadata for 471979 samples …
+  saved multifreq_meta.json  designs=29499  freq bins=Counter({9: 147495, 8: 58998, 10: 29499, 1: 29499, 6: 29499, 3: 29499, 0: 29499, 5: 29499, 4: 29499, 7: 29499, 2: 29494})
+Multifreq split by design: 29499 layouts
+Train samples: 412981, Validation samples: 58998
+  Train PI_freq bins (anchor MHz):
+    10 MHz: 25705
+    63 MHz: 25815
+    80 MHz: 25823
+    200 MHz: 25822
+    230 MHz: 25890
+    250 MHz: 25877
+    270 MHz: 25940
+    300 MHz: 25776
+    330 MHz: 51688
+    400 MHz: 128867
+    500 MHz: 25778
+  Append-tag curriculum: tag='New_data_10000'  train_rows=140000 (33.9% natural)
+    peak target=55% (alpha≈2.38)  epochs 1–100 → decay by 150
+  Train draws/epoch: 30000 (random subset of 412981 train rows)
+  Cross-freq pairs: enabled (471979 indices); high-MHz alt bias=0.55 (≥250 MHz)
+  DataLoader: workers=0  pin_memory=True  prefetch=n/a
+  exp051 model: private_h=384  freq_film=True  layout_prob=0.55  cf_layout_mix=0.45
+    grad_vec=2.5  grad_dir=1.5  phys_w=3.0  peak_loc=0.75
+    distill_w=2.0  freeze_occ_imp_epoch=320
+params: 12,807,448
+  AdamW: standard (fused disabled — incompatible with fp16 GradScaler)
+epochs 1–700  amp=fp16  tf32=False  compile=False  ram_cache=True  batch=160
+checkpoint_interval=25  keep_last_n=0
+  Val: epoch 1, every checkpoint interval, and final epoch only
+
+  [curriculum ep 1] layout_train_prob=0.551  cf_layout_mix=0.451
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/train_vae_simple.py", line 348, in <module>
+    main()
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/train_vae_simple.py", line 344, in main
+    train_vae()
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/train_vae_simple.py", line 327, in train_vae
+    _tr.train_vae()
+  File "/home/ubuntu/genai_pdn/experiments/exp038_true_multi/codes/train_vae_simple.py", line 1380, in train_vae
+    tr = _run_epoch(
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/run_epoch_encode.py", line 247, in _run_epoch
+    for i, batch in enumerate(loader):
+  File "/home/ubuntu/genai_pdn/.venv/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 732, in __next__
+    data = self._next_data()
+  File "/home/ubuntu/genai_pdn/.venv/lib/python3.10/site-packages/torch/utils/data/dataloader.py", line 788, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+  File "/home/ubuntu/genai_pdn/.venv/lib/python3.10/site-packages/torch/utils/data/_utils/fetch.py", line 55, in fetch
+    return self.collate_fn(data)
+  File "/home/ubuntu/genai_pdn/experiments/exp038_true_multi/codes/dataloader_multifreq.py", line 207, in collate
+    return multifreq_collate_with_alt_fn(batch)
+  File "/home/ubuntu/genai_pdn/experiments/exp038_true_multi/codes/dataloader_multifreq.py", line 187, in multifreq_collate_with_alt_fn
+    out = multifreq_collate_fn(batch)
+  File "/home/ubuntu/genai_pdn/experiments/exp038_true_multi/codes/dataloader_multifreq.py", line 174, in multifreq_collate_fn
+    "impedance": torch.stack([b["impedance"] for b in batch]),
+RuntimeError: stack expects each tensor to be equal size, but got [1, 231] at entry 0 and [1, 1] at entry 4

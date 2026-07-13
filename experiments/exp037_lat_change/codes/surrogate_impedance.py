@@ -41,7 +41,7 @@ if PROJECT_ROOT not in sys.path:
 @dataclass
 class SurrConfig:
     # ── Data ──────────────────────────────────────────────────────────────────
-    data_dir:    str = "/home/ubuntu/gan/datasets/data_multifreq_norm"
+    data_dir:    str = "datasets/data_multifreq_norm"
     train_split: float = 0.9
     num_workers: int   = 4
 
@@ -69,7 +69,7 @@ class SurrConfig:
     under_penalty:   float = 2.0    # asymmetric: penalise underestimate more
 
     # ── Paths ─────────────────────────────────────────────────────────────────
-    experiment_dir: str = "/home/ubuntu/gan/experiments/exp037_lat_change"
+    experiment_dir: str = "experiments/exp037_lat_change"
     checkpoint_interval: int = 50
     resume: bool = False   # set True to resume from last checkpoint
 

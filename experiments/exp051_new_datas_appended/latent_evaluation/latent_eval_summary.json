@@ -1,0 +1,38 @@
+{
+  "checkpoint": "experiments/exp051_new_datas_appended/checkpoints/checkpoint_epoch_950.pt",
+  "epoch": 950,
+  "latent_dim": 65,
+  "heatmap_private_dim": 15,
+  "approx_shared_dim": 50,
+  "n_samples": 20000,
+  "dead_dims_sigma95_mu_std005": 0,
+  "near_dead_dims": 0,
+  "active_dims_var_gt_1e-2": 65,
+  "active_dims_var_gt_1e-3": 65,
+  "pca_dims_90pct": 19,
+  "pca_dims_95pct": 23,
+  "pca_dims_99pct": 34,
+  "mean_posterior_sigma": 0.1840773969888687,
+  "min_dim_mu_std": 0.19031180441379547,
+  "max_dim_mu_std": 2.1134557723999023,
+  "median_dim_mu_std": 1.2130166292190552,
+  "dims_low_util_mu_std_lt_0.05": 0,
+  "dims_low_util_mu_std_lt_0.10": 0,
+  "top5_dims_by_mu_std": [
+    3,
+    18,
+    22,
+    30,
+    20
+  ],
+  "bottom5_dims_by_mu_std": [
+    61,
+    58,
+    52,
+    53,
+    62
+  ],
+  "probe_K_r2": 0.9205,
+  "probe_MHz_r2": 0.9601,
+  "verdict": "no_dead_dims"
+}

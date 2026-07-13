@@ -1,0 +1,16 @@
+{
+  "has_solution": true,
+  "K": 4,
+  "max_imp_ohm": 7.746301174163818,
+  "best_score": 7.746301174163818,
+  "best_step": 0,
+  "winning_seed": 661275740,
+  "mode": "batch",
+  "active_components": [
+    "C2",
+    "C26",
+    "C31",
+    "C40"
+  ],
+  "n_active": 4
+}

@@ -1,0 +1,86 @@
+Loaded config overrides from config.yaml
+  Curriculum (of 700 epochs): cross_freq@20, protect_hm@200, heatmap_focus@200, imp_peak@300→300 (ramp 77), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  exp051 training (Tier A lean: FG huber + grad + phys blob + peak_loc):
+    layout_train_prob=0.55 (~45% encode)  cf_layout_mix=0.45  high_freq_pair_bias=0.55
+    spatial: peak_loc_w=0.75  peak_w=3.0  grad_vec_w=2.5  dyn_w=2.0
+    peak_topk=24  phys_w=3.0  phys_over=1.75  p99_train=off
+    hf_mult=2.0  private_h=384  freq_film=True
+    epochs=700  early_stop=disabled
+Loaded config overrides from config.yaml
+  Curriculum (of 700 epochs): cross_freq@20, protect_hm@200, heatmap_focus@200, imp_peak@300→300 (ramp 77), layout_train_prob=0.55, cross_freq_layout_z_only=False
+Fresh run — removed previous outputs under experiments/exp051_new_datas_appended
+  - checkpoints/
+  - logs/
+  - metrics/
+heatmap norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+================================================================================
+EXP051_NEW_DATAS_APPENDED — MULTI-INPUT VAE
+  device: cuda
+  batch: 160
+  epochs: 700
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: fp16
+  tf32: False
+  compile: False
+  ram_cache: True
+================================================================================
+  Central norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 29499 layouts, 471979 manifest rows
+Loaded 471979 samples from datasets/data_multifreq_train_norm_robust
+  Heatmap z-clip at load: [-1.7153, 6.8219] (tail trim from stats)
+  Heatmap norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+K-values loaded from cache (471979 samples)
+Caching 471979 samples in RAM …
+  RAM cache ready in 194.9s
+Multifreq split by design: 29499 layouts
+Train samples: 412981, Validation samples: 58998
+  Train PI_freq bins (anchor MHz):
+    10 MHz: 25705
+    63 MHz: 25815
+    80 MHz: 25823
+    200 MHz: 25822
+    230 MHz: 25890
+    250 MHz: 25877
+    270 MHz: 25940
+    300 MHz: 25776
+    330 MHz: 51688
+    400 MHz: 128867
+    500 MHz: 25778
+  Append-tag curriculum: tag='New_data_10000'  train_rows=140000 (33.9% natural)
+    peak target=55% (alpha≈2.38)  epochs 1–100 → decay by 150
+  Train draws/epoch: 30000 (random subset of 412981 train rows)
+  Cross-freq pairs: enabled (471979 indices); high-MHz alt bias=0.55 (≥250 MHz)
+  DataLoader: workers=0  pin_memory=True  prefetch=n/a
+  exp051 model: private_h=384  freq_film=True  layout_prob=0.55  cf_layout_mix=0.45
+    grad_vec=2.5  grad_dir=1.5  phys_w=3.0  peak_loc=0.75
+    distill_w=2.0  freeze_occ_imp_epoch=320
+params: 12,807,448
+  AdamW: standard (fused disabled — incompatible with fp16 GradScaler)
+epochs 1–700  amp=fp16  tf32=False  compile=False  ram_cache=True  batch=160
+checkpoint_interval=25  keep_last_n=0
+  Val: epoch 1, every checkpoint interval, and final epoch only
+
+  [curriculum ep 1] layout_train_prob=0.551  cf_layout_mix=0.451
+Ep   1/700  total=181.6s  loss=242.9238  val=68.1605  hm=4.2838×5.5  cf=0.0000  occ=0.5157  imp=5.1716  β=0.000
+  checkpoint → checkpoint_epoch_1.pt
+  Off-anchor spatial eval → experiments/exp051_new_datas_appended/metrics/off_anchor_eval_epoch_1.csv
+    encode_cross   @   100 MHz  MSE=2.1344  r=0.422  peakΔ=0.022  n=5120
+    encode_cross   @   175 MHz  MSE=2.1337  r=0.423  peakΔ=0.022  n=5120
+    encode_cross   @   330 MHz  MSE=2.1352  r=0.422  peakΔ=0.022  n=5120
+    encode_cross   @   400 MHz  MSE=2.1341  r=0.422  peakΔ=0.022  n=5120
+    layout_cross   @   100 MHz  MSE=2.7623  r=0.240  peakΔ=0.028  n=5120
+    layout_cross   @   175 MHz  MSE=2.7580  r=0.242  peakΔ=0.028  n=5120
+    layout_cross   @   330 MHz  MSE=2.7646  r=0.240  peakΔ=0.028  n=5120
+    layout_cross   @   400 MHz  MSE=2.7611  r=0.241  peakΔ=0.028  n=5120
+  [curriculum ep 2] layout_train_prob=0.551  cf_layout_mix=0.451
+  [curriculum ep 3] layout_train_prob=0.552  cf_layout_mix=0.452
+  [curriculum ep 4] layout_train_prob=0.553  cf_layout_mix=0.452
+  [curriculum ep 5] layout_train_prob=0.553  cf_layout_mix=0.453
+Ep   5/700  total=61.5s  loss=242.2792  hm=2.9464×5.5  cf=0.0000  occ=0.5181  imp=40.4319
+  [curriculum ep 6] layout_train_prob=0.554  cf_layout_mix=0.453
+  [curriculum ep 7] layout_train_prob=0.555  cf_layout_mix=0.454

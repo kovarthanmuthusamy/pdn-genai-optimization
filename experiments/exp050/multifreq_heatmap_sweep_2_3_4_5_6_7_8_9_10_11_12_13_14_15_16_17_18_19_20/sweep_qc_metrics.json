@@ -1,0 +1,102 @@
+{
+  "generated_at": "2026-06-24T16:18:15.881823+00:00",
+  "experiment_dir": "experiments/exp050",
+  "checkpoint_path": "experiments/exp050/checkpoints/last_model.pt",
+  "qc_config": {
+    "inference_mode": "layout_qc",
+    "layout_source": "val",
+    "k_value": 20,
+    "pi_ref_mhz": 200.0
+  },
+  "per_mhz_clip_ceiling_ohm": {
+    "10.0": 0.209675668849579,
+    "70.0": 2.842672112751204,
+    "120.0": 11.148645685071312,
+    "270.0": 28.41703414567741,
+    "400.0": 19.74205258633566
+  },
+  "per_mhz_generation": [
+    {
+      "mhz": 10.0,
+      "k": 20,
+      "pi_norm": 0.3599516044570672,
+      "max": 0.3020533323287964,
+      "mean_fg": 0.06912851333618164,
+      "p95": 0.13004478812217712
+    },
+    {
+      "mhz": 70.0,
+      "k": 20,
+      "pi_norm": 0.6641459998837217,
+      "max": 1.7326903343200684,
+      "mean_fg": 0.4549592435359955,
+      "p95": 0.830597996711731
+    },
+    {
+      "mhz": 120.0,
+      "k": 20,
+      "pi_norm": 0.7484046254718868,
+      "max": 2.261857748031616,
+      "mean_fg": 0.6519263386726379,
+      "p95": 1.160567045211792
+    },
+    {
+      "mhz": 270.0,
+      "k": 20,
+      "pi_norm": 0.875173287927802,
+      "max": 10.812228202819824,
+      "mean_fg": 2.2157070636749268,
+      "p95": 4.492652893066406
+    },
+    {
+      "mhz": 400.0,
+      "k": 20,
+      "pi_norm": 0.9366156687720424,
+      "max": 12.14654541015625,
+      "mean_fg": 2.4134252071380615,
+      "p95": 4.6770524978637695
+    }
+  ],
+  "anchor_layout_vs_real": [
+    {
+      "mhz": 10.0,
+      "n": 1,
+      "pearson_r": 0.9620665311813354,
+      "fg_mse": 0.04486361891031265,
+      "peak_loc_err": 0.005747480317950249,
+      "mae_phys": 0.006369105074554682,
+      "real_max": 0.3073098659515381,
+      "gen_max": 0.3056511878967285,
+      "max_ratio": 0.9946025876856451
+    },
+    {
+      "mhz": 270.0,
+      "n": 1,
+      "pearson_r": 0.6328601241111755,
+      "fg_mse": 0.3543109893798828,
+      "peak_loc_err": 0.04542970284819603,
+      "mae_phys": 1.0821497440338135,
+      "real_max": 8.553366661071777,
+      "gen_max": 34.56886672973633,
+      "max_ratio": 4.041550900310018
+    },
+    {
+      "mhz": 400.0,
+      "n": 1,
+      "pearson_r": 0.7596462368965149,
+      "fg_mse": 1.1512662172317505,
+      "peak_loc_err": 0.03320953994989395,
+      "mae_phys": 3.940408706665039,
+      "real_max": 38.07238006591797,
+      "gen_max": 24.261499404907227,
+      "max_ratio": 0.6372467222406694
+    }
+  ],
+  "flags": [
+    "[WARN] 10 MHz: gen_max=0.30\u03a9 (\u226590% per-MHz clip ceiling 0.21\u03a9) \u2014 magnitude saturation",
+    "[OK]   10 MHz anchor: pearson_r=0.962, max_ratio=0.99",
+    "[WARN] 270 MHz anchor: pearson_r=0.633 (<0.75) \u2014 weak spatial pattern",
+    "[WARN] 270 MHz anchor: gen_max/real_max=4.04 \u2014 magnitude overshoot"
+  ],
+  "agent_copy_block": "=== SWEEP QC (copy to agent) ===\nexperiment: experiments/exp050\ncheckpoint: experiments/exp050/checkpoints/last_model.pt\nmode: layout_qc  layout_source: val\nK: 20  samples: 1  pi_ref: 200.0 MHz\nz_clip_ceiling_ohm@200MHz: 20.24\n\nPer-MHz generation (layout decode, no GT):\nMHz | anchor | gen_max | mean_fg | p95 | ceil_ohm | near_clip\n    10 | yes    |    0.30 |    0.07 |    0.13 |     0.21 | yes\n    70 | no     |    1.73 |    0.45 |    0.83 |     2.84 | no\n   120 | no     |    2.26 |    0.65 |    1.16 |    11.15 | no\n   270 | yes    |   10.81 |    2.22 |    4.49 |    28.42 | no\n   400 | yes    |   12.15 |    2.41 |    4.68 |    19.74 | no\n\nLayout vs real val heatmap (training anchors only):\nMHz | n | pearson_r | fg_mse | mae_phys | real_max | gen_max | max_ratio\n  10 | 1 | 0.962 | 0.0449 | 0.006 | 0.31 | 0.31 | 0.99\n 270 | 1 | 0.633 | 0.3543 | 1.082 | 8.55 | 34.57 | 4.04\n 400 | 1 | 0.760 | 1.1513 | 3.940 | 38.07 | 24.26 | 0.64\n\nFlags:\n[WARN] 10 MHz: gen_max=0.30\u03a9 (\u226590% per-MHz clip ceiling 0.21\u03a9) \u2014 magnitude saturation\n[OK]   10 MHz anchor: pearson_r=0.962, max_ratio=0.99\n[WARN] 270 MHz anchor: pearson_r=0.633 (<0.75) \u2014 weak spatial pattern\n[WARN] 270 MHz anchor: gen_max/real_max=4.04 \u2014 magnitude overshoot\n=== END SWEEP QC ==="
+}

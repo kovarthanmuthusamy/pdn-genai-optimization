@@ -1,0 +1,36 @@
+{
+  "mhz": [],
+  "run_mode": "impedance",
+  "k": [
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17
+  ],
+  "k_values": [
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17
+  ],
+  "num_samples": 1,
+  "qc_sweep": true,
+  "inference_mode": "layout_qc",
+  "layout_source": "val",
+  "pi_ref_mhz": 200.0,
+  "latent_run_dir": null
+}

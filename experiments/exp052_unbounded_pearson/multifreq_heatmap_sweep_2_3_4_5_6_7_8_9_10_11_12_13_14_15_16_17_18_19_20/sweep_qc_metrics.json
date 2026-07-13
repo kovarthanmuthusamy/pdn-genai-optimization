@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-07-02T10:05:33.405083+00:00",
+  "experiment_dir": "experiments/exp052_unbounded_pearson",
+  "checkpoint_path": "experiments/exp052_unbounded_pearson/checkpoints/last_model.pt",
+  "qc_config": {
+    "inference_mode": "layout_qc",
+    "layout_source": "val",
+    "k_value": 20,
+    "pi_ref_mhz": 200.0
+  },
+  "per_mhz_clip_ceiling_ohm": {
+    "10.0": 0.2093280463217426,
+    "70.0": 2.751843239252855,
+    "120.0": 10.607236294306915,
+    "270.0": 28.514561641873456,
+    "400.0": 20.33915283169178
+  },
+  "per_mhz_generation": [
+    {
+      "mhz": 10.0,
+      "k": 20,
+      "pi_norm": 0.3599516044570672,
+      "max": 0.17845726013183594,
+      "mean_fg": 0.06148149445652962,
+      "p95": 0.10465958714485168
+    },
+    {
+      "mhz": 70.0,
+      "k": 20,
+      "pi_norm": 0.6641459998837217,
+      "max": 1.58900785446167,
+      "mean_fg": 0.4811904728412628,
+      "p95": 0.8274468183517456
+    },
+    {
+      "mhz": 120.0,
+      "k": 20,
+      "pi_norm": 0.7484046254718868,
+      "max": 2.1793980598449707,
+      "mean_fg": 0.666082501411438,
+      "p95": 1.1603474617004395
+    },
+    {
+      "mhz": 270.0,
+      "k": 20,
+      "pi_norm": 0.875173287927802,
+      "max": 11.492236137390137,
+      "mean_fg": 2.433729648590088,
+      "p95": 5.153443336486816
+    },
+    {
+      "mhz": 400.0,
+      "k": 20,
+      "pi_norm": 0.9366156687720424,
+      "max": 9.68127727508545,
+      "mean_fg": 2.9403772354125977,
+      "p95": 6.3032355308532715
+    }
+  ],
+  "anchor_layout_vs_real": [
+    {
+      "mhz": 10.0,
+      "n": 1,
+      "pearson_r": 0.9779548645019531,
+      "fg_mse": 0.12228502333164215,
+      "peak_loc_err": 0.012506517581641674,
+      "mae_phys": 0.008501277305185795,
+      "real_max": 0.30768096446990967,
+      "gen_max": 0.21675097942352295,
+      "max_ratio": 0.7044666536227027
+    },
+    {
+      "mhz": 270.0,
+      "n": 1,
+      "pearson_r": 0.8151084184646606,
+      "fg_mse": 0.4450753331184387,
+      "peak_loc_err": 0.03805297613143921,
+      "mae_phys": 1.707959771156311,
+      "real_max": 14.146523475646973,
+      "gen_max": 25.814104080200195,
+      "max_ratio": 1.8247666378696354
+    },
+    {
+      "mhz": 400.0,
+      "n": 1,
+      "pearson_r": 0.9544863700866699,
+      "fg_mse": 0.09702057391405106,
+      "peak_loc_err": 0.02036290057003498,
+      "mae_phys": 0.5670480728149414,
+      "real_max": 22.915002822875977,
+      "gen_max": 21.501182556152344,
+      "max_ratio": 0.9383015451644535
+    }
+  ],
+  "flags": [
+    "[OK]   10 MHz anchor: pearson_r=0.978, max_ratio=0.70",
+    "[WARN] 270 MHz anchor: gen_max/real_max=1.82 \u2014 magnitude overshoot",
+    "[OK]   400 MHz anchor: pearson_r=0.954, max_ratio=0.94"
+  ],
+  "agent_copy_block": "=== SWEEP QC (copy to agent) ===\nexperiment: experiments/exp052_unbounded_pearson\ncheckpoint: experiments/exp052_unbounded_pearson/checkpoints/last_model.pt\nmode: layout_qc  layout_source: val\nK: 20  samples: 1  pi_ref: 200.0 MHz\nz_clip_ceiling_ohm@200MHz: 20.12\n\nPer-MHz generation (layout decode, no GT):\nMHz | anchor | gen_max | mean_fg | p95 | ceil_ohm | near_clip\n    10 | yes    |    0.18 |    0.06 |    0.10 |     0.21 | no\n    70 | no     |    1.59 |    0.48 |    0.83 |     2.75 | no\n   120 | no     |    2.18 |    0.67 |    1.16 |    10.61 | no\n   270 | yes    |   11.49 |    2.43 |    5.15 |    28.51 | no\n   400 | yes    |    9.68 |    2.94 |    6.30 |    20.34 | no\n\nLayout vs real val heatmap (training anchors only):\nMHz | n | pearson_r | fg_mse | mae_phys | real_max | gen_max | max_ratio\n  10 | 1 | 0.978 | 0.1223 | 0.009 | 0.31 | 0.22 | 0.70\n 270 | 1 | 0.815 | 0.4451 | 1.708 | 14.15 | 25.81 | 1.82\n 400 | 1 | 0.954 | 0.0970 | 0.567 | 22.92 | 21.50 | 0.94\n\nFlags:\n[OK]   10 MHz anchor: pearson_r=0.978, max_ratio=0.70\n[WARN] 270 MHz anchor: gen_max/real_max=1.82 \u2014 magnitude overshoot\n[OK]   400 MHz anchor: pearson_r=0.954, max_ratio=0.94\n=== END SWEEP QC ==="
+}

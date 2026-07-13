@@ -124,6 +124,11 @@ class VAEDataset(Dataset):
                 self.normalize = False
 
         self._layout_cache: dict[str, tuple[torch.Tensor, torch.Tensor, int]] = {}
+        self._al_heatmap_only: set[str] = set()
+        al_only_path = self.data_dir / "al_heatmap_only_design_ids.json"
+        if al_only_path.is_file():
+            self._al_heatmap_only = {str(x) for x in json.loads(al_only_path.read_text(encoding="utf-8"))}
+            print(f"  AL heatmap-only layouts: {len(self._al_heatmap_only)}")
         self._ram: list[dict] | None = None
         if cache_in_ram:
             self._load_ram_cache()
@@ -183,7 +188,13 @@ class VAEDataset(Dataset):
         impedance_raw = np.load(imp_path)
         occupancy_np = np.load(occ_path).reshape(-1)
         if impedance_raw.ndim == 2:
-            impedance_t = torch.from_numpy(impedance_raw[:1]).float()
+            # Original layouts: (231, 1); combinations append: (1, 231) — normalize to (1, n_freq)
+            if impedance_raw.shape[0] == 1:
+                impedance_t = torch.from_numpy(impedance_raw).float()
+            elif impedance_raw.shape[1] == 1:
+                impedance_t = torch.from_numpy(impedance_raw.T).float()
+            else:
+                impedance_t = torch.from_numpy(impedance_raw.reshape(1, -1)).float()
         else:
             impedance_t = torch.from_numpy(impedance_raw.flatten()).float().unsqueeze(0)
         occupancy_t = torch.from_numpy(occupancy_np).float().clamp(0.0, 1.0)
@@ -241,6 +252,10 @@ class VAEDataset(Dataset):
         }
         if design_id:
             out["design_id"] = design_id
+        if design_id and design_id in self._al_heatmap_only:
+            out["heatmap_only"] = torch.tensor(1.0, dtype=torch.float32)
+        else:
+            out["heatmap_only"] = torch.tensor(0.0, dtype=torch.float32)
         if self.has_pifreq:
             pifreq_path = self.pifreq_dir / f"{filename}.npy"
             if pifreq_path.exists():

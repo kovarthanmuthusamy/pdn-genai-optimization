@@ -141,8 +141,8 @@ class Config:
     penalty_warmup_epochs: int = 50   # epochs to ramp penalty terms 0→1 (≈10% of 500)
 
     # ── Paths & checkpointing ─────────────────────────────────────────────────
-    data_dir:            str = "/home/ubuntu/gan/datasets/data_norm"
-    experiment_dir:      str = "/home/ubuntu/gan/experiments/exp037_lat_change"
+    data_dir:            str = "datasets/data_norm"
+    experiment_dir:      str = "experiments/exp037_lat_change"
     checkpoint_interval: int = 50
     keep_last_n_checkpoints: int = 0   # keep N most recent epoch checkpoints (0 = keep all)
     resume_checkpoint:   int | None = None  # epoch number, or None to start fresh

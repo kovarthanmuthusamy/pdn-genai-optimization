@@ -1,0 +1,31 @@
+--- val sample 0 (K=30) ---
+  sweep_anchor_blend      p95=  1.04Ω  max= 11.79Ω  r= 0.210  mae=2.734  mse_train=0.08129 occ=0.33
+  layout_gt               p95=  0.96Ω  max=  8.36Ω  r= 0.342  mae=2.730  mse_train=0.08105 occ=0.54
+  layout_gt_native_pi     p95=  2.10Ω  max= 27.50Ω  r= 0.143  mae=2.528  mse_train=0.06144 occ=1.00
+  encode_gt               p95=  5.58Ω  max= 10.69Ω  r= 0.886  mae=0.477  mse_train=0.00130 occ=0.58
+  saved_sweep:heatmap_physical.npy  p95=  7.39Ω  max= 15.45Ω  r= 0.498  mae=2.371  mse_train=nan
+  (saved sweep npy is vs this dataset GT — compare uses ECADStar sim, not this GT heatmap)
+--- val sample 1 (K=30) ---
+  sweep_anchor_blend      p95=  0.94Ω  max=  8.66Ω  r= 0.207  mae=2.307  mse_train=0.06871 occ=0.46
+  layout_gt               p95=  0.97Ω  max=  9.90Ω  r= 0.204  mae=2.316  mse_train=0.06899 occ=0.54
+  layout_gt_native_pi     p95=  2.13Ω  max= 27.98Ω  r= 0.102  mae=2.122  mse_train=0.05193 occ=1.00
+  encode_gt               p95=  5.62Ω  max= 13.17Ω  r= 0.944  mae=0.368  mse_train=0.00095 occ=0.54
+--- val sample 2 (K=30) ---
+  sweep_anchor_blend      p95=  1.01Ω  max= 10.00Ω  r= 0.251  mae=2.198  mse_train=0.06455 occ=0.46
+  layout_gt               p95=  0.92Ω  max=  9.42Ω  r= 0.286  mae=2.211  mse_train=0.06548 occ=0.46
+  layout_gt_native_pi     p95=  1.91Ω  max= 23.60Ω  r= 0.192  mae=2.025  mse_train=0.05068 occ=1.00
+  encode_gt               p95=  4.67Ω  max= 11.39Ω  r= 0.945  mae=0.255  mse_train=0.00049 occ=0.43
+
+=== MEAN over dataset samples ===
+  sweep_anchor_blend      mean_r=0.223  mean_p95=1.00Ω  mean_mse_train=0.07152
+  layout_gt               mean_r=0.277  mean_p95=0.95Ω  mean_mse_train=0.07184
+  layout_gt_native_pi     mean_r=0.145  mean_p95=2.05Ω  mean_mse_train=0.05468
+  encode_gt               mean_r=0.925  mean_p95=5.29Ω  mean_mse_train=0.00091
+
+Interpretation:
+  • encode_gt  ≈ upper bound (model sees GT heatmap).
+  • layout_gt_native_pi ≈ eval_cross_freq (encode layout at target MHz).
+  • layout_gt  ≈ sweep layout path (encode at pi_ref=200, decode at target).
+  • sweep_anchor_blend ≈ compare pipeline (generated occ/imp from marginal z).
+  If layout_gt ≫ sweep but encode ≈ layout_gt, bottleneck is generated layout not heatmap decoder.
+

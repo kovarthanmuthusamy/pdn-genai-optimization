@@ -1,0 +1,2 @@
+epoch,train_impedance_loss,train_impedance_legacy,train_impedance_peak,val_impedance_loss,val_impedance_legacy,val_impedance_peak
+1,1.5113462209701538,1.5113462209701538,0.0,0.3013675564625224,0.3013675564625224,0.0

@@ -47,7 +47,7 @@ In `experiments/exp042/config.yaml` (for next restart):
 
 ```bash
 # Stop current run (Ctrl+C), then resume:
-cd /home/ubuntu/gan
+cd /home/ubuntu/genai_pdn
 source .venv/bin/activate
 python experiments/exp042/codes/train_vae_simple.py
 ```

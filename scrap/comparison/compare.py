@@ -31,10 +31,13 @@ from matplotlib.patches import FancyBboxPatch
 import numpy as np
 from scipy.interpolate import griddata, RBFInterpolator
 
-# ── Bootstrap project root ───────────────────────────────────────────────────
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+from scrap.comparison.heatmap_sim_metrics import (  # noqa: E402
+    compute_sim_heatmap_metrics,
+    print_metrics_summary,
+    write_sim_metrics_bundle,
+)
+from repo_paths import REPO_ROOT as _PROJECT_ROOT, setup_path
+setup_path()
 
 # ============================================================
 # CONFIGURATION
@@ -45,13 +48,15 @@ PI_FREQ_OVERRIDE: int | list[int] | None = None  # run_all_k only; None = use ru
 
 if WORKFLOW == "multifreq_heatmap_sweep":
     from scrap.generation.run_multifreq_heatmap_sweep import (  # noqa: E402
-        K_VALUE as _SWEEP_K,
         OUTPUT_ROOT as _OUTPUT_ROOT,
         SWEEP_FREQ_MANIFEST,
         exported_freq_mhz_list,
+        exported_k_values,
     )
 
-    K_MIN = K_MAX = _SWEEP_K
+    _K_VALUES: list[int] = exported_k_values()
+    K_MIN = min(_K_VALUES)
+    K_MAX = max(_K_VALUES)
     _FREQ_LIST: list[int | None] = []  # filled in main() via exported_freq_mhz_list()
 elif WORKFLOW == "run_all_k":
     from scrap.generation.run_all_k import (  # noqa: E402
@@ -105,13 +110,20 @@ OCCUPANCY_OUT_NAME   = "generated_occupancy.png"
 # Heatmap settings
 HEATMAP_CMAP           = "jet"
 HEATMAP_LEVELS         = 22
-HEATMAP_DIFF_TOLERANCE = 0.25   # suppress sub-tolerance noise in diff panel (Ohms)
+HEATMAP_DIFF_TOLERANCE = 0.0   # no suppression — show full |Real − Gen| in diff panel
 # Pattern diff: suppress noise below this (normalised [0,1] space)
 HEATMAP_PATTERN_DIFF_TOLERANCE = 0.05
-# vmax mode: "percentile" (per-panel p99.9) | "stats_percentile" | "global_max" (legacy)
+# Absolute diff panel colormap resolution and colorbar tick count.
+HEATMAP_DIFF_LEVELS = 25
+HEATMAP_DIFF_COLORBAR_TICKS = 25
+HEATMAP_DIFF_CMAP = "hot"
+# vmax mode: "max" (per-panel FG max) | "percentile" | "stats_percentile" | "global_max"
 HEATMAP_VMAX_MODE = "percentile"
 # Use real heatmap color scale for generated panel (legacy; set True with stats_percentile)
 HEATMAP_SHARED_COLOR_SCALE = False
+# When True, Real panel colorbar vmax uses Generated panel's FG percentile (real_vmax = gen_vmax).
+# Opposite of HEATMAP_SHARED_COLOR_SCALE (gen_vmax = real_vmax). Ignored when stats/global shared vmax is active.
+HEATMAP_REAL_VMAX_MATCH_GENERATED = False
 # Per-panel foreground percentile when HEATMAP_VMAX_MODE == "percentile".
 HEATMAP_VMAX_PERCENTILE_FG = 99.9
 # Dataset stats percentile of per-map FG max → shared colorbar vmax (Ω).
@@ -122,6 +134,10 @@ HEATMAP_STATS_DATA_DIR: str | None = None
 # Number of tick marks on Real/Generated colorbars (cmap resampling uses HEATMAP_LEVELS).
 HEATMAP_COLORBAR_TICKS = 6
 
+# Render speed: output DPI + image interpolation. Lower DPI / cheaper interpolation = faster.
+HEATMAP_PLOT_DPI = 130
+HEATMAP_INTERPOLATION = "bilinear"  # "nearest" (fastest) | "bilinear" | "bicubic" (smoothest)
+
 # Real heatmap .map file chooser (inside Heatmap_real_* directory)
 MAP_GLOB_PREFERENCE = ("Z_*.map", "*.map")
 
@@ -131,11 +147,16 @@ IMPEDANCE_CSV_GLOB_PREFERENCE = ("*PIPinZ*.csv", "*.csv")
 # Occupancy settings
 ACTIVE_POLICY = "topk"   # "topk" (activate exactly K slots) or "threshold"
 THRESHOLD     = 0.5
+
+# Post-simulation metrics (generated vs ECADStar Real/ .map — not dataset val)
+WRITE_SIM_METRICS = True
+METRICS_ONLY = False  # True → only write sim_compare_metrics.* (no PNG plots)
 # ============================================================
 
 
 def _project_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    from repo_paths import REPO_ROOT
+    return REPO_ROOT
 
 
 def _load_heatmap_stats() -> dict:
@@ -188,9 +209,9 @@ def _resolve_global_max_ohm() -> float:
     return _resolve_heatmap_vmax_ohm()
 
 
-def _colorbar_ticks(vmin: float, vmax: float) -> list[float]:
-    n = max(2, int(HEATMAP_COLORBAR_TICKS))
-    return np.linspace(vmin, vmax, n).tolist()
+def _colorbar_ticks(vmin: float, vmax: float, *, n: int | None = None) -> list[float]:
+    n_ticks = max(2, int(n if n is not None else HEATMAP_COLORBAR_TICKS))
+    return np.linspace(vmin, vmax, n_ticks).tolist()
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -381,19 +402,39 @@ def _maybe_load(path: Path) -> np.ndarray | None:
     return np.load(path).squeeze() if path.exists() else None
 
 
+def _panel_title(ax: Axes, headline: str, detail: str = "", *, fontsize: float = 11.0) -> None:
+    """Panel title; optional second line only when detail is provided."""
+    text = headline if not detail else f"{headline}\n{detail}"
+    ax.set_title(text, fontsize=fontsize, pad=8, loc="center")
+
+
+def _max_diff_caption(max_diff_ohm: float) -> str:
+    """Signed peak diff: real_max − gen_max (− → gen higher, + → gen lower)."""
+    if not np.isfinite(max_diff_ohm):
+        return "Δmax: n/a"
+    if abs(max_diff_ohm) < 1e-6:
+        return "Δmax ≈ 0 Ω (matched)"
+    if max_diff_ohm < 0:
+        return f"Δmax = {max_diff_ohm:+.2f} Ω (gen > real)"
+    return f"Δmax = {max_diff_ohm:+.2f} Ω (gen < real)"
+
+
 def _plot_heatmap_comparisons(
     *,
     comparisons: list[dict],
     mask: np.ndarray,
     out_path: Path,
-) -> None:
+) -> list[dict]:
     n = len(comparisons)
-    fig, axes = plt.subplots(n, 3, figsize=(15, 5 * n))
+    fig, axes = plt.subplots(n, 3, figsize=(16, 4.8 * n), constrained_layout=True)
     if n == 1:
         axes = np.array([axes])
 
     cmap = mpl.colormaps[HEATMAP_CMAP].resampled(HEATMAP_LEVELS).copy()
     cmap.set_bad("white")
+    diff_cmap = mpl.colormaps[HEATMAP_DIFF_CMAP].resampled(HEATMAP_DIFF_LEVELS).copy()
+    diff_cmap.set_bad("white")
+    metric_rows: list[dict] = []
 
     use_shared = HEATMAP_VMAX_MODE in ("global_max", "stats_percentile") or HEATMAP_SHARED_COLOR_SCALE
     shared_vmax: float | None = None
@@ -402,13 +443,11 @@ def _plot_heatmap_comparisons(
         shared_vmax = _resolve_heatmap_vmax_ohm()
         pct = float(HEATMAP_VMAX_STATS_PERCENTILE)
         if HEATMAP_VMAX_MODE == "stats_percentile":
-            shared_label = f"p{pct:g} max={shared_vmax:.2f}Ω"
+            shared_label = f"p{pct:g}={shared_vmax:.2f}Ω"
         else:
             shared_label = f"gmax={shared_vmax:.2f}Ω"
-        print(
-            f"  Heatmap color scale: shared {shared_label}  "
-            f"(levels={HEATMAP_LEVELS}, ticks={HEATMAP_COLORBAR_TICKS})",
-        )
+
+    pctl = float(HEATMAP_VMAX_PERCENTILE_FG)
 
     for row_idx, item in enumerate(comparisons):
         real = item["real"]
@@ -416,104 +455,112 @@ def _plot_heatmap_comparisons(
         label = item["label"]
 
         real_m = np.ma.masked_where(~mask, real)
-        gen_m  = np.ma.masked_where(~mask, gen)
-        diff   = np.abs(real - gen)
-        diff   = np.where(diff < HEATMAP_DIFF_TOLERANCE, 0.0, diff)
-        diff_m = np.ma.masked_where(~mask, diff)
+        gen_m = np.ma.masked_where(~mask, gen)
 
-        # Pattern diff: min-max normalise each map within the mask independently
         real_vals = real[mask]
-        gen_vals  = gen[mask]
-        real_norm = np.zeros_like(real, dtype=float)
-        gen_norm  = np.zeros_like(gen,  dtype=float)
-        real_norm[mask] = (real_vals - real_vals.min()) / max(real_vals.max() - real_vals.min(), 1e-12)
-        gen_norm[mask]  = (gen_vals  - gen_vals.min())  / max(gen_vals.max()  - gen_vals.min(),  1e-12)
-        pattern_diff = np.abs(real_norm - gen_norm)
-        pattern_diff[mask] = np.where(pattern_diff[mask] < HEATMAP_PATTERN_DIFF_TOLERANCE, 0.0, pattern_diff[mask])
-        pattern_diff_m = np.ma.masked_where(~mask, pattern_diff)
+        gen_vals = gen[mask]
+
+        amp_diff = np.abs(real - gen)
+        amp_diff_m = np.ma.masked_where(~mask, amp_diff)
 
         vmax_real = float(max(real_m.max(), 1e-12))
-        vmax_gen  = float(max(gen_m.max(), 1e-12))
+        vmax_gen = float(max(gen_m.max(), 1e-12))
         real_fg = real_m.compressed()
         gen_fg = gen_m.compressed()
-        p95_real = float(np.percentile(real_fg, 95)) if real_fg.size else vmax_real
-        p95_gen  = float(np.percentile(gen_fg, 95)) if gen_fg.size else vmax_gen
-        pctl = float(HEATMAP_VMAX_PERCENTILE_FG)
-        vmaxp_real = float(np.percentile(real_fg, pctl)) if real_fg.size else vmax_real
-        vmaxp_gen  = float(np.percentile(gen_fg, pctl)) if gen_fg.size else vmax_gen
+        if HEATMAP_VMAX_MODE == "max":
+            scale_real = vmax_real
+            scale_gen = vmax_gen
+        else:
+            scale_real = float(np.percentile(real_fg, pctl)) if real_fg.size else vmax_real
+            scale_gen = float(np.percentile(gen_fg, pctl)) if gen_fg.size else vmax_gen
 
         if shared_vmax is not None:
-            plot_vmax = shared_vmax
-            scale_label = shared_label or f"max={plot_vmax:.2f}Ω"
+            plot_vmax_real = shared_vmax
+            plot_vmax_gen = shared_vmax
         else:
-            plot_vmax_real = vmaxp_real
-            plot_vmax_gen = vmaxp_gen if not HEATMAP_SHARED_COLOR_SCALE else vmaxp_real
-            scale_label = None
+            if HEATMAP_SHARED_COLOR_SCALE and HEATMAP_REAL_VMAX_MATCH_GENERATED:
+                raise ValueError(
+                    "HEATMAP_SHARED_COLOR_SCALE and HEATMAP_REAL_VMAX_MATCH_GENERATED are "
+                    "mutually exclusive (gen_from_real vs real_from_gen)."
+                )
+            if HEATMAP_REAL_VMAX_MATCH_GENERATED:
+                plot_vmax_real = scale_gen
+                plot_vmax_gen = scale_gen
+            elif HEATMAP_SHARED_COLOR_SCALE:
+                plot_vmax_real = scale_real
+                plot_vmax_gen = scale_real
+            else:
+                plot_vmax_real = scale_real
+                plot_vmax_gen = scale_gen
 
         ax0, ax1, ax2 = axes[row_idx]
 
-        real_vmax = shared_vmax if shared_vmax is not None else plot_vmax_real
         im0 = ax0.imshow(
-            real_m, cmap=cmap, interpolation="bicubic", aspect="auto", origin="lower",
-            vmin=0.0, vmax=real_vmax,
+            real_m, cmap=cmap, interpolation=HEATMAP_INTERPOLATION, aspect="auto", origin="lower",
+            vmin=0.0, vmax=plot_vmax_real,
         )
-        if shared_vmax is not None:
-            ax0.set_title(
-                f"{label} - Real ({scale_label}, max={vmax_real:.2f})",
-                fontsize=12,
-            )
-        else:
-            ax0.set_title(
-                f"{label} - Real (p{pctl:g}={vmaxp_real:.2f}, max={vmax_real:.2f})",
-                fontsize=12,
-            )
-        ax0.set_xlabel("X"); ax0.set_ylabel("Y")
+        _panel_title(ax0, f"{label} · Real (sim)")
+        ax0.set_xlabel("X")
+        ax0.set_ylabel("Y")
         cb0 = fig.colorbar(im0, ax=ax0, fraction=0.046, pad=0.04)
-        vmin0, vmax0 = im0.get_clim()
-        cb0.set_ticks(_colorbar_ticks(vmin0, vmax0))
+        cb0.set_label("Ω")
+        cb0.set_ticks(_colorbar_ticks(*im0.get_clim()))
 
-        gen_vmax_plot = shared_vmax if shared_vmax is not None else plot_vmax_gen
         im1 = ax1.imshow(
-            gen_m, cmap=cmap, interpolation="bicubic", aspect="auto", origin="lower",
-            vmin=0.0, vmax=gen_vmax_plot,
+            gen_m, cmap=cmap, interpolation=HEATMAP_INTERPOLATION, aspect="auto", origin="lower",
+            vmin=0.0, vmax=plot_vmax_gen,
         )
-        if shared_vmax is not None:
-            scale_note = scale_label
-        else:
-            scale_note = f"p{pctl:g}={vmaxp_gen:.2f}"
-        ax1.set_title(
-            f"{label} - Generated ({scale_note}, max={vmax_gen:.2f}, p95={p95_gen:.2f})",
-            fontsize=12,
-        )
-        ax1.set_xlabel("X"); ax1.set_ylabel("Y")
+        _panel_title(ax1, f"{label} · Generated")
+        ax1.set_xlabel("X")
+        ax1.set_ylabel("Y")
         cb1 = fig.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-        vmin1, vmax1 = im1.get_clim()
-        cb1.set_ticks(_colorbar_ticks(vmin1, vmax1))
+        cb1.set_label("Ω")
+        cb1.set_ticks(_colorbar_ticks(*im1.get_clim()))
 
-        im2 = ax2.imshow(pattern_diff_m, cmap="RdYlGn_r", interpolation="bicubic", aspect="auto", origin="lower", vmin=0.0, vmax=1.0)
-        pearson_r = float(np.corrcoef(real_vals, gen_vals)[0, 1]) if len(real_vals) > 1 else float("nan")
-        ax2.set_title(f"{label} - Pattern Diff (r={pearson_r:.3f})", fontsize=12)
-        ax2.set_xlabel("X"); ax2.set_ylabel("Y")
-        cb2 = fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-        cb2.set_label("|norm(Real) - norm(Gen)|")
-        cb2.set_ticks([0.0, 0.25, 0.5, 0.75, 1.0])
+        if "metrics" in item:
+            mrow = item["metrics"]
+            pearson_r = float(mrow["pearson_r"])
+            max_diff_ohm = float(mrow["max_diff_ohm"])
+            metric_rows.append(mrow)
+        else:
+            pearson_r = float(np.corrcoef(real_vals, gen_vals)[0, 1]) if len(real_vals) > 1 else float("nan")
+            max_diff_ohm = vmax_real - vmax_gen
 
-        mae = float(np.mean(diff_m.compressed())) if diff_m.count() else float("nan")
-        print(
-            f"{label}: heatmap MAE={mae:.6f}, "
-            f"real_max={vmax_real:.3f} p95={p95_real:.3f} p{pctl:g}={vmaxp_real:.3f}, "
-            f"gen_max={vmax_gen:.3f} p95={p95_gen:.3f} p{pctl:g}={vmaxp_gen:.3f}"
+        diff_lim = float(np.nanmax(amp_diff_m.compressed())) if amp_diff_m.count() else 1e-6
+        diff_lim = max(diff_lim, 1e-6)
+        im2 = ax2.imshow(
+            amp_diff_m,
+            cmap=diff_cmap,
+            interpolation=HEATMAP_INTERPOLATION,
+            aspect="auto",
+            origin="lower",
+            vmin=0.0,
+            vmax=diff_lim,
         )
+        _panel_title(
+            ax2,
+            f"{label} · |Real − Gen|",
+            f"r = {pearson_r:.3f}  ·  {_max_diff_caption(max_diff_ohm)}",
+        )
+        ax2.set_xlabel("X")
+        ax2.set_ylabel("Y")
+        cb2 = fig.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+        cb2.set_label("|Real − Gen| (Ω)")
+        cb2.set_ticks(_colorbar_ticks(0.0, diff_lim, n=HEATMAP_DIFF_COLORBAR_TICKS))
 
-    if WORKFLOW == "multifreq_heatmap_sweep":
-        fig.suptitle("Heatmap Comparison: Real vs Generated", fontsize=16, y=1.02)
-    else:
-        fig.suptitle(f"Heatmap Comparison: Real vs Generated  [{FREQ_LABEL}]", fontsize=16, y=1.02)
-    fig.tight_layout()
+    freq_note = "" if WORKFLOW == "multifreq_heatmap_sweep" else f"  [{FREQ_LABEL}]"
+    fig.suptitle(
+        f"Heatmap comparison — Real (sim) vs Generated{freq_note}",
+        fontsize=14,
+        fontweight="bold",
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    fig.savefig(out_path, dpi=HEATMAP_PLOT_DPI)
     plt.close(fig)
-    print(f"Saved heatmap comparison: {out_path}")
+    for mrow in metric_rows:
+        print_metrics_summary(mrow)
+    print(f"  → saved {out_path.name}")
+    return metric_rows
 
 
 def _plot_impedance_comparisons(
@@ -524,7 +571,7 @@ def _plot_impedance_comparisons(
     out_path: Path,
 ) -> None:
     n = len(comparisons)
-    fig, axes = plt.subplots(n, 1, figsize=(10, 5 * n))
+    fig, axes = plt.subplots(n, 1, figsize=(10, 5 * n), constrained_layout=True)
     if n == 1:
         axes = [axes]
 
@@ -535,7 +582,7 @@ def _plot_impedance_comparisons(
         if (v := item.get("gen_raw_ohm"))    is not None: ax.loglog(frequency, v, "--", lw=1, color="#9E9E9E",      alpha=0.7, label="Ch0 raw")
         if (v := item.get("gen_integ_ohm"))  is not None: ax.loglog(frequency, v, "--", lw=1, color="mediumseagreen", alpha=0.7, label="∫Ch1")
         if (v := item.get("gen_integ2_ohm")) is not None: ax.loglog(frequency, v, "--", lw=1, color="darkorange",   alpha=0.7, label="∫∫Ch2")
-        ax.loglog(frequency, item["gen_blended_ohm"],  "-",  lw=2.5, label="Generated (blended)", color="green")
+        ax.loglog(frequency, item["gen_blended_ohm"],  "-",  lw=1.2, label="Generated (blended)", color="green")
 
         if (d1 := item.get("gen_derivative")) is not None and len(np.atleast_1d(d1)) == len(frequency):
             ax2 = ax.twinx()
@@ -555,12 +602,11 @@ def _plot_impedance_comparisons(
         ax.set_title(f"{label}: Generated vs Real", fontsize=14)
         ax.grid(True, which="both", linestyle="--", alpha=0.4)
 
-    fig.suptitle(f"Impedance Profile Comparison  [{FREQ_LABEL}]", fontsize=16, y=1.02)
-    fig.tight_layout()
+    fig.suptitle(f"Impedance Profile Comparison  [{FREQ_LABEL}]", fontsize=16)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    fig.savefig(out_path, dpi=HEATMAP_PLOT_DPI)
     plt.close(fig)
-    print(f"Saved impedance comparison: {out_path}")
+    print(f"  → saved {out_path.name}")
 
 
 # ── Occupancy helpers ─────────────────────────────────────────────────────────
@@ -664,20 +710,79 @@ def _plot_checkboxes(
 
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=250, bbox_inches="tight")
+    fig.savefig(out_path, dpi=HEATMAP_PLOT_DPI)
     plt.close(fig)
-    print(f"Saved occupancy plot: {out_path}")
+    print(f"  → saved {out_path.name}")
 
 
 # ── Per-K runner ──────────────────────────────────────────────────────────────
 
-def _run_single_k(k: int, *, repo_root: Path) -> None:
+def _collect_sim_metrics_single_k(
+    k: int,
+    *,
+    repo_root: Path,
+    mhz: int | None = None,
+) -> list[dict]:
+    """Load gen vs simulated-real heatmaps and return metric rows (no plots)."""
+    k_dir = (repo_root / BASE_GENERATED_DIR / f"K{k}").resolve()
+    if not k_dir.exists():
+        raise SystemExit(f"K folder not found: {k_dir}")
+
+    real_dir = k_dir / "Real"
+    if not real_dir.exists():
+        raise SystemExit(f"Real outputs folder not found (run move step first): {real_dir}")
+
+    num_samples = _infer_num_samples(k_dir)
+    mask = np.load(repo_root / MASK_PATH).astype(bool)
+    rows: list[dict] = []
+
+    for i in range(num_samples):
+        sample_dir = k_dir / f"data_sample_{i}"
+        if not sample_dir.exists():
+            raise SystemExit(f"Missing sample dir: {sample_dir}")
+
+        if WORKFLOW == "multifreq_heatmap_sweep":
+            label = f"sample_{i}"
+        else:
+            label = f"K{k}/sample_{i}"
+            if FREQ_LABEL:
+                label = f"{FREQ_LABEL} {label}"
+
+        heat_candidates = sorted(real_dir.glob(f"Heatmap_real_{i}*"))
+        if not heat_candidates:
+            raise SystemExit(f"No real heatmap item for sample {i} under: {real_dir}")
+        gen_heat = _load_generated_heatmap(sample_dir / "heatmap_physical.npy")
+        real_heat = _load_map_file(
+            _choose_real_heatmap_mapfile(heat_candidates[0]),
+            resolution=gen_heat.shape[0],
+        )
+        mrow = compute_sim_heatmap_metrics(
+            real_heat,
+            gen_heat,
+            mask,
+            mhz=mhz,
+            k=k,
+            sample=i,
+            label=label,
+            diff_tolerance=HEATMAP_DIFF_TOLERANCE,
+            pattern_diff_tolerance=HEATMAP_PATTERN_DIFF_TOLERANCE,
+        )
+        rows.append(mrow)
+
+    if rows:
+        print(f"  K={k:2d}  metrics ({len(rows)} sample(s))")
+        for mrow in rows:
+            print_metrics_summary(mrow)
+    return rows
+
+
+def _run_single_k(k: int, *, repo_root: Path, mhz: int | None = None) -> list[dict]:
     k_dir = (repo_root / BASE_GENERATED_DIR / f"K{k}").resolve()
     if not k_dir.exists():
         raise SystemExit(f"K folder not found: {k_dir}")
 
     num_samples = _infer_num_samples(k_dir)
-    print(f"\n=== K={k}  ({num_samples} samples) ===")
+    all_metric_rows: list[dict] = []
 
     if RUN_HEATMAP or RUN_IMPEDANCE:
         real_dir = k_dir / "Real"
@@ -709,7 +814,20 @@ def _run_single_k(k: int, *, repo_root: Path) -> None:
                     _choose_real_heatmap_mapfile(heat_candidates[0]),
                     resolution=gen_heat.shape[0],
                 )
-                comparisons_heatmap.append({"generated": gen_heat, "real": real_heat, "label": label})
+                entry: dict = {"generated": gen_heat, "real": real_heat, "label": label}
+                if WRITE_SIM_METRICS and mask is not None:
+                    entry["metrics"] = compute_sim_heatmap_metrics(
+                        real_heat,
+                        gen_heat,
+                        mask,
+                        mhz=mhz,
+                        k=k,
+                        sample=i,
+                        label=label,
+                        diff_tolerance=HEATMAP_DIFF_TOLERANCE,
+                        pattern_diff_tolerance=HEATMAP_PATTERN_DIFF_TOLERANCE,
+                    )
+                comparisons_heatmap.append(entry)
 
             if RUN_IMPEDANCE:
                 frequency        = np.load(repo_root / FREQUENCY_PATH).squeeze()
@@ -741,11 +859,13 @@ def _run_single_k(k: int, *, repo_root: Path) -> None:
 
         if RUN_HEATMAP and comparisons_heatmap:
             assert mask is not None
-            _plot_heatmap_comparisons(
+            print(f"  K={k:2d}  heatmap compare ({num_samples} sample(s))")
+            metric_rows = _plot_heatmap_comparisons(
                 comparisons=comparisons_heatmap,
                 mask=mask,
                 out_path=k_dir / HEATMAP_OUT_NAME,
             )
+            all_metric_rows.extend(metric_rows)
         if RUN_IMPEDANCE and comparisons_imp:
             frequency        = np.load(repo_root / FREQUENCY_PATH).squeeze()
             target_impedance = np.load(repo_root / TARGET_IMPEDANCE_PATH).squeeze()
@@ -760,11 +880,17 @@ def _run_single_k(k: int, *, repo_root: Path) -> None:
         occ = _load_occupancy_matrix(k_dir, num_samples=num_samples)
         _plot_checkboxes(occupancy_matrix=occ, out_path=k_dir / OCCUPANCY_OUT_NAME, title_prefix=f"K{k}/", expected_k=k)
 
+    return all_metric_rows
+
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def _iter_freqs() -> list[int | None]:
     if WORKFLOW == "multifreq_heatmap_sweep":
+        import scrap.generation.run_multifreq_heatmap_sweep as sweep  # noqa: E402
+
+        if sweep.uses_flat_k_layout():
+            return [None]
         return list(exported_freq_mhz_list())
     return _FREQ_LIST
 
@@ -775,15 +901,89 @@ def _refresh_multifreq_config() -> None:
         return
     import scrap.generation.run_multifreq_heatmap_sweep as sweep  # noqa: E402
 
-    global K_MIN, K_MAX, _OUTPUT_ROOT
-    K_MIN = K_MAX = sweep.K_VALUE
+    global K_MIN, K_MAX, _K_VALUES, _OUTPUT_ROOT
+    _K_VALUES = exported_k_values(sweep.OUTPUT_ROOT)
+    K_MIN = min(_K_VALUES)
+    K_MAX = max(_K_VALUES)
     _OUTPUT_ROOT = sweep.OUTPUT_ROOT
 
 
+def _iter_k_values() -> list[int]:
+    if WORKFLOW == "multifreq_heatmap_sweep":
+        return list(_K_VALUES)
+    return list(range(K_MIN, K_MAX + 1))
+
+
+def _metrics_output_root(repo_root: Path) -> Path:
+    if WORKFLOW == "multifreq_heatmap_sweep":
+        _refresh_multifreq_config()
+        return repo_root / _OUTPUT_ROOT
+    return repo_root / Path(BASE_GENERATED_DIR)
+
+
+def run_sim_metrics_only() -> Path:
+    """Evaluate generated vs ECADStar-simulated real heatmaps; write CSV/JSON/MD only."""
+    _refresh_multifreq_config()
+    if WORKFLOW == "multifreq_heatmap_sweep" and not _iter_freqs():
+        raise SystemExit(
+            "No sweep frequencies found. Run generate first "
+            f"(expects {SWEEP_FREQ_MANIFEST} under OUTPUT_ROOT)."
+        )
+
+    repo_root = _project_root()
+    os.chdir(repo_root)
+    all_rows: list[dict] = []
+
+    for mhz in _iter_freqs():
+        global BASE_GENERATED_DIR, FREQ_LABEL
+        BASE_GENERATED_DIR = _base_dir_for_freq(mhz)
+        FREQ_LABEL = f"{mhz} MHz" if mhz is not None else "default freq"
+        print(f"\n— {FREQ_LABEL} —")
+
+        ok: list[int] = []
+        failed: list[tuple[int, str]] = []
+        for k in _iter_k_values():
+            try:
+                all_rows.extend(_collect_sim_metrics_single_k(k, repo_root=repo_root, mhz=mhz))
+                ok.append(k)
+            except SystemExit as e:
+                failed.append((k, str(e)))
+                if FAIL_FAST:
+                    raise
+            except Exception as e:
+                failed.append((k, repr(e)))
+                traceback.print_exc()
+                if FAIL_FAST:
+                    raise
+
+        if failed:
+            print(f"  done {len(ok)} OK, {len(failed)} failed")
+            for k, msg in failed:
+                print(f"    K{k}: {msg}")
+        else:
+            print(f"  done {len(ok)} K value(s)")
+
+    if not all_rows:
+        raise SystemExit("No sim metrics rows collected — check Real/ folders and generated heatmaps.")
+
+    metrics_root = _metrics_output_root(repo_root)
+    print(f"\nSim metrics: {len(all_rows)} rows → {metrics_root.name}/")
+    _, json_path, _ = write_sim_metrics_bundle(all_rows, metrics_root)
+    return json_path
+
+
 def main() -> None:
+    if METRICS_ONLY:
+        run_sim_metrics_only()
+        return
+
     _refresh_multifreq_config()
     if not (0 <= K_MIN <= K_MAX <= 52):
         raise SystemExit("Expected 0 <= K_MIN <= K_MAX <= 52")
+    if WORKFLOW == "multifreq_heatmap_sweep":
+        for k in _K_VALUES:
+            if not 0 <= k <= 52:
+                raise SystemExit(f"Invalid K in sweep list: {k}")
 
     repo_root = _project_root()
     os.chdir(repo_root)
@@ -795,23 +995,22 @@ def main() -> None:
             f"(expects {SWEEP_FREQ_MANIFEST} or generate_summary.csv under OUTPUT_ROOT)."
         )
 
+    all_sim_metrics: list[dict] = []
+
     for mhz in freq_list:
         global BASE_GENERATED_DIR, FREQ_LABEL
         BASE_GENERATED_DIR = _base_dir_for_freq(mhz)
         FREQ_LABEL = f"{mhz} MHz" if mhz is not None else "default freq"
+        print(f"\n— {FREQ_LABEL} — compare → {BASE_GENERATED_DIR}")
 
-        label = f"freq_{mhz}MHz" if mhz is not None else "(no freq subfolder)"
-        print(f"\n{'='*60}")
-        print(f"Comparing {label}  →  {BASE_GENERATED_DIR}")
-        print(f"{'='*60}")
+        ok: list[int] = []
+        failed: list[tuple[int, str]] = []
+        skipped: list[int] = []
 
-        ok:      list[int]             = []
-        failed:  list[tuple[int, str]] = []
-        skipped: list[int]             = []
-
-        for k in range(K_MIN, K_MAX + 1):
+        for k in _iter_k_values():
             try:
-                _run_single_k(k, repo_root=repo_root)
+                rows = _run_single_k(k, repo_root=repo_root, mhz=mhz)
+                all_sim_metrics.extend(rows)
                 ok.append(k)
             except SystemExit as e:
                 msg = str(e)
@@ -826,14 +1025,21 @@ def main() -> None:
                 if FAIL_FAST:
                     raise
 
-        print(f"\n=== Summary ({label}) ===")
-        print(f"OK:      {len(ok)}")
-        print(f"Failed:  {len(failed)}")
-        print(f"Skipped: {len(set(skipped))}")
         if failed:
-            print("\nFailures:")
+            print(f"  done {len(ok)} OK, {len(failed)} failed, {len(set(skipped))} skipped")
             for k, msg in failed:
-                print(f"  K{k}: {msg}")
+                print(f"    K{k}: {msg}")
+        else:
+            print(f"  done {len(ok)} K value(s)")
+
+    if WRITE_SIM_METRICS and all_sim_metrics:
+        if WORKFLOW == "multifreq_heatmap_sweep":
+            _refresh_multifreq_config()
+            metrics_root = _project_root() / _OUTPUT_ROOT
+        else:
+            metrics_root = _project_root() / Path(BASE_GENERATED_DIR)
+        print(f"\nSim metrics: {len(all_sim_metrics)} rows → {metrics_root.name}/")
+        write_sim_metrics_bundle(all_sim_metrics, metrics_root)
 
 
 if __name__ == "__main__":

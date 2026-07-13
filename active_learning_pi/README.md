@@ -14,6 +14,6 @@ Active-learning library and configuration for the PI multifreq VAE loop.
 python pipelines/active_learning/run.py
 ```
 
-Set `COMMAND` in the CONFIG block (`cycle`, `generate`, `infer`, `simulate`, …). Use `CONFIG_PATH = None` to load `active_learning_pi/config/default.json`.
+Set `COMMAND` in the CONFIG block at the top of `run.py` (`full`, `cycle`, `finetune`, …). See `docs/AL_OPTION_B_FINETUNE_EXP057.md`.
 
 Do not run `al/pipeline.py` directly; it delegates to `run.py`.

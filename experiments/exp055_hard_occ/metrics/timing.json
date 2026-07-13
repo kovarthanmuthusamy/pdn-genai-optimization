@@ -1,0 +1,9 @@
+{
+  "training_time_seconds": 40633,
+  "epochs_in_run": 350,
+  "avg_train_sec": 92.36,
+  "avg_val_sec": 80.06,
+  "avg_epoch_sec_est": 95.56,
+  "val_on_checkpoint_only": true,
+  "val_runs": 14
+}

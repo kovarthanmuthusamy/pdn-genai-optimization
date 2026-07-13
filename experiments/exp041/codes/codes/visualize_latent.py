@@ -15,7 +15,7 @@ Encodes the full dataset → collects all fused mu vectors → produces:
     Plot 10 — Modality-vs-fused disagreement vs K (experts vs PoE fused)
 
 Usage:
-    cd /home/ubuntu/gan
+    cd /home/ubuntu/genai_pdn
     python3 experiments/exp030_adding_physic/codes/visualize_latent.py
 """
 import sys, json
@@ -24,7 +24,8 @@ import numpy as np
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-PROJECT_ROOT = "/home/ubuntu/gan"
+from repo_paths import REPO_ROOT as PROJECT_ROOT, setup_path
+setup_path()
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

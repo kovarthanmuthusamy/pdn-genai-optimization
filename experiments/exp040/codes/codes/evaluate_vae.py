@@ -15,7 +15,8 @@ import torch
 import numpy as np
 from pathlib import Path
 
-PROJECT_ROOT = "/home/ubuntu/gan"
+from repo_paths import REPO_ROOT as PROJECT_ROOT, setup_path
+setup_path()
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

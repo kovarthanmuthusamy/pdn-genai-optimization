@@ -7,8 +7,20 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 from pathlib import Path
 from typing import Optional, List
+
+
+def _apply_dense_ticks(ax, epochs: np.ndarray, *, y_nbins: int = 16, x_nbins: int = 24) -> None:
+    """Use more major/minor ticks so late-training convergence is easier to read."""
+    n_epochs = int(epochs[-1]) if len(epochs) else 1
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=min(x_nbins, max(8, n_epochs // 4)), integer=True))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=y_nbins, min_n_ticks=8))
+    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.grid(True, which='major', alpha=0.3)
+    ax.grid(True, which='minor', alpha=0.12)
 
 
 CSV_HEADER = [
@@ -408,7 +420,7 @@ class VAETrainingLogger:
         axes[0, 0].set_title('Total Loss vs Components')
         axes[0, 0].set_xlim(left=1)
         axes[0, 0].legend()
-        axes[0, 0].grid(alpha=0.3)
+        _apply_dense_ticks(axes[0, 0], epochs)
         
         # Reconstruction loss components
         axes[0, 1].plot(epochs, heatmap_loss, 'orange', label='Heatmap Loss', linewidth=2)
@@ -419,7 +431,7 @@ class VAETrainingLogger:
         axes[0, 1].set_title('Modality-specific Reconstruction Losses')
         axes[0, 1].set_xlim(left=1)
         axes[0, 1].legend()
-        axes[0, 1].grid(alpha=0.3)
+        _apply_dense_ticks(axes[0, 1], epochs)
         
         # KL loss trend
         axes[1, 0].plot(epochs, kl_loss, 'r-', linewidth=2)
@@ -427,7 +439,7 @@ class VAETrainingLogger:
         axes[1, 0].set_ylabel('KL Loss')
         axes[1, 0].set_title('KL Divergence Loss (Latent Space Regularization)')
         axes[1, 0].set_xlim(left=1)
-        axes[1, 0].grid(alpha=0.3)
+        _apply_dense_ticks(axes[1, 0], epochs)
         
         # Loss ratio (recon vs KL)
         axes[1, 1].plot(epochs, recon_loss / (kl_loss + 1e-8), linewidth=2, color='cyan')
@@ -435,7 +447,7 @@ class VAETrainingLogger:
         axes[1, 1].set_ylabel('Ratio')
         axes[1, 1].set_title('Reconstruction to KL Loss Ratio')
         axes[1, 1].set_xlim(left=1)
-        axes[1, 1].grid(alpha=0.3)
+        _apply_dense_ticks(axes[1, 1], epochs)
         
         plt.tight_layout()
         
@@ -471,19 +483,22 @@ class VAETrainingLogger:
         axes[0].set_xlabel('Epoch')
         axes[0].set_ylabel('Loss')
         axes[0].set_title('Heatmap Reconstruction Loss (64x64x2)')
-        axes[0].grid(alpha=0.3)
+        axes[0].set_xlim(left=1)
+        _apply_dense_ticks(axes[0], epochs)
         
         axes[1].plot(epochs, occupancy_loss, 's-', linewidth=2, markersize=4)
         axes[1].set_xlabel('Epoch')
         axes[1].set_ylabel('Loss')
         axes[1].set_title('Occupancy Reconstruction Loss (7x8x1)')
-        axes[1].grid(alpha=0.3)
+        axes[1].set_xlim(left=1)
+        _apply_dense_ticks(axes[1], epochs)
         
         axes[2].plot(epochs, impedance_loss, '^-', linewidth=2, markersize=4)
         axes[2].set_xlabel('Epoch')
         axes[2].set_ylabel('Loss')
         axes[2].set_title('Impedance Reconstruction Loss (231x1)')
-        axes[2].grid(alpha=0.3)
+        axes[2].set_xlim(left=1)
+        _apply_dense_ticks(axes[2], epochs)
         
         plt.tight_layout()
         
@@ -508,17 +523,17 @@ class VAETrainingLogger:
         axes[0].plot(epochs, val_total, "r--", label="Val", linewidth=2)
         axes[0].set_xlabel("Epoch"); axes[0].set_ylabel("Loss")
         axes[0].set_title("Total Loss (Train vs Val)")
-        axes[0].set_xlim(left=1); axes[0].legend(); axes[0].grid(alpha=0.3)
+        axes[0].set_xlim(left=1); axes[0].legend(); _apply_dense_ticks(axes[0], epochs)
         axes[1].plot(epochs, self.recon_loss, "b-", label="Train", linewidth=2)
         axes[1].plot(epochs, val_recon, "r--", label="Val", linewidth=2)
         axes[1].set_xlabel("Epoch"); axes[1].set_ylabel("Loss")
         axes[1].set_title("Reconstruction Loss (Train vs Val)")
-        axes[1].set_xlim(left=1); axes[1].legend(); axes[1].grid(alpha=0.3)
+        axes[1].set_xlim(left=1); axes[1].legend(); _apply_dense_ticks(axes[1], epochs)
         axes[2].plot(epochs, self.kl_loss, "b-", label="Train", linewidth=2)
         axes[2].plot(epochs, val_kl, "r--", label="Val", linewidth=2)
         axes[2].set_xlabel("Epoch"); axes[2].set_ylabel("Loss")
         axes[2].set_title("KL Loss (Train vs Val)")
-        axes[2].set_xlim(left=1); axes[2].legend(); axes[2].grid(alpha=0.3)
+        axes[2].set_xlim(left=1); axes[2].legend(); _apply_dense_ticks(axes[2], epochs)
         plt.tight_layout()
         if save_path is None:
             save_path = str(self.log_dir / "overfitting.png")
@@ -536,13 +551,13 @@ class VAETrainingLogger:
         fig, axes = plt.subplots(1, 3, figsize=(18, 5))
         axes[0].plot(epochs, ri, "m-", linewidth=2)
         axes[0].set_xlabel("Epoch"); axes[0].set_ylabel("Loss")
-        axes[0].set_title("Physics RI Loss"); axes[0].set_xlim(left=1); axes[0].grid(alpha=0.3)
+        axes[0].set_title("Physics RI Loss"); axes[0].set_xlim(left=1); _apply_dense_ticks(axes[0], epochs)
         axes[1].plot(epochs, cs, "c-", linewidth=2)
         axes[1].set_xlabel("Epoch"); axes[1].set_ylabel("Loss")
-        axes[1].set_title("Physics Critic Supervision"); axes[1].set_xlim(left=1); axes[1].grid(alpha=0.3)
+        axes[1].set_title("Physics Critic Supervision"); axes[1].set_xlim(left=1); _apply_dense_ticks(axes[1], epochs)
         axes[2].plot(epochs, ar, "y-", linewidth=2)
         axes[2].set_xlabel("Epoch"); axes[2].set_ylabel("Loss")
-        axes[2].set_title("Physics Anti-Resonance"); axes[2].set_xlim(left=1); axes[2].grid(alpha=0.3)
+        axes[2].set_title("Physics Anti-Resonance"); axes[2].set_xlim(left=1); _apply_dense_ticks(axes[2], epochs)
         plt.tight_layout()
         if save_path is None:
             save_path = str(self.log_dir / "physics_losses.png")

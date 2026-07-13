@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 
+from active_learning_pi.al.robust_normalize import is_robust_per_mhz_stats, normalize_heatmap_raw as _normalize_hm
+
 EXPECTED_IMP_LEN = 231
 
 
@@ -35,26 +37,17 @@ def denormalize_impedance_from_model(z: np.ndarray, imp_stats: dict) -> np.ndarr
     return np.exp(log_imp).astype(np.float32)
 
 
-def normalize_heatmap_raw(raw: np.ndarray, hm_stats: dict) -> np.ndarray:
-    """Same as pipelines/normalize/multifreq.py — (2,H,W) raw → (1,H,W) normalized."""
-    raw = np.asarray(raw, dtype=np.float32)
-    if raw.ndim == 3 and raw.shape[0] == 1:
-        return raw.astype(np.float32, copy=False)
-    if raw.ndim != 3 or raw.shape[0] < 2:
-        raise ValueError(f"Unexpected heatmap shape: {raw.shape}")
-
-    ch0, mask = raw[0], raw[1]
-    log_mean = float(hm_stats["log_mean"])
-    log_std = float(hm_stats["log_std"])
-    clip_min = float(hm_stats["clip_min"])
-    clip_max = float(hm_stats["clip_max"])
-    bg_value = float(hm_stats["background_value"])
-
-    log_ch0 = np.log1p(np.maximum(ch0, 0.0))
-    z = (log_ch0 - log_mean) / (log_std if log_std != 0.0 else 1.0)
-    z = np.clip(z, clip_min, clip_max)
-    z[mask <= 0.5] = bg_value
-    return z[np.newaxis].astype(np.float32, copy=False)
+def normalize_heatmap_raw(
+    raw: np.ndarray,
+    hm_stats: dict,
+    *,
+    mhz: float | None = None,
+    groot: Path | None = None,
+) -> np.ndarray:
+    """Normalize raw heatmap using training stats (robust per-MHz or legacy log-z)."""
+    if is_robust_per_mhz_stats(hm_stats) and mhz is None:
+        raise ValueError("mhz is required for robust per-MHz heatmap normalization")
+    return _normalize_hm(raw, hm_stats, mhz=mhz, groot=groot)
 
 
 def normalize_impedance_raw(raw: np.ndarray, imp_stats: dict) -> np.ndarray:
@@ -82,6 +75,9 @@ def package_raw_dataset(
     manifest: list[dict[str, Any]],
     groot: Path,
     imp_stats: dict,
+    *,
+    heatmap_only_labels: bool = False,
+    hm_stats: dict | None = None,
 ) -> list[dict[str, Any]]:
     """
     Layout under raw_root/ (matches Data_Creation multifreq before Normalization.py):
@@ -124,6 +120,19 @@ def package_raw_dataset(
         mhz = float(meta.get("mhz", np.load(sample_dir / "pi_freq_mhz.npy")))
         np.save(pf_out / f"{sid}.npy", np.float64(mhz * 1e6))
 
+        imp_source = "skipped_heatmap_only" if heatmap_only_labels else "missing"
+        if heatmap_only_labels:
+            rows.append(
+                {
+                    **meta,
+                    "raw_packaged": True,
+                    "raw_sample_id": sid,
+                    "imp_source": imp_source,
+                    "heatmap_only_label": True,
+                }
+            )
+            continue
+
         imp_source = "simulation_csv"
         imp_raw = None
         csv_p = _resolve_impedance_csv(sample_dir)
@@ -153,6 +162,8 @@ def normalize_raw_tree(
     stats_json: Path,
     *,
     overwrite: bool = False,
+    heatmap_only_labels: bool = False,
+    groot: Path | None = None,
 ) -> dict[str, Any]:
     """Apply training stats (pipelines/normalize/multifreq.py rules) to raw_root → norm_root."""
     if not stats_json.is_file():
@@ -171,6 +182,7 @@ def normalize_raw_tree(
         d.mkdir(parents=True, exist_ok=True)
 
     occ_dir = raw_root / "Occ_map"
+    pf_dir = raw_root / "PI_freq"
     stems = sorted(p.stem for p in occ_dir.glob("sample_*.npy"))
     done = 0
     errors: list[str] = []
@@ -178,12 +190,17 @@ def normalize_raw_tree(
     for stem in stems:
         try:
             hm_raw = np.load(raw_root / "heatmap" / f"{stem}.npy")
-            imp_raw = np.load(raw_root / "Imp" / f"{stem}.npy")
             occ_raw = np.load(occ_dir / f"{stem}.npy")
-            pf_raw = np.load(raw_root / "PI_freq" / f"{stem}.npy")
+            pf_raw = np.load(pf_dir / f"{stem}.npy")
+            mhz = float(np.asarray(pf_raw).reshape(-1)[0] / 1e6)
 
-            np.save(hm_out / f"{stem}.npy", normalize_heatmap_raw(hm_raw, hm_stats))
-            np.save(imp_out / f"{stem}.npy", normalize_impedance_raw(imp_raw, imp_stats))
+            np.save(
+                hm_out / f"{stem}.npy",
+                normalize_heatmap_raw(hm_raw, hm_stats, mhz=mhz, groot=groot),
+            )
+            if not heatmap_only_labels:
+                imp_raw = np.load(raw_root / "Imp" / f"{stem}.npy")
+                np.save(imp_out / f"{stem}.npy", normalize_impedance_raw(imp_raw, imp_stats))
             np.save(occ_out / f"{stem}.npy", occ_raw.astype(np.float32))
             np.save(pf_out / f"{stem}.npy", pf_raw)
             done += 1
@@ -222,18 +239,23 @@ def normalize_iteration_labels(
     )
     stats_json = groot / stats_rel
     hm_stats, imp_stats, _ = _load_training_stats(stats_json)
+    heatmap_only_labels = bool(cfg.get("heatmap_only_labels", False))
 
     raw_root = iteration_dir / cfg.get("raw_dataset_subdir", "raw_dataset")
     norm_root = iteration_dir / cfg.get("normalized_dataset_subdir", "dataset_norm")
 
     print(f"\n=== Package raw dataset ===")
     print(f"  Stats: {stats_json}")
+    if heatmap_only_labels:
+        print("  Option B: heatmap-only labels (impedance packaging skipped)")
     packaged = package_raw_dataset(
         iteration_dir / "labels",
         raw_root,
         manifest,
         groot,
         imp_stats,
+        heatmap_only_labels=heatmap_only_labels,
+        hm_stats=hm_stats,
     )
     ok_pack = sum(1 for r in packaged if r.get("raw_packaged"))
     print(f"  Packaged {ok_pack}/{len(packaged)} samples → {raw_root}")
@@ -244,6 +266,8 @@ def normalize_iteration_labels(
         norm_root,
         stats_json,
         overwrite=bool(cfg.get("normalize_overwrite", False)),
+        heatmap_only_labels=heatmap_only_labels,
+        groot=groot,
     )
     print(f"  Normalized {report['n_samples']} samples → {norm_root}")
     if report["errors"]:

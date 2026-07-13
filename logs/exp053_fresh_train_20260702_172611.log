@@ -1,0 +1,88 @@
+Loaded config overrides from config.yaml
+  Curriculum (of 450 epochs): cross_freq@27, protect_hm@355, heatmap_focus@275, imp_peak@275→275 (ramp 50), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  exp053 training (Pearson + grad + log1p peak stack + union blob):
+    layout_train_prob=0.55 (~45% encode)  cf_layout_mix=0.45  high_freq_pair_bias=0.55
+    pearson_w=2.5  grad_vec=2.5  grad_dir=1.5
+    peak_log1p_w=1.5  hot=2.0  max=1.0  ctr=1.5
+    peak_topk=32  phys_w=1.5  peak_loc_w=0.3
+    epochs=450  amp=off  resume=None
+Loaded config overrides from config.yaml
+  Curriculum (of 450 epochs): cross_freq@27, protect_hm@355, heatmap_focus@275, imp_peak@275→275 (ramp 50), layout_train_prob=0.55, cross_freq_layout_z_only=False
+Fresh run — removed previous outputs under experiments/exp053_peak_log1p_losses
+  - checkpoints/
+  - logs/
+  - metrics/
+heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=16
+================================================================================
+EXP053_PEAK_LOG1P_LOSSES — MULTI-INPUT VAE
+  device: cuda
+  batch: 160
+  epochs: 450
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: off
+  tf32: False
+  compile: False
+  ram_cache: True
+================================================================================
+  Central norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=16
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 29499 layouts, 471979 manifest rows
+Loaded 471979 samples from datasets/data_multifreq_train_norm_unbounded
+  Heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=16
+K-values loaded from cache (471979 samples)
+Caching 471979 samples in RAM …
+  RAM cache ready in 129.7s
+Multifreq split by design: 29499 layouts
+Train samples: 412981, Validation samples: 58998
+  Train PI_freq bins (anchor MHz):
+    10 MHz: 25705
+    63 MHz: 25815
+    80 MHz: 25823
+    200 MHz: 25822
+    230 MHz: 25890
+    250 MHz: 25877
+    270 MHz: 25940
+    300 MHz: 25776
+    330 MHz: 25881
+    350 MHz: 25807
+    370 MHz: 25737
+    390 MHz: 25746
+    400 MHz: 25838
+    420 MHz: 25699
+    450 MHz: 25847
+    500 MHz: 25778
+  Append-tag curriculum: tag='New_data_10000'  train_rows=140000 (33.9% natural)
+    peak target=55% (alpha≈2.38)  epochs 1–65 → decay by 100
+  Train draws/epoch: 30000 (random subset of 412981 train rows)
+  Cross-freq pairs: enabled (471979 indices); high-MHz alt bias=0.55 (≥250 MHz)
+  DataLoader: workers=0  pin_memory=True  prefetch=n/a
+  exp053 model: private_h=384  freq_film=True  layout_prob=0.55  cf_layout_mix=0.45
+    mhz_loss=0.50-2.50 (log)  pearson_w=2.5  grad_vec=2.5  grad_dir=1.5  peak_log1p=hot2.0/max1.0/ctr1.5  phys_w=1.5  peak_loc=0.3
+    distill_w=2.0  freeze_occ_imp_epoch=205
+params: 12,807,448
+epochs 1–450  amp=off  tf32=False  compile=False  ram_cache=True  batch=160
+checkpoint_interval=25  keep_last_n=0
+  Val: epoch 1, every checkpoint interval, and final epoch only
+
+  [curriculum ep 1] layout_train_prob=0.551  cf_layout_mix=0.451
+Ep   1/450  total=173.3s  loss=29.1796  val=13.3177  hm=6.0687×5.0  cf=0.0000  occ=0.5350  imp=1.2740  β=0.000
+  checkpoint → checkpoint_epoch_1.pt
+  Off-anchor spatial eval → experiments/exp053_peak_log1p_losses/metrics/off_anchor_eval_epoch_1.csv
+    encode_cross   @   100 MHz  MSE=0.3963  r=0.948  peakΔ=0.012  n=5120
+    encode_cross   @   175 MHz  MSE=0.3966  r=0.948  peakΔ=0.012  n=5120
+    encode_cross   @   330 MHz  MSE=0.3965  r=0.948  peakΔ=0.012  n=5120
+    encode_cross   @   400 MHz  MSE=0.3964  r=0.948  peakΔ=0.012  n=5120
+    layout_cross   @   100 MHz  MSE=0.8825  r=0.517  peakΔ=0.029  n=5120
+    layout_cross   @   175 MHz  MSE=0.8825  r=0.517  peakΔ=0.029  n=5120
+    layout_cross   @   330 MHz  MSE=0.8827  r=0.516  peakΔ=0.029  n=5120
+    layout_cross   @   400 MHz  MSE=0.8825  r=0.517  peakΔ=0.029  n=5120
+  [hm ep 1] total=6.0687  tier_a=3.2687  peak_log1p=1.8667  phys_blob=0.8422
+  [curriculum ep 2] layout_train_prob=0.552  cf_layout_mix=0.452
+  [hm ep 2] total=4.2575  tier_a=2.0245  peak_log1p=1.4887  phys_blob=0.5313
+  [curriculum ep 3] layout_train_prob=0.553  cf_layout_mix=0.452
+  [hm ep 3] total=3.4929  tier_a=1.6014  peak_log1p=1.2610  phys_blob=0.4186
+  [curriculum ep 4] layout_train_prob=0.554  cf_layout_mix=0.453

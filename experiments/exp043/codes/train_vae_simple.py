@@ -222,12 +222,12 @@ class Config:
     # Use env vars to override where outputs are written/read.
     data_dir: str = field(
         default_factory=lambda: os.environ.get(
-            "VAE_DATA_DIR", "/home/ubuntu/gan/datasets/data_multifreq_gmax",
+            "VAE_DATA_DIR", "datasets/data_multifreq_gmax",
         ),
     )
     experiment_dir: str = field(
         default_factory=lambda: os.environ.get(
-            "VAE_EXPERIMENT_DIR", "/home/ubuntu/gan/experiments/exp043",
+            "VAE_EXPERIMENT_DIR", "experiments/exp043",
         ),
     )
     checkpoint_interval: int = 25   # CSV, plots, latent stats, and checkpoint_epoch_{N}.pt

@@ -1,0 +1,15 @@
+datasets/
+experiments/
+data_multi_norm/
+data_multi_norm_robust/
+data_multi_norm_unbounded/
+data/
+evaluation/
+.venv/
+checkpoints/
+**/__pycache__/
+**/*.pt
+**/*.pth
+**/*.ckpt
+**/*.peb
+**/*.h5

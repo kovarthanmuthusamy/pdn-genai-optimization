@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from active_learning_pi.al.paths import al_root, gan_root
+from active_learning_pi.al.paths import al_root, repo_root
 
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
@@ -29,11 +29,16 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
             cfg = yaml.safe_load(f)
         else:
             cfg = json.load(f)
-    groot = gan_root()
-    if not cfg.get("gan_root"):
-        cfg["gan_root"] = str(groot)
+    groot = repo_root()
+    key = "repo_root"
+    legacy = "gan_root"
+    if not cfg.get(key) and cfg.get(legacy):
+        cfg[key] = cfg[legacy]
+    if not cfg.get(key):
+        cfg[key] = str(groot)
     else:
-        cfg["gan_root"] = str(Path(cfg["gan_root"]).resolve())
+        cfg[key] = str(Path(cfg[key]).resolve())
+    cfg[legacy] = cfg[key]  # backward compat
     return cfg
 
 

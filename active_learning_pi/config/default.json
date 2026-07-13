@@ -1,4 +1,5 @@
 {
+  "repo_root": null,
   "gan_root": null,
   "experiment_dir": "experiments/exp038_true_multi",
   "checkpoint_path": "experiments/exp038_true_multi/checkpoints/checkpoint_epoch_900.pt",

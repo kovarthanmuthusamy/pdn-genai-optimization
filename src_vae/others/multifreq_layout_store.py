@@ -21,16 +21,18 @@ from pathlib import Path
 
 import numpy as np
 
+from repo_paths import resolve_repo_path
+
 MANIFEST_NAME = "manifest.csv"
 LAYOUTS_DIR_NAME = "layouts"
 
 
 def manifest_path(data_dir: Path) -> Path:
-    return Path(data_dir) / MANIFEST_NAME
+    return resolve_repo_path(data_dir) / MANIFEST_NAME
 
 
 def layouts_root(data_dir: Path) -> Path:
-    return Path(data_dir) / LAYOUTS_DIR_NAME
+    return resolve_repo_path(data_dir) / LAYOUTS_DIR_NAME
 
 
 def layout_dir(data_dir: Path, design_id: str) -> Path:
@@ -246,7 +248,23 @@ def _heatmap_stems(data_dir: Path) -> set[str]:
     hm = Path(data_dir) / "heatmap"
     if not hm.is_dir():
         return set()
-    return {p.stem for p in hm.glob("*.npy")}
+    return {p.stem for p in hm.glob("*.npy") if p.exists()}
+
+
+def _remove_broken_npy_links(directory: Path) -> int:
+    """Unlink *.npy symlinks whose target is missing."""
+    if not directory.is_dir():
+        return 0
+    removed = 0
+    for path in directory.glob("*.npy"):
+        if path.exists():
+            continue
+        try:
+            path.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return removed
 
 
 def repair_multifreq_dataset(
@@ -264,6 +282,11 @@ def repair_multifreq_dataset(
     ``prune_orphan_heatmaps`` is True. Manifest rows without a heatmap file are dropped.
     """
     root = Path(data_dir)
+    removed_broken_hm = 0
+    removed_broken_pf = 0
+    if not dry_run:
+        removed_broken_hm = _remove_broken_npy_links(root / "heatmap")
+        removed_broken_pf = _remove_broken_npy_links(root / "PI_freq")
     hm_stems = _heatmap_stems(root)
     rows = load_manifest_rows(root)
     if not rows and not hm_stems:
@@ -317,6 +340,9 @@ def repair_multifreq_dataset(
             "sample_name", "design_id", "freq_label", "freq_mhz", "freq_hz",
             "source_folder", "pi_number", "decap_index",
         ]
+        fieldnames = [f for f in fieldnames if f is not None]
+        for row in kept_rows:
+            row.pop(None, None)
         with mp.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=fieldnames)
             w.writeheader()
@@ -335,6 +361,8 @@ def repair_multifreq_dataset(
         "manifest_dupes_dropped": dupes_dropped,
         "removed_heatmap_files": removed_hm,
         "removed_pifreq_files": removed_pf,
+        "removed_broken_heatmap_links": removed_broken_hm,
+        "removed_broken_pifreq_links": removed_broken_pf,
         "dry_run": int(dry_run),
     }
     return stats

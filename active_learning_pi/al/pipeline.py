@@ -15,7 +15,8 @@ from active_learning_pi.al.ecadstar import run_ecadstar_batch
 from active_learning_pi.al.evaluate_off_anchor import evaluate_labels_vs_predictions
 from active_learning_pi.al.ingest_labels import ingest_simulation_outputs
 from active_learning_pi.al.inference_pool import predict_candidates
-from active_learning_pi.al.paths import gan_root, iteration_dir, run_dir
+from active_learning_pi.al.paths import iteration_dir, repo_root, run_dir
+from active_learning_pi.al.build_overlay import build_overlay_from_iterations
 from active_learning_pi.al.normalize_labels import normalize_iteration_labels
 from active_learning_pi.al.peb_batch import build_peb_from_selection
 
@@ -146,8 +147,10 @@ def cmd_simulate(cfg: dict, groot: Path, iteration: int) -> int:
     peb = _peb_path(it_dir)
     if not peb.is_file():
         raise FileNotFoundError(f"Run build-peb first — missing {peb}")
+    selected = load_json(it_dir / SELECTED_JSON)
     print(f"\n=== Simulate ECADSTAR once (iter {iteration}) ===")
-    return run_ecadstar_batch(cfg, peb, groot)
+    print(f"  Selected layouts: {len(selected)}")
+    return run_ecadstar_batch(cfg, peb, groot, pi_count=len(selected))
 
 
 def cmd_ingest(cfg: dict, groot: Path, iteration: int) -> Path:
@@ -183,18 +186,77 @@ def cmd_evaluate(cfg: dict, groot: Path, iteration: int) -> dict[str, Any]:
     return report
 
 
+def cmd_build_overlay(cfg: dict, groot: Path) -> dict[str, Any]:
+    print(f"\n=== Build AL overlay dataset (Option B) ===")
+    report = build_overlay_from_iterations(cfg, groot)
+    print(
+        f"  overlay: {report.get('overlay_root')}  added={report.get('added')}  "
+        f"skipped={report.get('skipped_existing')}"
+    )
+    if report.get("errors"):
+        for err in report["errors"][:8]:
+            print(f"  error: {err}")
+    return report
+
+
+def cmd_finetune(cfg: dict, groot: Path) -> int:
+    ft = cfg.get("finetune", {})
+    if not ft.get("enabled"):
+        print("\n=== Fine-tune ===")
+        print("  finetune.enabled is false — enable in AL config or run:")
+        print("    python pipelines/active_learning/finetune_exp057.py")
+        return 1
+
+    from active_learning_pi.al.build_overlay import build_overlay_from_iterations
+    from active_learning_pi.al.finetune_run import finetune_env, resolve_checkpoint_path
+    from src_vae.others.multifreq_layout_store import load_manifest_rows
+
+    overlay_rel = ft.get("overlay_data_dir") or cfg.get("overlay_data_dir")
+    overlay_root = groot / overlay_rel if overlay_rel else None
+    n_overlay = len(load_manifest_rows(overlay_root)) if overlay_root and overlay_root.is_dir() else 0
+
+    if n_overlay == 0:
+        print("\n=== Build AL overlay (required for fine-tune) ===")
+        report = build_overlay_from_iterations(cfg, groot)
+        n_overlay = int(report.get("added", 0)) + int(report.get("skipped_existing", 0))
+        if n_overlay == 0:
+            print("  No AL overlay samples — run ingest first or use --train-only.")
+            return 1
+
+    exp_rel = ft["experiment_dir"]
+    train_script = groot / exp_rel / "codes" / "train_vae_simple.py"
+    if not train_script.is_file():
+        print(f"Missing training script: {train_script}")
+        return 1
+
+    import subprocess
+    import sys
+
+    ckpt = resolve_checkpoint_path(cfg, groot)
+    print(f"\n=== Fine-tune exp057 (Option B) ===")
+    print(f"  checkpoint: {ckpt}")
+    print(f"  overlay samples: {n_overlay}")
+
+    env = finetune_env(cfg, groot, use_overlay=True)
+    return int(subprocess.call([sys.executable, str(train_script)], cwd=str(groot), env=env))
+
+
 def cmd_finetune_hint(cfg: dict, groot: Path) -> None:
     ft = cfg.get("finetune", {})
     if not ft.get("enabled"):
         print("\n=== Fine-tune ===")
         print("  finetune.enabled is false.")
-        print("  Merge runs/.../iter_*/dataset_norm/ into your training set, then:")
-        print(f"    python {ft.get('experiment_dir', 'experiments/exp039_improved_heatmap')}/codes/train_vae_simple.py")
+        print("  After AL ingest, run:")
+        print(f"    python pipelines/active_learning/finetune_exp057.py")
+        print("  Or set COMMAND=build-overlay then COMMAND=finetune in pipelines/active_learning/run.py")
         return
     exp = groot / ft["experiment_dir"]
-    print(f"\n=== Fine-tune ===")
-    print(f"  cd {groot}")
-    print(f"  python {exp}/codes/train_vae_simple.py  # config: {ft.get('config_path')}")
+    print(f"\n=== Fine-tune (Option B) ===")
+    print(f"  1) python pipelines/active_learning/run.py   # COMMAND=build-overlay")
+    print(f"  2) python pipelines/active_learning/finetune_exp057.py")
+    print(f"     or COMMAND=finetune in pipelines/active_learning/run.py")
+    print(f"  config: {ft.get('config_path')}")
+    print(f"  overlay: {ft.get('overlay_data_dir', cfg.get('overlay_data_dir'))}")
 
 
 def run_cycle(
@@ -203,33 +265,74 @@ def run_cycle(
     *,
     do_simulate: bool,
     do_ingest: bool,
+    run_finetune: bool = False,
 ) -> int:
     """
-    Full active-learning cycle:
-      1) generate all candidates
-      2) infer + score each (cheap, no ECADStar)
-      3) select only worst → one PEB
-      4) one ECADStar batch
-      5) ingest + evaluate
-      6) fine-tune hint
+    Active-learning cycle:
+      1) generate candidates
+      2) infer + score (MC uncertainty)
+      3) select worst → PEB
+      4) ECADStar batch
+      5) ingest + normalize + evaluate
+      6) [optional] build overlay + fine-tune exp057
     """
     it = bump_iteration(cfg, groot)
+    print(f"\n{'='*60}\n  AL iteration {it}\n{'='*60}")
+
+    print("\n[1/7] Generate candidates")
     cmd_generate(cfg, groot, it)
+    print("\n[2/7] Infer + score (uncertainty)")
     cmd_infer(cfg, groot, it)
+    print("\n[3/7] Select worst for ECAD")
     cmd_select_bad(cfg, groot, it)
+    print("\n[4/7] Build PEB")
     cmd_build_peb(cfg, groot, it)
 
     rc = 0
     if do_simulate:
+        print("\n[5/7] ECADStar simulate")
         rc = cmd_simulate(cfg, groot, it)
         if rc != 0:
             return rc
+    else:
+        print("\n[5/7] ECADStar simulate — SKIPPED")
+
     if do_ingest and rc == 0:
+        print("\n[6/7] Ingest + normalize + evaluate")
         cmd_ingest(cfg, groot, it)
         cmd_normalize(cfg, groot, it)
         cmd_evaluate(cfg, groot, it)
-    cmd_finetune_hint(cfg, groot)
+    elif not do_ingest:
+        print("\n[6/7] Ingest — SKIPPED")
+
+    ft = cfg.get("finetune", {})
+    if run_finetune and do_ingest and rc == 0 and ft.get("enabled"):
+        print("\n[7/7] Build overlay + fine-tune exp057")
+        cmd_build_overlay(cfg, groot)
+        return cmd_finetune(cfg, groot)
+
+    if run_finetune and ft.get("enabled"):
+        cmd_finetune_hint(cfg, groot)
+    else:
+        print("\n[7/7] Fine-tune — skipped (use COMMAND=full or finetune.run_after_cycle=true)")
     return rc
+
+
+def run_full_cycle(
+    cfg: dict,
+    groot: Path,
+    *,
+    skip_simulate: bool = False,
+    skip_ingest: bool = False,
+) -> int:
+    """End-to-end: cycle + overlay + fine-tune (single command)."""
+    return run_cycle(
+        cfg,
+        groot,
+        do_simulate=not skip_simulate,
+        do_ingest=not skip_ingest,
+        run_finetune=True,
+    )
 
 
 def main_from_config(
@@ -242,7 +345,7 @@ def main_from_config(
 ) -> int:
     """Run pipeline from CONFIG. Called by pipelines/active_learning/run.py."""
     cfg = load_config(config_path)
-    groot = Path(cfg["gan_root"])
+    groot = Path(cfg.get("repo_root") or cfg["gan_root"])
 
     def _it() -> int:
         return iteration if iteration is not None else current_iteration(cfg, groot)
@@ -271,15 +374,30 @@ def main_from_config(
     if command == "evaluate":
         cmd_evaluate(cfg, groot, _it())
         return 0
+    if command == "build-overlay":
+        cmd_build_overlay(cfg, groot)
+        return 0
+    if command == "finetune":
+        return cmd_finetune(cfg, groot)
     if command == "finetune-hint":
         cmd_finetune_hint(cfg, groot)
         return 0
     if command in ("cycle", "iteration"):
+        ft = cfg.get("finetune", {})
+        auto_ft = bool(ft.get("run_after_cycle", False))
         return run_cycle(
             cfg,
             groot,
             do_simulate=not skip_simulate,
             do_ingest=not skip_ingest,
+            run_finetune=auto_ft,
+        )
+    if command == "full":
+        return run_full_cycle(
+            cfg,
+            groot,
+            skip_simulate=skip_simulate,
+            skip_ingest=skip_ingest,
         )
     raise ValueError(f"Unknown command: {command!r}")
 

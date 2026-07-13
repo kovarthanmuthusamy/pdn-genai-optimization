@@ -24,9 +24,8 @@ import numpy as np
 from scipy.interpolate import griddata, RBFInterpolator
 
 # -- Bootstrap project root --------------------------------------------------
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+from repo_paths import REPO_ROOT as _PROJECT_ROOT, setup_path
+setup_path()
 
 # -- Import run parameters from run_all_k ------------------------------------
 from scrap.generation.run_all_k import (  # noqa: E402

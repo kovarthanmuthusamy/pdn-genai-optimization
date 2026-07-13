@@ -1,0 +1,61 @@
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/train_vae_simple.py", line 348, in <module>
+    main()
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/train_vae_simple.py", line 344, in main
+    train_vae()
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/train_vae_simple.py", line 327, in train_vae
+    _tr.train_vae()
+  File "/home/ubuntu/genai_pdn/experiments/exp038_true_multi/codes/train_vae_simple.py", line 1237, in train_vae
+    train_ld, val_ld = create_multifreq_data_loaders(
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/train_vae_simple.py", line 266, in _create_with_hf_bias
+    return _dm047.create_multifreq_data_loaders(*args, **kwargs)
+  File "/home/ubuntu/genai_pdn/experiments/exp051_new_datas_appended/codes/dataloader_multifreq.py", line 113, in create_multifreq_data_loaders
+    dataset = VAEDataset(
+  File "/home/ubuntu/genai_pdn/src_vae/others/dataloader.py", line 113, in __init__
+    self._precompute_k_values()
+  File "/home/ubuntu/genai_pdn/src_vae/others/dataloader.py", line 149, in _precompute_k_values
+    occ = np.load(layout_occ_path(self.data_dir, did), mmap_mode="r").reshape(-1)
+  File "/home/ubuntu/genai_pdn/.venv/lib/python3.10/site-packages/numpy/lib/_npyio_impl.py", line 451, in load
+    fid = stack.enter_context(open(os.fspath(file), "rb"))
+FileNotFoundError: [Errno 2] No such file or directory: '/home/ubuntu/genai_pdn/datasets/data_multifreq_train_norm_robust/layouts/layout_pi26859_d26858/occ.npy'
+Loaded config overrides from config.yaml
+  Curriculum (of 700 epochs): cross_freq@20, protect_hm@200, heatmap_focus@200, imp_peak@300→300 (ramp 77), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  exp051 training (Tier A lean: FG huber + grad + phys blob + peak_loc):
+    layout_train_prob=0.55 (~45% encode)  cf_layout_mix=0.45  high_freq_pair_bias=0.55
+    spatial: peak_loc_w=0.75  peak_w=3.0  grad_vec_w=2.5  dyn_w=2.0
+    peak_topk=24  phys_w=3.0  phys_over=1.75  p99_train=off
+    hf_mult=2.0  private_h=384  freq_film=True
+    epochs=700  early_stop=disabled
+Loaded config overrides from config.yaml
+  Curriculum (of 700 epochs): cross_freq@20, protect_hm@200, heatmap_focus@200, imp_peak@300→300 (ramp 77), layout_train_prob=0.55, cross_freq_layout_z_only=False
+Fresh run — removed previous outputs under experiments/exp051_new_datas_appended
+  - checkpoints/
+  - logs/
+  - metrics/
+heatmap norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+================================================================================
+EXP051_NEW_DATAS_APPENDED — MULTI-INPUT VAE
+  device: cuda
+  batch: 160
+  epochs: 700
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: fp16
+  tf32: False
+  compile: False
+  ram_cache: True
+================================================================================
+  Central norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 29499 layouts, 471979 manifest rows
+Loaded 471979 samples from datasets/data_multifreq_train_norm_robust
+  Heatmap z-clip at load: [-1.7153, 6.8219] (tail trim from stats)
+  Heatmap norm: robust_log1p_per_mhz  bins=[10.0, 200.0, 230.0, 250.0, 270.0, 300.0…]  n=11
+Computing K values for 471979 samples (one-time, will be cached)…

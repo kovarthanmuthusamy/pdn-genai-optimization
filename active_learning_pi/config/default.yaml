@@ -1,6 +1,7 @@
 # Active learning loop for PI-distribution heatmaps (see docs/active-learning-pi-heatmaps.md)
 
-gan_root: null  # null = auto-detect parent of active_learning_pi/
+repo_root: null  # null = auto-detect via repo_paths.REPO_ROOT
+gan_root: null  # deprecated alias for repo_root
 
 # Model / inference (exp038 multifreq VAE by default)
 experiment_dir: experiments/exp038_true_multi

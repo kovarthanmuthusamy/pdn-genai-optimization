@@ -1,0 +1,29 @@
+{
+  "has_solution": true,
+  "K": 17,
+  "max_imp_ohm": 6.962579250335693,
+  "best_score": 6.962579250335693,
+  "best_step": 152,
+  "winning_seed": 206049551,
+  "mode": "batch",
+  "active_components": [
+    "C8",
+    "C9",
+    "C10",
+    "C11",
+    "C13",
+    "C18",
+    "C19",
+    "C20",
+    "C26",
+    "C28",
+    "C31",
+    "C34",
+    "C39",
+    "C44",
+    "C46",
+    "C50",
+    "C52"
+  ],
+  "n_active": 17
+}

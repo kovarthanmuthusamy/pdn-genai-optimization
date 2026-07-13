@@ -15,7 +15,8 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.widgets import Button
 
-PROJECT_ROOT = "/home/ubuntu/gan"
+from repo_paths import REPO_ROOT as PROJECT_ROOT, setup_path
+setup_path()
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

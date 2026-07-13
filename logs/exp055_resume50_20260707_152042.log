@@ -1,0 +1,62 @@
+Loaded config from config.yaml (182 keys)
+exp055  epochs=400  batch=224  amp=off  ckpt_every=25  resume=50
+Loaded config from config.yaml (182 keys)
+  Loaded 3 existing epochs from loss.csv (ep 1–50)
+================================================================================
+EXP055_HARD_OCC — MULTI-INPUT VAE
+  device: cuda
+  batch: 224
+  epochs: 400
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: off
+  tf32: False
+  compile: False
+  ram_cache: False
+================================================================================
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 24979 layouts, 582997 manifest rows
+Loaded 582997 samples from datasets/data_multifreq_train_norm_unbounded
+  Heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+K-values loaded from cache (582997 samples)
+Data: train=508060 val=74937 layouts=24979 draws=30000/508060 cross_freq=582997
+Model: 12.8M params  latent=65  layout_p=0.55  cf_mix=0.45  occ_bin=True  milestones=[ep20, ep80, ep240, ep260]
+
+========================================================
+  RESUMING from checkpoint checkpoint_epoch_50.pt
+  completed epoch: 50  →  training epochs 51–400
+  val_loss: 5.7095
+========================================================
+
+  Curriculum restored from checkpoint (not re-scaled to new num_epochs):
+    beta_end_epoch=240, beta_phase2_end_epoch=240, modality_dropout_anneal_epochs=16, physics_critic_warmup_epochs=10, physics_slope_anneal_epochs=20, penalty_warmup_epochs=10, focal_gamma_warmup_epochs=0, cross_freq_start_epoch=20, modality_dropout_protect_heatmap_epoch=260, heatmap_focus_start_epoch=260, impedance_peak_start_epoch=80, impedance_peak_ramp_epochs=20, impedance_peak_focus_epoch=80
+  Careful impedance LR: backbone=3.00e-05  impedance=3.00e-05 (mult=1.0)
+  optimizer state skipped (param groups changed)
+Ep  52/400  total=134.7s  loss=10.4851  hm=0.8171×4.0  cf=0.1851  occ=0.4697  imp=0.5373
+Ep  54/400  total=156.4s  loss=10.4081  hm=0.8252×4.0  cf=0.1829  occ=0.4648  imp=0.5243
+Ep  56/400  total=79.4s  loss=10.2498  hm=0.7873×4.0  cf=0.1830  occ=0.4641  imp=0.5215
+Ep  58/400  total=144.1s  loss=10.1289  hm=0.7787×4.0  cf=0.1776  occ=0.4597  imp=0.5128
+Ep  60/400  total=146.4s  loss=9.8823  hm=0.7050×4.0  cf=0.1807  occ=0.4560  imp=0.5099
+Ep  62/400  total=88.7s  loss=9.9138  hm=0.7525×4.0  cf=0.1765  occ=0.4506  imp=0.4982
+Ep  64/400  total=148.5s  loss=9.6302  hm=0.6916×4.0  cf=0.1759  occ=0.4463  imp=0.4884
+Ep  66/400  total=142.7s  loss=9.8891  hm=0.7551×4.0  cf=0.1748  occ=0.4471  imp=0.4883
+Ep  68/400  total=104.6s  loss=9.4679  hm=0.6720×4.0  cf=0.1710  occ=0.4411  imp=0.4815
+Ep  70/400  total=152.1s  loss=9.7822  hm=0.7462×4.0  cf=0.1672  occ=0.4407  imp=0.4808
+Ep  72/400  total=109.8s  loss=9.7884  hm=0.7671×4.0  cf=0.1669  occ=0.4352  imp=0.4750
+Ep  74/400  total=137.8s  loss=9.2779  hm=0.6284×4.0  cf=0.1654  occ=0.4370  imp=0.4687
+  checkpoint → checkpoint_epoch_75.pt
+Ep  76/400  total=139.6s  loss=9.1968  hm=0.6497×4.0  cf=0.1602  occ=0.4303  imp=0.4595
+Ep  78/400  total=155.7s  loss=9.2602  hm=0.6631×4.0  cf=0.1580  occ=0.4311  imp=0.4584
+  >> milestone epoch 80
+Ep  80/400  total=80.0s  loss=9.2984  hm=0.6863×4.0  cf=0.1622  occ=0.4267  imp=0.4483
+Ep  82/400  total=148.2s  loss=9.2884  hm=0.6834×4.0  cf=0.1646  occ=0.4264  imp=0.4467
+Ep  84/400  total=141.4s  loss=9.1205  hm=0.6437×4.0  cf=0.1590  occ=0.4270  imp=0.4396
+Ep  86/400  total=98.8s  loss=9.0561  hm=0.6478×4.0  cf=0.1574  occ=0.4198  imp=0.4343
+Ep  88/400  total=148.9s  loss=9.1612  hm=0.6805×4.0  cf=0.1606  occ=0.4184  imp=0.4364
+Ep  90/400  total=135.2s  loss=9.3878  hm=0.7508×4.0  cf=0.1563  occ=0.4174  imp=0.4298
+Ep  92/400  total=109.8s  loss=9.2013  hm=0.7126×4.0  cf=0.1580  occ=0.4146  imp=0.4262
+Ep  94/400  total=157.8s  loss=9.1953  hm=0.7238×4.0  cf=0.1591  occ=0.4128  imp=0.4199
+Ep  96/400  total=124.5s  loss=9.0950  hm=0.6799×4.0  cf=0.1595  occ=0.4172  imp=0.4181

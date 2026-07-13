@@ -1,22 +1,28 @@
-# PI-Distribution training anchor frequencies (MHz).
-# Edit this file when adding new simulated anchors, then:
-#   1. python Data_Creation/Data_processing_multifreq.py --append
-#   2. python scripts/Normalization.py --append
-#   3. Delete datasets/data_multifreq_norm/multifreq_meta.json (or it auto-invalidates)
+# Legacy fallback only — anchor MHz are read from dataset_meta.json:
+#   datasets/data_multifreq_train/dataset_meta.json  (pi_frequencies_mhz)
+# Refresh after append:
+#   python pipelines/data/refresh_multifreq_train_meta.py  (or your append pipeline)
 #
-# Original 7 anchors + 4 new (change the four new MHz to match your Raw/ folders).
+# This file is used only when no dataset_meta.json / manifest is available.
 
 anchors_mhz:
   - 10
   - 63
   - 80
-  - 130
+  - 100
+  - 120
   - 150
+  - 170
   - 200
   - 230
   - 250
   - 270
   - 300
   - 330
+  - 350
+  - 370
+  - 390
   - 400
+  - 420
+  - 450
   - 500

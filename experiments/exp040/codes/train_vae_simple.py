@@ -14,9 +14,15 @@ from pathlib import Path
 
 import torch
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+import sys
+from pathlib import Path
+
+_REPO_BOOT = Path(__file__).resolve().parents[3]
+if str(_REPO_BOOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_BOOT))
+
+from repo_paths import REPO_ROOT as PROJECT_ROOT, setup_path
+setup_path()
 
 import experiments.exp038_true_multi.codes.train_vae_simple as _tr
 from experiments.exp040.codes import vae_factorized_freq as _vf

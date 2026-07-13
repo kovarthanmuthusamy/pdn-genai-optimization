@@ -1,0 +1,98 @@
+{
+  "generated_at": "2026-06-23T07:38:36.838105+00:00",
+  "experiment_dir": "experiments/exp050",
+  "checkpoint_path": "experiments/exp050/checkpoints/last_model.pt",
+  "qc_config": {
+    "inference_mode": "layout_qc",
+    "layout_source": "val",
+    "k_value": 30,
+    "pi_ref_mhz": 200.0
+  },
+  "per_mhz_clip_ceiling_ohm": {
+    "10.0": 0.209675668849579,
+    "70.0": 2.842672112751204,
+    "120.0": 11.148645685071312,
+    "270.0": 28.41703414567741,
+    "400.0": 19.74205258633566
+  },
+  "per_mhz_generation": [
+    {
+      "mhz": 10.0,
+      "pi_norm": 0.3599516044570672,
+      "max": 0.22592270374298096,
+      "mean_fg": 0.06186574697494507,
+      "p95": 0.1018478199839592
+    },
+    {
+      "mhz": 70.0,
+      "pi_norm": 0.6641459998837217,
+      "max": 1.4466145038604736,
+      "mean_fg": 0.403937965631485,
+      "p95": 0.6638982892036438
+    },
+    {
+      "mhz": 120.0,
+      "pi_norm": 0.7484046254718868,
+      "max": 1.871243953704834,
+      "mean_fg": 0.5319309234619141,
+      "p95": 0.8758797645568848
+    },
+    {
+      "mhz": 270.0,
+      "pi_norm": 0.875173287927802,
+      "max": 7.253069877624512,
+      "mean_fg": 1.8533530235290527,
+      "p95": 3.187978982925415
+    },
+    {
+      "mhz": 400.0,
+      "pi_norm": 0.9366156687720424,
+      "max": 9.233156204223633,
+      "mean_fg": 2.9885950088500977,
+      "p95": 5.370278835296631
+    }
+  ],
+  "anchor_layout_vs_real": [
+    {
+      "mhz": 10.0,
+      "n": 2,
+      "pearson_r": 0.9204185009002686,
+      "fg_mse": 0.04959668219089508,
+      "peak_loc_err": 0.007538974285125732,
+      "mae_phys": 0.007100268732756376,
+      "real_max": 0.24572992324829102,
+      "gen_max": 0.24203437566757202,
+      "max_ratio": 0.9849609378790025
+    },
+    {
+      "mhz": 270.0,
+      "n": 2,
+      "pearson_r": 0.9700863361358643,
+      "fg_mse": 0.012287970632314682,
+      "peak_loc_err": 0.004770004656165838,
+      "mae_phys": 0.19552727788686752,
+      "real_max": 10.747363567352295,
+      "gen_max": 10.055227756500244,
+      "max_ratio": 0.9355994792104568
+    },
+    {
+      "mhz": 400.0,
+      "n": 2,
+      "pearson_r": 0.5887734889984131,
+      "fg_mse": 0.5292072296142578,
+      "peak_loc_err": 0.03716958314180374,
+      "mae_phys": 1.3688672184944153,
+      "real_max": 12.741783618927002,
+      "gen_max": 19.91249370574951,
+      "max_ratio": 1.5627712964903073
+    }
+  ],
+  "flags": [
+    "[WARN] 10 MHz: gen_max=0.23\u03a9 (\u226590% per-MHz clip ceiling 0.21\u03a9) \u2014 magnitude saturation",
+    "[OK]   10 MHz anchor: pearson_r=0.920, max_ratio=0.98",
+    "[OK]   270 MHz anchor: pearson_r=0.970, max_ratio=0.94",
+    "[WARN] 400 MHz anchor: pearson_r=0.589 (<0.75) \u2014 weak spatial pattern",
+    "[WARN] 400 MHz anchor: gen_max/real_max=1.56 \u2014 magnitude overshoot"
+  ],
+  "agent_copy_block": "=== SWEEP QC (copy to agent) ===\nexperiment: experiments/exp050\ncheckpoint: experiments/exp050/checkpoints/last_model.pt\nmode: layout_qc  layout_source: val\nK: 30  samples: 2  pi_ref: 200.0 MHz\nz_clip_ceiling_ohm@200MHz: 20.24\n\nPer-MHz generation (layout decode, no GT):\nMHz | anchor | gen_max | mean_fg | p95 | ceil_ohm | near_clip\n    10 | yes    |    0.23 |    0.06 |    0.10 |     0.21 | yes\n    70 | no     |    1.45 |    0.40 |    0.66 |     2.84 | no\n   120 | no     |    1.87 |    0.53 |    0.88 |    11.15 | no\n   270 | yes    |    7.25 |    1.85 |    3.19 |    28.42 | no\n   400 | yes    |    9.23 |    2.99 |    5.37 |    19.74 | no\n\nLayout vs real val heatmap (training anchors only):\nMHz | n | pearson_r | fg_mse | mae_phys | real_max | gen_max | max_ratio\n  10 | 2 | 0.920 | 0.0496 | 0.007 | 0.25 | 0.24 | 0.98\n 270 | 2 | 0.970 | 0.0123 | 0.196 | 10.75 | 10.06 | 0.94\n 400 | 2 | 0.589 | 0.5292 | 1.369 | 12.74 | 19.91 | 1.56\n\nFlags:\n[WARN] 10 MHz: gen_max=0.23\u03a9 (\u226590% per-MHz clip ceiling 0.21\u03a9) \u2014 magnitude saturation\n[OK]   10 MHz anchor: pearson_r=0.920, max_ratio=0.98\n[OK]   270 MHz anchor: pearson_r=0.970, max_ratio=0.94\n[WARN] 400 MHz anchor: pearson_r=0.589 (<0.75) \u2014 weak spatial pattern\n[WARN] 400 MHz anchor: gen_max/real_max=1.56 \u2014 magnitude overshoot\n=== END SWEEP QC ==="
+}

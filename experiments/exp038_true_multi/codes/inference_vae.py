@@ -15,9 +15,15 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.widgets import Button
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import sys
+from pathlib import Path
+
+_REPO_BOOT = Path(__file__).resolve().parents[3]
+if str(_REPO_BOOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_BOOT))
+
+from repo_paths import REPO_ROOT as PROJECT_ROOT, resolve_repo_path, setup_path
+setup_path()
 
 _EXP_DIR = Path(__file__).resolve().parents[1]
 _CONFIG_PATH = _EXP_DIR / "config.yaml"
@@ -29,7 +35,7 @@ def _default_data_dir() -> Path:
         cfg = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
         data_dir = cfg.get("data_dir")
         if data_dir:
-            return Path(data_dir)
+            return resolve_repo_path(data_dir)
     return PROJECT_ROOT / "datasets" / "data_multifreq_norm"
 
 

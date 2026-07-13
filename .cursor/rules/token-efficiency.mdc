@@ -1,0 +1,13 @@
+---
+description: Keep agent context lean in this ML repo
+alwaysApply: true
+---
+
+# Token efficiency (genai_pdn)
+
+- Prefer grep and semantic search over full-file reads; use line ranges when reading files.
+- Do not read ignored paths: datasets/, checkpoints/, experiments/, `*.pt`, `*.pth`, and other entries in `.cursorignore`.
+- Start a new chat for unrelated tasks instead of carrying long debugging history.
+- Use Exa (`web_search_exa`, `web_fetch_exa`) for web lookup; skip browser MCP unless UI testing is required.
+- Do not use Figma MCP in this project (design work is out of scope).
+- Minimize MCP tool calls; use only what the task needs.

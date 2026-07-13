@@ -1,0 +1,2 @@
+Loaded config from config.yaml (153 keys)
+exp054  epochs=400  batch=160  amp=off  ckpt_every=25  resume=fresh

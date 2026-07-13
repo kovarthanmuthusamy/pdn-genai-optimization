@@ -1,0 +1,2 @@
+epoch,beta,hm_mu_mean,hm_sigma_mean,occ_mu_mean,occ_sigma_mean,imp_mu_mean,imp_sigma_mean,fused_mu_mean,fused_mu_std,fused_sigma_mean,fused_mu_min,fused_mu_max,kl_gaussian,val_recon,val_total
+1,0.000000,-0.0515,1.0026,-0.0139,0.9940,0.0026,0.9483,0.0120,0.3705,0.4361,-0.8975,1.6740,0.5329,4.7471,16.6138

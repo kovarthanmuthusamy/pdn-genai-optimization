@@ -23,9 +23,15 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.widgets import Button
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import sys
+from pathlib import Path
+
+_REPO_BOOT = Path(__file__).resolve().parents[3]
+if str(_REPO_BOOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_BOOT))
+
+from repo_paths import REPO_ROOT as PROJECT_ROOT, resolve_repo_path, setup_path
+setup_path()
 
 _EXP_DIR = Path(__file__).resolve().parents[1]
 _CONFIG_PATH = _EXP_DIR / "config.yaml"
@@ -47,20 +53,14 @@ def _default_data_dir() -> Path:
         cfg = load_experiment_config(_CONFIG_PATH)
         data_dir = cfg.get("data_dir")
         if data_dir:
-            return Path(data_dir)
+            return resolve_repo_path(data_dir)
     return PROJECT_ROOT / "datasets" / "data_multifreq_norm"
 
 
 def _norm_stats_path() -> Path:
-    p = _default_data_dir() / "normalization_stats.json"
-    if p.is_file():
-        return p
-    legacy = PROJECT_ROOT / "datasets" / "data_norm" / "normalization_stats.json"
-    if legacy.is_file():
-        return legacy
-    raise FileNotFoundError(
-        f"normalization_stats.json not found. Tried:\n  {p}\n  {legacy}"
-    )
+    from libs.experiment_paths import norm_stats_path
+
+    return norm_stats_path(_default_data_dir())
 
 
 from experiments.exp042.codes.vae_poe_freq import MultiInputVAEPoeFreq  # noqa: E402

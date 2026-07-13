@@ -1,0 +1,37 @@
+Loaded config from config.yaml (172 keys)
+exp056  epochs=600  batch=224  amp=off  ckpt_every=25  resume=experiments/exp056_graph_vae/checkpoints/checkpoint_epoch_400.pt
+Loaded config from config.yaml (172 keys)
+  Loaded 17 existing epochs from loss.csv (ep 1–400)
+================================================================================
+EXP056_GRAPH_VAE — MULTI-INPUT VAE
+  device: cuda
+  batch: 224
+  epochs: 600
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: off
+  tf32: False
+  compile: False
+  ram_cache: False
+================================================================================
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 24979 layouts, 582997 manifest rows
+Loaded 582997 samples from datasets/data_multifreq_train_norm_unbounded
+  Heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+K-values loaded from cache (582997 samples)
+Data: train=508060 val=74937 layouts=24979 draws=30000/508060 cross_freq=582997
+Model: 12.1M params  latent=65  layout_p=0.55  cf_mix=0.45  occ_bin=True  milestones=[ep20, ep50]
+
+========================================================
+  RESUMING from checkpoint checkpoint_epoch_400.pt
+  completed epoch: 400  →  training epochs 401–400
+  val_loss: 3.0599
+========================================================
+
+  Curriculum restored from checkpoint (not re-scaled to new num_epochs):
+    beta_end_epoch=50, beta_phase2_end_epoch=50, modality_dropout_anneal_epochs=16, physics_critic_warmup_epochs=10, physics_slope_anneal_epochs=20, penalty_warmup_epochs=10, focal_gamma_warmup_epochs=0, cross_freq_start_epoch=20, modality_dropout_protect_heatmap_epoch=50, heatmap_focus_start_epoch=50, impedance_peak_start_epoch=50, impedance_peak_ramp_epochs=20, impedance_peak_focus_epoch=50
+  Careful impedance LR: backbone=3.00e-05  impedance=3.00e-05 (mult=1.0)
+  optimizer state skipped (param groups changed)

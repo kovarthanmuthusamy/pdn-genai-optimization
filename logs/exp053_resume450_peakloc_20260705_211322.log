@@ -1,0 +1,34 @@
+Loaded config overrides from config.yaml
+  Curriculum (of 600 epochs): cross_freq@27, protect_hm@325, heatmap_focus@600, imp_peak@275→275 (ramp 66), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  exp053 training (Pearson + grad + log1p peak stack + union blob):
+    layout_train_prob=0.55 (~45% encode)  cf_layout_mix=0.45  high_freq_pair_bias=0.55
+    pearson_w=2.5  grad_vec=2.5  grad_dir=1.5
+    peak_log1p_w=3.5  hot=2.5  max=1.75  ctr=2.5
+    peak_topk=32  phys_w=1.5  peak_loc_w=0.8
+    epochs=600  amp=off  resume=experiments/exp053_peak_log1p_losses/checkpoints/checkpoint_epoch_450.pt
+Loaded config overrides from config.yaml
+  Curriculum (of 600 epochs): cross_freq@27, protect_hm@325, heatmap_focus@600, imp_peak@275→275 (ramp 66), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  Loaded 19 existing epochs from loss.csv (ep 1–450)
+heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+================================================================================
+EXP053_PEAK_LOG1P_LOSSES — MULTI-INPUT VAE
+  device: cuda
+  batch: 160
+  epochs: 600
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: off
+  tf32: False
+  compile: False
+  ram_cache: True
+================================================================================
+  Central norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 29499 layouts, 655894 manifest rows
+Loaded 655894 samples from datasets/data_multifreq_train_norm_unbounded
+  Heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+K-values loaded from cache (655894 samples)
+Caching 655894 samples in RAM …

@@ -1,0 +1,76 @@
+Loaded config overrides from config.yaml
+  Curriculum (of 450 epochs): cross_freq@27, protect_hm@355, heatmap_focus@275, imp_peak@275→275 (ramp 50), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  exp053 training (Pearson + grad + log1p peak stack + union blob):
+    layout_train_prob=0.55 (~45% encode)  cf_layout_mix=0.45  high_freq_pair_bias=0.55
+    pearson_w=2.5  grad_vec=2.5  grad_dir=1.5
+    peak_log1p_w=2.75  hot=2.5  max=1.25  ctr=1.875
+    peak_topk=32  phys_w=1.5  peak_loc_w=0.3
+    epochs=450  amp=off  resume=325
+Loaded config overrides from config.yaml
+  Curriculum (of 450 epochs): cross_freq@27, protect_hm@355, heatmap_focus@275, imp_peak@275→275 (ramp 50), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  Loaded 15 existing epochs from loss.csv (ep 1–350)
+heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+================================================================================
+EXP053_PEAK_LOG1P_LOSSES — MULTI-INPUT VAE
+  device: cuda
+  batch: 160
+  epochs: 450
+  checkpoint_interval: 25
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 30000
+  val_on_checkpoint_only: True
+  amp: off
+  tf32: False
+  compile: False
+  ram_cache: True
+================================================================================
+  Central norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 29499 layouts, 655894 manifest rows
+Loaded 655894 samples from datasets/data_multifreq_train_norm_unbounded
+  Heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+K-values loaded from cache (655894 samples)
+Caching 655894 samples in RAM …
+  RAM cache ready in 151.1s
+Multifreq split by design: 29499 layouts
+Train samples: 567890, Validation samples: 88004
+  Train PI_freq bins (anchor MHz):
+    10 MHz: 25534
+    63 MHz: 25514
+    80 MHz: 8720
+    100 MHz: 25578
+    120 MHz: 25536
+    150 MHz: 25512
+    170 MHz: 25105
+    180 MHz: 25459
+    200 MHz: 25561
+    230 MHz: 25509
+    250 MHz: 25516
+    270 MHz: 25535
+    280 MHz: 25120
+    300 MHz: 25525
+    330 MHz: 25529
+    350 MHz: 25603
+    370 MHz: 25552
+    390 MHz: 25450
+    400 MHz: 15098
+    420 MHz: 25507
+    430 MHz: 25067
+    450 MHz: 25558
+    470 MHz: 23047
+    500 MHz: 11755
+  Append-tag curriculum: tag='New_data_10000'  train_rows=139736 (24.6% natural)
+    peak target=55% (alpha≈3.74)  epochs 1–65 → decay by 100
+  Train draws/epoch: 30000 (random subset of 567890 train rows)
+  Cross-freq pairs: enabled (655894 indices); high-MHz alt bias=0.55 (≥250 MHz)
+  DataLoader: workers=0  pin_memory=True  prefetch=n/a
+  exp053 model: private_h=384  freq_film=True  layout_prob=0.55  cf_layout_mix=0.45
+    mhz_loss=0.50-3.00 (log)  pearson_w=2.5  grad_vec=2.5  grad_dir=1.5  peak_log1p=hot2.5/max1.25/ctr1.875  phys_w=1.5  peak_loc=0.3
+    distill_w=2.0  freeze_occ_imp_epoch=205
+params: 12,807,448
+Resume: experiments/exp053_peak_log1p_losses/checkpoints/checkpoint_epoch_325.pt
+  Curriculum restored from checkpoint (not re-scaled to new num_epochs):
+    beta_end_epoch=340, beta_phase2_end_epoch=680, modality_dropout_anneal_epochs=36, physics_critic_warmup_epochs=22, physics_slope_anneal_epochs=45, penalty_warmup_epochs=22, focal_gamma_warmup_epochs=0, cross_freq_start_epoch=27, modality_dropout_protect_heatmap_epoch=355, heatmap_focus_start_epoch=275, impedance_peak_start_epoch=275, impedance_peak_ramp_epochs=50, impedance_peak_focus_epoch=275
+  Curriculum (of 450 epochs): cross_freq@27, protect_hm@325, heatmap_focus@275, imp_peak@275→275 (ramp 50), layout_train_prob=0.55, cross_freq_layout_z_only=False
+  Careful impedance LR: backbone=3.00e-05  impedance=1.50e-05 (mult=0.5)

@@ -189,10 +189,10 @@ class Config:
     # Allow starting new experiments without copying this code.
     # Use env vars to override where outputs are written/read.
     data_dir: str = field(
-        default_factory=lambda: os.environ.get("VAE_DATA_DIR", "/home/ubuntu/gan/datasets/data_multifreq_norm"),
+        default_factory=lambda: os.environ.get("VAE_DATA_DIR", "datasets/data_multifreq_norm"),
     )
     experiment_dir: str = field(
-        default_factory=lambda: os.environ.get("VAE_EXPERIMENT_DIR", "/home/ubuntu/gan/experiments/exp038_true_multi"),
+        default_factory=lambda: os.environ.get("VAE_EXPERIMENT_DIR", "experiments/exp038_true_multi"),
     )
     checkpoint_interval: int = 25   # CSV, plots, latent stats, and checkpoint_epoch_{N}.pt
     keep_last_n_checkpoints: int = 0  # 0 = keep every interval checkpoint (no pruning)

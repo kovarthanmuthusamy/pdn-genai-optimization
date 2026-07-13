@@ -24,12 +24,17 @@ from src_vae.others.multifreq_anchors import (
     nearest_anchor_mhz,
 )
 
-# Anchor MHz — edit configs/multifreq_anchors.yaml, then rebuild/append dataset.
+# Anchor MHz from dataset_meta.json (raw pool fallback); YAML is legacy only.
+def _anchors_for_dataset(data_dir: Path | str) -> tuple[float, ...]:
+    return load_anchors_mhz(data_dir)
+
+
+# Backward compat (raw dataset_meta.json); prefer _anchors_for_dataset(data_dir).
 ANCHOR_MHZ: tuple[float, ...] = load_anchors_mhz()
 
 
-def _nearest_anchor_mhz(mhz: float) -> float:
-    return nearest_anchor_mhz(mhz, ANCHOR_MHZ)
+def _nearest_anchor_mhz(mhz: float, anchors: tuple[float, ...]) -> float:
+    return nearest_anchor_mhz(mhz, anchors)
 
 
 def _load_pi_freq_mhz(pifreq_dir: Path, stem: str) -> float:
@@ -41,11 +46,12 @@ def _load_pi_freq_mhz(pifreq_dir: Path, stem: str) -> float:
 
 def precompute_multifreq_metadata(dataset: VAEDataset) -> dict:
     """Cache design keys and frequency bins; written next to dataset root."""
+    anchors = _anchors_for_dataset(dataset.data_dir)
     cache_path = dataset.data_dir / "multifreq_meta.json"
     n = len(dataset)
     if cache_path.exists():
         meta = json.loads(cache_path.read_text())
-        anchors_match = list(meta.get("anchor_mhz", [])) == list(ANCHOR_MHZ)
+        anchors_match = list(meta.get("anchor_mhz", [])) == list(anchors)
         if meta.get("n_samples") == n and len(meta.get("design_keys", [])) == n and anchors_match:
             return meta
         if not anchors_match:
@@ -72,14 +78,14 @@ def precompute_multifreq_metadata(dataset: VAEDataset) -> dict:
         else:
             mhz = float("nan")
         freq_mhz.append(mhz)
-        freq_bin.append(anchor_bin_index(mhz, ANCHOR_MHZ) if mhz == mhz else -1)
+        freq_bin.append(anchor_bin_index(mhz, anchors) if mhz == mhz else -1)
 
     meta = {
         "n_samples": n,
         "design_keys": design_keys,
         "freq_mhz": freq_mhz,
         "freq_bin": freq_bin,
-        "anchor_mhz": list(ANCHOR_MHZ),
+        "anchor_mhz": list(anchors),
     }
     cache_path.write_text(json.dumps(meta), encoding="utf-8")
     print(f"  saved {cache_path.name}  designs={len(set(design_keys))}  "
@@ -282,6 +288,7 @@ def create_multifreq_data_loaders(
     )
 
     meta = precompute_multifreq_metadata(dataset)
+    anchor_mhz = [float(x) for x in meta["anchor_mhz"]]
     design_keys = meta["design_keys"]
     freq_bin = meta["freq_bin"]
 
@@ -314,7 +321,7 @@ def create_multifreq_data_loaders(
     if f_ctr:
         print("  Train PI_freq bins (anchor MHz):")
         for bi in sorted(f_ctr.keys()):
-            print(f"    {ANCHOR_MHZ[bi]:.0f} MHz: {f_ctr[bi]}")
+            print(f"    {anchor_mhz[bi]:.0f} MHz: {f_ctr[bi]}")
 
     dl_kwargs: dict = {"num_workers": num_workers, "pin_memory": pin_memory}
     if num_workers > 0:

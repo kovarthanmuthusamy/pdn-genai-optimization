@@ -35,7 +35,7 @@ if PROJECT_ROOT not in sys.path:
 
 @dataclass
 class SurrConfig:
-    data_dir:    str = "/home/ubuntu/gan/datasets/data_multifreq_norm"
+    data_dir:    str = "datasets/data_multifreq_norm"
     train_split: float = 0.9
     num_workers: int   = 4
 
@@ -64,7 +64,7 @@ class SurrConfig:
     peak_mag_weight: float = 2.0
     num_peaks:       int   = 8
 
-    experiment_dir: str = "/home/ubuntu/gan/experiments/exp038_true_multi"
+    experiment_dir: str = "experiments/exp038_true_multi"
     checkpoint_interval: int = 50
     resume: bool = False
 

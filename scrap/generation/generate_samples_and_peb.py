@@ -57,10 +57,9 @@ FORCE_CPU = False
 
 
 def _add_project_root_to_syspath() -> Path:
-    project_root = Path(__file__).resolve().parents[1]
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-    return project_root
+    from repo_paths import REPO_ROOT, setup_path
+    setup_path()
+    return REPO_ROOT
 
 
 PROJECT_ROOT = _add_project_root_to_syspath()

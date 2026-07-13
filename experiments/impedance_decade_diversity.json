@@ -1,0 +1,43 @@
+{
+  "data_root": "/home/ubuntu/genai_pdn/datasets/data_multifreq_train",
+  "n_layouts": 29499,
+  "max_layouts": null,
+  "ranked_decades": [
+    {
+      "decade": 6,
+      "label": "1\u201310 MHz",
+      "n_freq_points": 90,
+      "n_layouts": 29499,
+      "mean_std_log10": 0.24004511378399376,
+      "median_std_log10": 0.1879043664319745,
+      "max_std_log10": 0.5861897393525263,
+      "mean_iqr_log10": 0.3091685161344957,
+      "freq_mhz_lo": 1.0,
+      "freq_mhz_hi": 9.9
+    },
+    {
+      "decade": 8,
+      "label": "100\u20131000 MHz",
+      "n_freq_points": 51,
+      "n_layouts": 29499,
+      "mean_std_log10": 0.19192533816662036,
+      "median_std_log10": 0.20079502068223992,
+      "max_std_log10": 0.277120386038404,
+      "mean_iqr_log10": 0.181497552472596,
+      "freq_mhz_lo": 100.0,
+      "freq_mhz_hi": 600.0
+    },
+    {
+      "decade": 7,
+      "label": "10\u2013100 MHz",
+      "n_freq_points": 90,
+      "n_layouts": 29499,
+      "mean_std_log10": 0.14861526004292852,
+      "median_std_log10": 0.12718668756584028,
+      "max_std_log10": 0.24714441914161625,
+      "mean_iqr_log10": 0.1310545846731115,
+      "freq_mhz_lo": 10.0,
+      "freq_mhz_hi": 99.0
+    }
+  ]
+}

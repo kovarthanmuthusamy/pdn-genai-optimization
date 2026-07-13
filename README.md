@@ -16,14 +16,16 @@ loop of *place → simulate → inspect spectrum → locate spatial hotspots →
 
 This project develops a **generative-AI framework** that learns this design space from data and
 reformulates the search as a continuous inverse-design problem. A multi-input, **product-of-experts
-Variational Autoencoder (VAE)** is trained as a differentiable **surrogate** of a single board,
-jointly modelling (i) the decap occupancy vector, (ii) the PI-spectrum (impedance magnitude vs.
-frequency), and (iii) the spatial **PI-distribution** hotspot maps at a set of frequency anchors,
-conditioned on the decap budget $K$ and the inspection frequency. With the decoder frozen,
-**gradient-based latent optimization** then searches the learned latent space for configurations
-whose predicted spectrum meets a target, returning — for each decap budget $K$ — the feasible
-placement with the lowest peak impedance, or reporting that no feasible solution exists. The result
-is a **decision-support tool** that proposes physically meaningful starting points for the
+Variational Autoencoder (VAE)** with **graph encoders** and a **structured latent space** is trained
+as a differentiable **surrogate** of a single board, jointly modelling (i) the decap occupancy vector,
+(ii) the PI-spectrum (impedance magnitude vs. frequency), and (iii) the spatial **PI-distribution**
+hotspot maps at a set of frequency anchors, conditioned on the decap budget $K$ and the inspection
+frequency. The current model is **`exp057_structured_graph`** (~10.7M parameters, 65-d latent).
+With the decoder frozen, **gradient-based latent optimization** then searches the learned latent space
+for configurations whose predicted spectrum meets a target, returning — for each decap budget $K$ —
+the feasible placement with the lowest peak impedance, or reporting that no feasible solution exists.
+An **active-learning loop** can fine-tune the surrogate on newly simulated high-uncertainty layouts.
+The result is a **decision-support tool** that proposes physically meaningful starting points for the
 engineer's iterative process, collapsing an intractable combinatorial search into a handful of
 gradient descents.
 
@@ -42,6 +44,8 @@ gradient descents.
 9. [Installation & Usage](#9-installation--usage)
 10. [Limitations & Future Work](#10-limitations--future-work)
 11. [What is Tracked in This Repository](#11-what-is-tracked-in-this-repository)
+
+**Current version:** `exp057_structured_graph` (Jul 2026) — structured 65-d latent, occupancy + spectrum GNNs, active-learning fine-tune.
 
 ---
 
@@ -116,20 +120,26 @@ flowchart LR
     style S3 fill:#222e3c,color:#fff
 ```
 
-| Stage                  | Input                    | Output                           | Code                                                           |
-| ---------------------- | ------------------------ | -------------------------------- | -------------------------------------------------------------- |
-| 1. Surrogate training  | dataset (one design)     | frozen VAE + impedance surrogate | `[experiments/exp043/](experiments/exp043/)`                   |
-| 2. Latent optimization | target $Z_\text{target}$ | best placement per $K$           | `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)` |
-| 3. Analysis            | a solution               | PI-distribution hotspot maps     | VAE heatmap decoder                                            |
+| Stage                  | Input                    | Output                           | Code                                                                 |
+| ---------------------- | ------------------------ | -------------------------------- | -------------------------------------------------------------------- |
+| 1. Surrogate training  | dataset (one design)     | frozen VAE + impedance surrogate | `[experiments/exp057_structured_graph/](experiments/exp057_structured_graph/)` |
+| 2. Latent optimization | target $Z_\text{target}$ | best placement per $K$           | `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)`       |
+| 3. Analysis            | a solution               | PI-distribution hotspot maps     | VAE heatmap decoder                                                  |
+| 4. Active learning     | surrogate uncertainty    | new sim labels + fine-tuned VAE  | `[pipelines/active_learning/run.py](pipelines/active_learning/run.py)` |
 
 ---
 
 ## 4. Stage 1 — Generative Surrogate (VAE)
 
-A **multi-input Variational Autoencoder** learns a shared latent space $\mathbf z\in\mathbb R^{42}$
-over three correlated modalities of the same board, fused with a **Product-of-Experts (PoE)**
-posterior. Conditioning signals are the decap budget $K$ and (for the spatial head) the inspection
-**frequency**.
+The **current model** is **`exp057_structured_graph`**: a multi-input Variational Autoencoder with a
+**structured latent** $\mathbf z\in\mathbb R^{65}$ (42 shared + 8 peak + 15 spatial), **graph neural
+network (GNN)** encoders for occupancy (52-slot PCB grid) and impedance (231-bin spectrum chain), and a
+**Product-of-Experts (PoE)** posterior. Conditioning signals are the decap budget $K$ and (for the
+spatial head) the inspection **frequency**.
+
+Earlier experiments (`exp043` PoE baseline → `exp054` self-contained training → `exp055` binary
+occupancy decode → `exp056` occupancy GNN → `exp057` structured latent + spectrum GNN) are kept under
+`experiments/` for comparison. See `docs/EXP057_STRUCTURED_GRAPH_VAE.md` for architecture details.
 
 ### 4.1 Modalities
 
@@ -166,7 +176,7 @@ flowchart TD
     EI --> POE
     EH --> POE
     EF --> POE
-    POE --> Zl["Latent z ∈ ℝ⁴²"]
+    POE --> Zl["Latent z ∈ ℝ⁶⁵<br/>(42 shared + 8 peak + 15 spatial)"]
     Zl --> DO["Occupancy decoder"]
     Zl --> DI["Impedance decoder"]
     Zl --> DH["Heatmap decoder<br/>(FiLM by frequency)"]
@@ -174,10 +184,12 @@ flowchart TD
     style Zl fill:#33415c,color:#fff
 ```
 
-Architecture: `[vae_poe_freq.py](experiments/exp043/codes/vae_poe_freq.py)`. Hyperparameters
-(`latent_dim=42`, `heatmap_private_dim=8`, `cond_dim=8`, K-balanced and frequency-balanced sampling,
-FiLM-conditioned heatmap head, curriculum schedules) are in
-`[config.yaml](experiments/exp043/config.yaml)`.
+Architecture: `[vae_poe_freq.py](experiments/exp057_structured_graph/codes/vae_poe_freq.py)`,
+`[graph_occ.py](experiments/exp057_structured_graph/codes/graph_occ.py)` (PCB-slot GNN),
+`[graph_imp.py](experiments/exp057_structured_graph/codes/graph_imp.py)` (spectrum-chain GNN).
+Hyperparameters (`latent_dim=65`, `heatmap_private_dim=15`, `cond_dim=8`, binary occupancy decode,
+cross-frequency pairs, FiLM heatmap head) are in
+`[config.yaml](experiments/exp057_structured_graph/config.yaml)`.
 
 ### 4.3 Impedance surrogate
 
@@ -277,47 +289,69 @@ concentrates spatially.
 
 ## 7. Repository Structure
 
-Scripts are grouped under `**pipelines/`** and `**libs/**`. Legacy folders (`Data_Creation/`, `scripts/`, `New_heatmaps/`, `Latent_opm/`) have been removed — see `[REPO_LAYOUT.md](REPO_LAYOUT.md)` for the migration map.
+Scripts are grouped under **`pipelines/`** and **`libs/`**. Path helpers live in
+`[repo_paths.py](repo_paths.py)`; see `[docs/FOLDER_RENAME_AND_PATHS.md](docs/FOLDER_RENAME_AND_PATHS.md)`
+for the folder rename and migration notes.
 
 ```text
 .
 ├── pipelines/                   Runnable workflows (edit CONFIG, then python …)
 │   ├── data/                    Build datasets from raw ECAD exports
 │   ├── dataset/                 Manifest transforms, subsample, gmax
+│   ├── dataset_sim/             ECAD append queue, combination sim, output moves
 │   ├── normalize/               Normalization & stats
 │   ├── analysis/                Latent traversal, QA utilities
 │   ├── visualize/               Heatmap & impedance plotting
 │   ├── latent/                  Stage-2 optimization & reports
 │   ├── heatmaps/                PEB frequency & combination tools
-│   └── active_learning/         Active-learning entry (run.py)
+│   └── active_learning/         Active-learning entry (run.py, finetune_exp057.py)
 ├── libs/                        Shared import-only modules
 │   ├── data_creation/           heatmap, impedance, occupancy, csv_to_occupancy
+│   ├── dataset_meta.py          dataset_meta.json helpers
 │   └── peb/                     PEB frequency regex helper
-├── experiments/                 Generative surrogate experiments (exp029 … exp050)
-│   ├── exp043/                  ← current model
-│   │   ├── codes/
-│   │   │   ├── vae_poe_freq.py        PoE VAE with frequency expert
-│   │   │   ├── train_vae_simple.py    training entry point
-│   │   │   ├── inference_vae.py       sampling / reconstruction
-│   │   │   └── evaluate_vae.py        metrics
-│   │   └── config.yaml                hyperparameters
-│   └── exp038_true_multi/       baseline + impedance surrogate used by Stage 2
-├── active_learning_pi/al/       Active-learning library (pipeline, ingest, …)
+├── experiments/                 Generative surrogate experiments (exp029 … exp057)
+│   ├── exp043/                  PoE VAE baseline (frequency expert, FiLM heatmap)
+│   ├── exp054_K_30/             Self-contained training loop, K≤30 filter
+│   ├── exp055_hard_occ/         Binary top-K occupancy decode
+│   ├── exp056_graph_vae/        Occupancy GNN on 52-slot PCB grid
+│   └── exp057_structured_graph/ ← current model
+│       ├── codes/
+│       │   ├── vae_poe_freq.py        PoE VAE with structured latent
+│       │   ├── graph_occ.py           occupancy GNN encoder/decoder
+│       │   ├── graph_imp.py           spectrum-chain GNN encoder/decoder
+│       │   ├── train_vae_simple.py    training entry point
+│       │   └── eval_off_anchor.py     off-anchor spatial metrics
+│       └── config.yaml                hyperparameters
+├── active_learning_pi/          Active-learning library + run configs
+│   ├── al/                      pipeline, ingest, normalize, finetune, …
+│   └── config/exp057.json       exp057 fine-tune settings
 ├── scrap/                       Sample generation, comparison, orchestration
 │   ├── generation/
 │   ├── comparison/
 │   └── orchestration/           End-to-end multifreq sweep pipelines
 ├── datasets/                    Training data (not committed — see §8)
+├── data_multi_norm_robust/      Robust-normalized cache (not committed)
 ├── data/
 │   ├── heatmaps/                PEB files, all_combinations.csv, decap maps
 │   └── latent_runs/             Latent optimization outputs
 ├── configs/                     target_impedance.npy, frequency grid, masks
-├── tools/ecadstar/              ECADSTAR batch helpers (PowerShell + AutoHotkey)
-├── repo_paths.py                 Repo-root path helpers (REPO_ROOT, repo_path)
+├── tools/                       Path migration, docstring helpers, ECADSTAR utils
+├── docs/                        Experiment notes, pipeline guides, figures
+├── repo_paths.py                Repo-root path helpers (REPO_ROOT, repo_path)
 ├── evaluation/                  Novelty / quality evaluation of generated samples
 ├── src_vae/                     Shared VAE training library
-└── viewer/, visualization/      Result viewers and plotting
+└── viewer/                      Result viewers
 ```
+
+### Experiment lineage (selected)
+
+| Experiment | Key change |
+| ---------- | ---------- |
+| `exp043` | PoE multi-input VAE + frequency expert (baseline) |
+| `exp054_K_30` | Self-contained training; K≤30 unbounded dataset |
+| `exp055_hard_occ` | Hard top-K occupancy before heatmap decode |
+| `exp056_graph_vae` | GNN occupancy encoder/decoder on PCB grid |
+| `exp057_structured_graph` | Structured 65-d latent + spectrum GNN + occ↔imp coupling |
 
 ### Common entry points
 
@@ -325,37 +359,43 @@ Scripts are grouped under `**pipelines/`** and `**libs/**`. Legacy folders (`Dat
 | ----------------------------- | ------------------------------------------------------------ |
 | Build multifreq dataset       | `python pipelines/data/processing_multifreq.py`              |
 | Normalize dataset             | `python pipelines/normalize/multifreq.py`                    |
-| Train surrogate (exp043)      | `python experiments/exp043/codes/train_vae_simple.py`        |
+| Train surrogate (exp057)      | `python -m experiments.exp057_structured_graph.codes.train_vae_simple` |
 | Latent optimization (Stage 2) | `python pipelines/latent/optimize.py`                        |
 | Feasibility sampling          | `python pipelines/latent/find_feasible.py`                   |
 | Active-learning cycle         | `python pipelines/active_learning/run.py`                    |
 | Multifreq sweep               | `python scrap/orchestration/run_multifreq_sweep_pipeline.py` |
+| ECAD append pipeline          | `python pipelines/dataset_sim/run_combinations_sim_pipeline.py` |
 
-All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script’s docstring includes **Agent notes** (What, Usage, Config keys). See `[pipelines/README.md](pipelines/README.md)` and `[docs/CONFIG_ONLY_SCRIPTS.md](docs/CONFIG_ONLY_SCRIPTS.md)`.
+All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script's docstring includes **Agent notes** (What, Usage, Config keys). See `[pipelines/README.md](pipelines/README.md)` and `[docs/CONFIG_ONLY_SCRIPTS.md](docs/CONFIG_ONLY_SCRIPTS.md)`.
 
 ---
 
 ## 8. Dataset
 
-The dataset is **not committed** (size). Expected layout under `datasets/`:
+Training data is **not committed** (size). Expected layout under `datasets/`:
 
 ```text
-datasets/data_multifreq/
-├── dataset_meta.json    summary: layouts, sample count, size (MB), PI MHz anchors
-├── manifest.csv         one row per (layout, frequency) sample
-├── layouts/             per-layout decap occupancy vectors
-├── Imp/                 PI-spectrum magnitudes      [231]
-├── PI_freq/             frequency-conditioning vectors
-├── heatmap/             PI-distribution maps         [64×64]
-└── Occ_map/             occupancy maps
+datasets/
+├── data_multifreq_train/              raw multifreq export (~472k rows)
+├── data_multifreq_train_norm_robust/    robust per-MHz normalization (median/IQR)
+├── data_multifreq_train_norm_unbounded/ K≤30 filter, used by exp054–exp057
+├── data_multifreq_al_overlay_exp057/   active-learning overlay (built per AL cycle)
+└── data_multifreq/                      legacy multifreq layout (if present)
+    ├── dataset_meta.json    summary: layouts, sample count, PI MHz anchors
+    ├── manifest.csv         one row per (layout, frequency) sample
+    ├── layouts/             per-layout decap occupancy vectors
+    ├── Imp/                 PI-spectrum magnitudes      [231]
+    ├── PI_freq/             frequency-conditioning vectors
+    ├── heatmap/             PI-distribution maps         [64×64]
+    └── Occ_map/             occupancy maps
 ```
 
-Normalized datasets (`data_multifreq_norm/`) include the same `dataset_meta.json` (updated at
-normalize time) plus `normalization_stats.json`. The optimization target is
-`configs/target_impedance.npy` (shape `[231]`).
+Each normalized tree includes `dataset_meta.json` and `normalization_stats.json`. The optimization
+target is `configs/target_impedance.npy` (shape `[231]`).
 
 Build scripts: `pipelines/data/processing_multifreq.py` → `pipelines/normalize/multifreq.py`.
-PEB / combination assets live in `data/heatmaps/`.
+PEB / combination assets live in `data/heatmaps/`. A local robust-normalized cache may also exist at
+`data_multi_norm_robust/` (also not committed).
 
 Example `dataset_meta.json` fields: `unique_layouts`, `manifest_rows`, `size.total_mb`,
 `pi_frequencies_mhz` (e.g. `[10, 80, 130, …, 600]`), `samples_per_mhz`.
@@ -378,9 +418,13 @@ Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `
 ### Stage 1 — train the surrogate
 
 ```bash
-python experiments/exp043/codes/train_vae_simple.py
-# config: experiments/exp043/config.yaml
+# Current model (exp057)
+python -m experiments.exp057_structured_graph.codes.train_vae_simple
+# config: experiments/exp057_structured_graph/config.yaml
 ```
+
+Resume from `experiments/exp057_structured_graph/checkpoints/last_model.pt` (set
+`resume_checkpoint` in config). Cannot load exp056 or earlier checkpoints — architecture keys differ.
 
 ### Build & normalize a dataset (if starting from raw ECAD)
 
@@ -391,7 +435,9 @@ python pipelines/normalize/multifreq.py
 
 ### Stage 2 — inverse design
 
-Edit the **CONFIGURATION** block at the top of `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)`, then:
+Edit the **CONFIGURATION** block at the top of `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)`
+(set `EXPERIMENT` and checkpoint paths — defaults to `exp038_true_multi` for the impedance surrogate),
+then:
 
 ```bash
 python pipelines/latent/optimize.py
@@ -423,18 +469,34 @@ python pipelines/latent/export_peb.py
 python pipelines/latent/compare_report.py
 ```
 
+### Active learning (exp057 fine-tune loop)
+
+Edit CONFIG in `[pipelines/active_learning/run.py](pipelines/active_learning/run.py)` and
+`active_learning_pi/config/exp057.json`, then:
+
+```bash
+python pipelines/active_learning/run.py
+```
+
+The default `COMMAND = "full"` runs seven steps: generate candidates → MC uncertainty scoring →
+select worst layouts → ECADSTAR simulation → ingest labels → build overlay dataset → fine-tune exp057
+(+50 epochs from `last_model.pt`). See `[docs/AL_OPTION_B_FINETUNE_EXP057.md](docs/AL_OPTION_B_FINETUNE_EXP057.md)`.
+
 ---
 
 ## 10. Limitations & Future Work
 
 - **Single design.** The surrogate is trained on one board; cross-design generalization (a
 design-conditioned surrogate) is the natural next step.
-- **Surrogate fidelity.** Feasibility is asserted in surrogate space. A **closed-loop verification**
-stage that re-simulates each proposed placement with the ground-truth solver — and optionally
-feeds failures back as active-learning samples — would harden the claims.
+- **Surrogate fidelity.** Feasibility is asserted in surrogate space. Ground-truth re-simulation
+before sign-off remains mandatory; the active-learning loop (`pipelines/active_learning/`) partially
+closes the loop by fine-tuning on newly simulated high-uncertainty layouts.
+- **Stage-2 / Stage-1 alignment.** Latent optimization still defaults to `exp038_true_multi`
+checkpoints; wiring it to exp057 requires matching occupancy decode and surrogate paths in
+`pipelines/latent/optimize.py`.
 - **Discrete read-out.** The STE relaxation makes the search gradient-guided, but the
-occupancy and impedance decoders are separate heads; tightening their consistency (or optimizing
-directly through the impedance surrogate on hard placements) is an avenue for improvement.
+occupancy and impedance decoders are separate heads; tightening their consistency remains an avenue
+for improvement.
 
 ---
 
@@ -442,14 +504,18 @@ directly through the impedance surrogate on hard placements) is an avenue for im
 
 To keep the repository lightweight, the following are intentionally **excluded** (see `.gitignore`):
 
-- `datasets/` — training data (`data_multifreq`, `data_multifreq_norm`, …)
+- `datasets/` — training data (`data_multifreq_train`, normalized variants, AL overlays, …)
+- `data_multi_norm_robust/` — local robust-normalized cache (~7.5 GB)
 - `data/latent_runs/` — optimization run outputs (regenerated by Stage 2)
 - `data/heatmaps/` — large PEB exports and combination CSVs
-- model checkpoints — `*.pt`, `checkpoints/` (~11 GB; regenerated by training)
-- `*.peb` simulation exports and oversized HTML reports
+- model checkpoints — `*.pt`, `checkpoints/` (regenerated by training)
+- `*.peb` simulation exports and oversized HTML reports (>50 MB comparison reports in experiments)
 - `src_gan/`, `temp_visuals/`, `ppt/`, virtual-environment and IDE folders, Python caches
 
-Source code (`pipelines/`, `libs/`, `experiments/`, `src_vae/`), configuration, and documentation are tracked.
+Source code (`pipelines/`, `libs/`, `experiments/`, `src_vae/`, `active_learning_pi/`, `scrap/`),
+configuration, documentation (`docs/`), and experiment metrics/reports are tracked.
+
+**Remote:** [github.com/kovarthanmuthusamy/pdn-genai-optimization](https://github.com/kovarthanmuthusamy/pdn-genai-optimization)
 
 ---
 

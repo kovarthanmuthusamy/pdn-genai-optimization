@@ -57,13 +57,19 @@
 \begin{titlepage}
     \begin{minipage}{0.45\textwidth}
     \hspace{-1cm}
-    \includegraphics[height=1.2cm]{images/tud.png}
+    % Drop the real logo files into Thesis_report/images/ and they appear automatically.
+    % The guard keeps the document compiling until then instead of halting the build.
+    \IfFileExists{images/tud.png}{%
+      \includegraphics[height=1.2cm]{images/tud.png}%
+    }{\rule{0pt}{1.2cm}}
     \end{minipage}
     \hfill
     \begin{minipage}{0.45\textwidth}
     \hspace{4cm}
     %\raggedleft
-    \includegraphics[height=1.8cm]{images/DT_IPL.png}
+    \IfFileExists{images/DT_IPL.png}{%
+      \includegraphics[height=1.8cm]{images/DT_IPL.png}%
+    }{\rule{0pt}{1.8cm}}
     \end{minipage}
     
     \centering

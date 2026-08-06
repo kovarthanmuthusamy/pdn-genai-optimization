@@ -10,7 +10,7 @@ tags: [literature, core, pdn-domain]
 
 **Authors:** L. D. Smith, R. E. Anderson, D. W. Forehand, T. J. Pelc, T. Roy  
 **Year:** 1999 · **Venue:** IEEE Trans. Advanced Packaging 22(3)  
-**Link:** https://doi.org/10.1109/6040.784471  
+**Link:** https://doi.org/10.1109/6040.784476  
 **Tier:** CORE — belongs in the literature review
 
 ## Why it matters here

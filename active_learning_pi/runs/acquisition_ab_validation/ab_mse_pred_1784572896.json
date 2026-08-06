@@ -1,0 +1,42 @@
+{
+  "experiment": "experiments/exp057_structured_graph",
+  "checkpoint": "experiments/exp057_structured_graph/checkpoints/last_model.pt",
+  "path": "pred",
+  "target": "mse",
+  "n_total": 640,
+  "n_fit": 384,
+  "n_test": 256,
+  "budget_k": 40,
+  "kappa": 0.5,
+  "novelty_weight": 0.25,
+  "gp_kind": "sklearn",
+  "methods": {
+    "gp_ucb_novelty": {
+      "spearman_vs_true_y": -0.007509584573128861,
+      "top_k_mean_true_y": 0.4719838140997961,
+      "lift_vs_random_top_k": 0.8672557965604409,
+      "mean_score": 0.8028568976031204
+    },
+    "gp_ucb_only": {
+      "spearman_vs_true_y": 0.3637681677729457,
+      "top_k_mean_true_y": 0.5175800877997107,
+      "lift_vs_random_top_k": 0.9510375523887163,
+      "mean_score": 0.7809844536063041
+    },
+    "gp_mu_only": {
+      "spearman_vs_true_y": 0.3632996681162737,
+      "top_k_mean_true_y": 0.6704389450833708,
+      "lift_vs_random_top_k": 1.2319110189665963,
+      "mean_score": 0.47317703061993
+    },
+    "random": {
+      "spearman_vs_true_y": -0.031604772259098184,
+      "top_k_mean_true_y": 0.544226762129116,
+      "lift_vs_random_top_k": 1.0,
+      "mean_score": 0.4873839944639568
+    }
+  },
+  "pass_gp_beats_random": false,
+  "timestamp": "2026-07-20T20:41:36",
+  "verdict": "FAIL \u2014 do not claim AL improvement until GP beats random on holdout"
+}

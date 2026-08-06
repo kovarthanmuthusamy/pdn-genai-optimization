@@ -1,0 +1,164 @@
+{
+  "available": true,
+  "n": 23,
+  "off_anchor_mhz": [
+    155.0,
+    250.0,
+    265.0
+  ],
+  "score_field": "badness",
+  "error_field": "p99_abs_err",
+  "spearman_badness_vs_p99_err": 0.4011857707509882,
+  "pearson_badness_vs_p99_err": 0.4524697510536371,
+  "mean_p99_err_all_labeled": 13.33386570788148,
+  "mean_p99_err_top_half_badness": 16.466973639389394,
+  "mean_p99_err_bottom_half_badness": 10.354264201202163,
+  "top_vs_bottom_half_lift": 1.5903567186819056,
+  "n_selected_labeled": 23,
+  "mean_p99_err_selected": 13.33386570788148,
+  "mean_p99_err_top_k_by_badness": 13.333865707881477,
+  "selected_vs_all_lift": 1.0,
+  "ranking_ok": true,
+  "rows": [
+    {
+      "candidate_id": 4,
+      "badness": 0.5162822008132935,
+      "p99_abs_err": 1.2532124980511572,
+      "selected": true
+    },
+    {
+      "candidate_id": 6,
+      "badness": 0.6384510397911072,
+      "p99_abs_err": 14.498939928884766,
+      "selected": true
+    },
+    {
+      "candidate_id": 57,
+      "badness": 0.4863683879375458,
+      "p99_abs_err": 3.6178940301458535,
+      "selected": true
+    },
+    {
+      "candidate_id": 249,
+      "badness": 0.5655091404914856,
+      "p99_abs_err": 1.4605766556186741,
+      "selected": true
+    },
+    {
+      "candidate_id": 273,
+      "badness": 0.42784497141838074,
+      "p99_abs_err": 2.729537893716728,
+      "selected": true
+    },
+    {
+      "candidate_id": 390,
+      "badness": 0.7538193464279175,
+      "p99_abs_err": 14.42084878922109,
+      "selected": true
+    },
+    {
+      "candidate_id": 400,
+      "badness": 0.7230039238929749,
+      "p99_abs_err": 15.181287004522993,
+      "selected": true
+    },
+    {
+      "candidate_id": 534,
+      "badness": 0.5506320595741272,
+      "p99_abs_err": 0.9397867394251231,
+      "selected": true
+    },
+    {
+      "candidate_id": 667,
+      "badness": 0.6068519949913025,
+      "p99_abs_err": 11.645295034766814,
+      "selected": true
+    },
+    {
+      "candidate_id": 727,
+      "badness": 0.9679208993911743,
+      "p99_abs_err": 33.71955265600108,
+      "selected": true
+    },
+    {
+      "candidate_id": 734,
+      "badness": 0.47734153270721436,
+      "p99_abs_err": 11.584166125905345,
+      "selected": true
+    },
+    {
+      "candidate_id": 841,
+      "badness": 0.45489025115966797,
+      "p99_abs_err": 4.681943357362945,
+      "selected": true
+    },
+    {
+      "candidate_id": 906,
+      "badness": 1.3867018222808838,
+      "p99_abs_err": 31.068083034923426,
+      "selected": true
+    },
+    {
+      "candidate_id": 943,
+      "badness": 0.5848022699356079,
+      "p99_abs_err": 22.990754022990533,
+      "selected": true
+    },
+    {
+      "candidate_id": 1041,
+      "badness": 0.7103210687637329,
+      "p99_abs_err": 11.771389075468274,
+      "selected": true
+    },
+    {
+      "candidate_id": 1191,
+      "badness": 1.351489782333374,
+      "p99_abs_err": 37.0796543296328,
+      "selected": true
+    },
+    {
+      "candidate_id": 1197,
+      "badness": 0.5469661355018616,
+      "p99_abs_err": 36.909485860577405,
+      "selected": true
+    },
+    {
+      "candidate_id": 1298,
+      "badness": 0.5101955533027649,
+      "p99_abs_err": 24.396555868152827,
+      "selected": true
+    },
+    {
+      "candidate_id": 1302,
+      "badness": 1.3079228401184082,
+      "p99_abs_err": 3.735708592112789,
+      "selected": true
+    },
+    {
+      "candidate_id": 1388,
+      "badness": 0.8118203282356262,
+      "p99_abs_err": 0.8135336924733045,
+      "selected": true
+    },
+    {
+      "candidate_id": 1421,
+      "badness": 0.7205972075462341,
+      "p99_abs_err": 2.9211775778032703,
+      "selected": true
+    },
+    {
+      "candidate_id": 1501,
+      "badness": 0.9361159801483154,
+      "p99_abs_err": 15.926535352239554,
+      "selected": true
+    },
+    {
+      "candidate_id": 1563,
+      "badness": 0.46021896600723267,
+      "p99_abs_err": 3.3329931612772166,
+      "selected": true
+    }
+  ],
+  "scored_path": "/home/ubuntu/genai_pdn/active_learning_pi/runs/al_exp059_gp_error_001/iter_0001/scored_candidates.json",
+  "phase": "acquisition"
+}

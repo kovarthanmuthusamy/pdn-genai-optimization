@@ -1,0 +1,36 @@
+# config_occ_only_finetune.yaml for exp058 — only after fresh train has produced last_model.pt
+# Do NOT point at exp057 checkpoints.
+{
+  "resume_checkpoint": "experiments/exp058_asymmetric_kl/checkpoints/last_model.pt",
+  "num_epochs": 1100,
+  "learning_rate": 1.2e-05,
+  "reset_lr_on_resume": true,
+  "train_samples_per_epoch": 56000,
+  "layout_train_prob": 1.0,
+  "occ_only_encode_prob": 1.0,
+  "eval_use_occ_only_layout": true,
+  "use_beta_annealing": false,
+  "beta_final": 0.03,
+  "free_bits": 0.12,
+  "latent_distill_weight": 2.5,
+  "output_distill_weight": 2.5,
+  "cross_freq_weight": 1.2,
+  "cross_freq_layout_z_only": true,
+  "heatmap_weight": 5.0,
+  "heatmap_focus_heatmap_weight": 6.0,
+  "heatmap_focus_start_frac": 0.0,
+  "heatmap_focus_start_epoch": 0,
+  "eval_off_anchor_mhz": [
+    155,
+    250,
+    265
+  ],
+  "eval_off_anchor_interval": 5,
+  "eval_off_anchor_max_batches": 20,
+  "al_finetune_early_stop": true,
+  "al_finetune_early_stop_patience": 4,
+  "al_finetune_early_stop_min_delta": 0.01,
+  "al_finetune_early_stop_kind": "layout_cross",
+  "checkpoint_interval": 5,
+  "epoch_print_interval": 1
+}

@@ -1,0 +1,179 @@
+{
+  "iteration": 2,
+  "off_anchor_mhz": [
+    80.0,
+    250.0,
+    500.0
+  ],
+  "pre_finetune": {
+    "n": 8,
+    "p99_mae": 7.539891362362926,
+    "p99_median_ae": 4.76235038275618,
+    "rows": [
+      {
+        "candidate_id": 76,
+        "mhz": 250.0,
+        "real_p99": 10.263954026767008,
+        "pred_p99_mean": 7.211753050486247,
+        "p99_abs_err": 3.052200976280761
+      },
+      {
+        "candidate_id": 22,
+        "mhz": 250.0,
+        "real_p99": 31.97649074364454,
+        "pred_p99_mean": 5.9869089523951216,
+        "p99_abs_err": 25.989581791249417
+      },
+      {
+        "candidate_id": 64,
+        "mhz": 80.0,
+        "real_p99": 2.093861417433454,
+        "pred_p99_mean": 8.18053142229716,
+        "p99_abs_err": 6.086670004863706
+      },
+      {
+        "candidate_id": 36,
+        "mhz": 250.0,
+        "real_p99": 7.502392794568696,
+        "pred_p99_mean": 6.786471803983052,
+        "p99_abs_err": 0.7159209905856434
+      },
+      {
+        "candidate_id": 39,
+        "mhz": 250.0,
+        "real_p99": 10.128346444331413,
+        "pred_p99_mean": 6.690315683682759,
+        "p99_abs_err": 3.4380307606486538
+      },
+      {
+        "candidate_id": 56,
+        "mhz": 250.0,
+        "real_p99": 13.666205758197428,
+        "pred_p99_mean": 4.848548809687297,
+        "p99_abs_err": 8.81765694851013
+      },
+      {
+        "candidate_id": 74,
+        "mhz": 250.0,
+        "real_p99": 4.406913911167019,
+        "pred_p99_mean": 6.5608287652333575,
+        "p99_abs_err": 2.153914854066339
+      },
+      {
+        "candidate_id": 18,
+        "mhz": 250.0,
+        "real_p99": 16.953836262596933,
+        "pred_p99_mean": 6.888681689898173,
+        "p99_abs_err": 10.06515457269876
+      }
+    ]
+  },
+  "post_finetune": {
+    "n": 8,
+    "p99_mae": 8.193525467022246,
+    "p99_median_ae": 5.1091288152843575,
+    "rows": [
+      {
+        "candidate_id": 76,
+        "mhz": 250.0,
+        "real_p99": 10.263954026767008,
+        "pred_p99_mean": 6.565308928489685,
+        "p99_abs_err": 3.698645098277323
+      },
+      {
+        "candidate_id": 22,
+        "mhz": 250.0,
+        "real_p99": 31.97649074364454,
+        "pred_p99_mean": 4.517480532328288,
+        "p99_abs_err": 27.45901021131625
+      },
+      {
+        "candidate_id": 64,
+        "mhz": 80.0,
+        "real_p99": 2.093861417433454,
+        "pred_p99_mean": 7.387465238571167,
+        "p99_abs_err": 5.293603821137713
+      },
+      {
+        "candidate_id": 36,
+        "mhz": 250.0,
+        "real_p99": 7.502392794568696,
+        "pred_p99_mean": 8.483619213104248,
+        "p99_abs_err": 0.9812264185355524
+      },
+      {
+        "candidate_id": 39,
+        "mhz": 250.0,
+        "real_p99": 10.128346444331413,
+        "pred_p99_mean": 5.203692634900411,
+        "p99_abs_err": 4.924653809431002
+      },
+      {
+        "candidate_id": 56,
+        "mhz": 250.0,
+        "real_p99": 13.666205758197428,
+        "pred_p99_mean": 5.390947063763936,
+        "p99_abs_err": 8.275258694433493
+      },
+      {
+        "candidate_id": 74,
+        "mhz": 250.0,
+        "real_p99": 4.406913911167019,
+        "pred_p99_mean": 6.119017601013184,
+        "p99_abs_err": 1.712103689846165
+      },
+      {
+        "candidate_id": 18,
+        "mhz": 250.0,
+        "real_p99": 16.953836262596933,
+        "pred_p99_mean": 3.750134269396464,
+        "p99_abs_err": 13.20370199320047
+      }
+    ],
+    "checkpoint_path": "experiments/exp057_structured_graph/checkpoints/last_model.pt",
+    "checkpoint_epoch": 1050,
+    "checkpoint_val_loss": 1.679437357821363,
+    "phase": "post_finetune"
+  },
+  "training_off_anchor": {
+    "available": true,
+    "path": "/home/ubuntu/genai_pdn/experiments/exp057_structured_graph/metrics/off_anchor_eval.csv",
+    "epoch": 1050,
+    "rows": [
+      {
+        "epoch": 1050,
+        "mhz": 100.0,
+        "kind": "layout_cross",
+        "n": 3840,
+        "hm_fg_mse_mean": 1.2573354810469026,
+        "pearson_fg_mean": 0.46301615810435426,
+        "peak_loc_err_mean": 0.03410431573454199
+      },
+      {
+        "epoch": 1050,
+        "mhz": 270.0,
+        "kind": "layout_cross",
+        "n": 3840,
+        "hm_fg_mse_mean": 0.7295242600671675,
+        "pearson_fg_mean": 0.732175854724945,
+        "peak_loc_err_mean": 0.024413354892885764
+      },
+      {
+        "epoch": 1050,
+        "mhz": 400.0,
+        "kind": "layout_cross",
+        "n": 3840,
+        "hm_fg_mse_mean": 0.8013000989783298,
+        "pearson_fg_mean": 0.6590417873982308,
+        "peak_loc_err_mean": 0.024159189228021204
+      }
+    ]
+  },
+  "improvement": {
+    "p99_mae_delta": 0.6536341046593197,
+    "p99_median_ae_delta": 0.3467784325281773,
+    "n_pre": 8,
+    "n_post": 8,
+    "p99_mae_pct": -8.669012234341759
+  }
+}

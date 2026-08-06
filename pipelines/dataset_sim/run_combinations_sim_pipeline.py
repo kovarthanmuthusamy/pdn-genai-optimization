@@ -33,9 +33,8 @@ from pipelines.dataset_sim.combinations import load_combinations_csv
 from pipelines.dataset_sim.ecadstar import (
     clear_ecadstar_lock,
     resolve_windows_path,
-    run_ecadstar_batch,
+    run_ecadstar_batch_headless,
     stage_peb_for_ecadstar,
-    wait_for_batch_started,
     wait_for_pi_outputs,
 )
 from pipelines.dataset_sim.paths import PEB_DIR_WIN, RAW_ROOT_WIN, resolve_raw_root
@@ -62,21 +61,18 @@ SKIP_MHZ: set[float] = set()
 POWERBUS = "Power_GND"
 IMPEDANCE_COMPONENTS = "IC1_Port1,IC2_Port2"
 
-# --- Windows / ECADStar ---
+# --- Windows / ECADStar (native headless CLI; see docs/ecadstar_headless_cli.md) ---
+# engineer.exe <design.erf> --batch <file.peb> --batch-auto-exit : opens the .erf,
+# runs the .peb, writes PI-1..N, and QUITS ITSELF. No GUI window / no focus / no AHK.
 PEB_COPY_DEST: str | None = r"C:\Users\muthusamy\Desktop\design\PEB"
 ECADSTAR_ERF_PATH = r"C:\Users\muthusamy\Desktop\design\H-shape.emc\H-shape.erf"
 ECADSTAR_EMC_OUTPUT_DIR = r"C:\Users\muthusamy\Desktop\design\H-shape.emc"
-ECADSTAR_AHK_EXE: str | None = None
-ECADSTAR_SKIP_OPEN_ERF = False  # True = never re-open .erf (Load Batch only, every phase)
-# True = re-open .erf on first distribution MHz only; later MHz use skipopen (avoids Ctrl+O + menu failures)
-ECADSTAR_SKIP_OPEN_ERF_AFTER_FIRST = True
+ENGINEER_EXE = r"C:\Program Files\eCADSTAR\eCADSTAR 2023.0\Analysis\bin\engineer.exe"
+ECADSTAR_IMPULSE_PORT: int | None = None
 ECADSTAR_CLEAR_LOCK_FILE = True
 # Full 10k run may take many hours — raise if needed
 ECADSTAR_WAIT_TIMEOUT_SEC = 172_800  # 48 h per phase
 ECADSTAR_WAIT_POLL_SEC = 120
-# After Load Batch: keep checking until PI-1 shows batch started (AHK waits too)
-ECADSTAR_BATCH_START_TIMEOUT_SEC = 900
-ECADSTAR_BATCH_START_POLL_SEC = 10
 
 # --- Step control ---
 SKIP_IMPEDANCE = True  # True = skip impedance phase
@@ -118,66 +114,40 @@ def _save_progress(progress: dict) -> None:
     path.write_text(json.dumps(progress, indent=2), encoding="utf-8")
 
 
-def _skip_open_erf_for_distribution(*, done_mhz: set[int], pending_index: int) -> bool:
-    """Whether to pass skipopen to AHK for this distribution MHz step."""
-    if ECADSTAR_SKIP_OPEN_ERF:
-        return True
-    if not ECADSTAR_SKIP_OPEN_ERF_AFTER_FIRST:
-        return False
-    return bool(done_mhz) or pending_index > 0
-
-
 def _simulate_peb(
     peb_path: Path,
     *,
     pi_count: int,
     mode: str,
-    skip_open_erf: bool | None = None,
     expected_mhz: float | None = None,
 ) -> None:
     if SKIP_SIMULATE:
         print("  SKIP_SIMULATE: PEB written, ECADStar not invoked.")
         return
 
-    if skip_open_erf is None:
-        skip_open_erf = ECADSTAR_SKIP_OPEN_ERF
-
-    if skip_open_erf:
-        print("  ECADStar mode: skipopen (Load Batch only)")
-    else:
-        print("  ECADStar mode: re-open H-shape.erf then Load Batch")
-
+    # Native headless CLI: engineer.exe opens the .erf, runs the .peb, writes
+    # PI-1..N, and quits itself. No GUI window / no focus / background-safe.
+    print("  ECADStar mode: headless engineer.exe --batch --batch-auto-exit")
     if ECADSTAR_CLEAR_LOCK_FILE:
         clear_ecadstar_lock(ECADSTAR_ERF_PATH)
-
     stage_peb_for_ecadstar(
         peb_path,
         erf_path=ECADSTAR_ERF_PATH,
         peb_copy_dest=PEB_COPY_DEST,
     )
-
     batch_start = time.time()
-    rc = run_ecadstar_batch(
+    rc = run_ecadstar_batch_headless(
         peb_path,
         erf_path=ECADSTAR_ERF_PATH,
-        repo_root=REPO_ROOT,
-        ahk_exe=ECADSTAR_AHK_EXE,
-        skip_open_erf=skip_open_erf,
+        engineer_exe=ENGINEER_EXE,
+        impulse_port=ECADSTAR_IMPULSE_PORT,
+        timeout_sec=ECADSTAR_WAIT_TIMEOUT_SEC,
     )
     if rc != 0:
         raise SystemExit(
-            f"ECADStar failed (exit {rc}) for {peb_path.name}. "
-            "Check %TEMP%\\ecadstar_piemi_batch.log on Windows."
+            f"ECADStar headless batch failed (rc={rc}) for {peb_path.name}. "
+            f"Check {ECADSTAR_EMC_OUTPUT_DIR}\\PI-1\\log.txt on Windows."
         )
-
-    wait_for_batch_started(
-        ECADSTAR_EMC_OUTPUT_DIR,
-        peb_path=peb_path,
-        batch_start_ts=batch_start,
-        timeout_sec=ECADSTAR_BATCH_START_TIMEOUT_SEC,
-        poll_sec=ECADSTAR_BATCH_START_POLL_SEC,
-    )
-
     wait_for_pi_outputs(
         ECADSTAR_EMC_OUTPUT_DIR,
         pi_count=pi_count,
@@ -216,11 +186,8 @@ def run() -> None:
     print(f"  Output       : {OUTPUT_ROOT} ({RAW_ROOT_WIN})")
     print(f"  MHz sweep    : {mhz_list}")
     print(f"  Simulate     : {not SKIP_SIMULATE}")
-    if not SKIP_SIMULATE and not ECADSTAR_SKIP_OPEN_ERF:
-        if ECADSTAR_SKIP_OPEN_ERF_AFTER_FIRST:
-            print("  ECADStar     : re-open .erf on first distribution MHz only; then skipopen")
-        else:
-            print("  ECADStar     : re-open H-shape.erf each phase (impedance + every MHz)")
+    if not SKIP_SIMULATE:
+        print("  ECADStar     : headless engineer.exe --batch --batch-auto-exit")
 
     # --- Impedance: one PEB for all layouts ---
     if not SKIP_IMPEDANCE and not progress.get("impedance_done"):
@@ -258,7 +225,6 @@ def run() -> None:
         print("\n[Distribution] skipped (SKIP_DISTRIBUTION)")
     else:
         done_mhz = {int(x) for x in progress.get("distribution_mhz_done", [])}
-        dist_pending_index = 0
         for mhz in mhz_list:
             mhz_tag = int(round(mhz))
             if mhz_tag in done_mhz:
@@ -266,10 +232,6 @@ def run() -> None:
                 continue
 
             dist_peb = PEB_DIR / f"combinations_dist_{mhz_tag}MHz.peb"
-            skip_open = _skip_open_erf_for_distribution(
-                done_mhz=done_mhz,
-                pending_index=dist_pending_index,
-            )
             print("\n" + "=" * 72)
             print(f"[{mhz_tag} MHz] one PEB, {n_layouts:,} layouts → {dist_peb.name}")
             print("=" * 72)
@@ -284,7 +246,6 @@ def run() -> None:
                 dist_peb,
                 pi_count=n_layouts,
                 mode="distribution",
-                skip_open_erf=skip_open,
                 expected_mhz=mhz,
             )
             dist_pending_index += 1

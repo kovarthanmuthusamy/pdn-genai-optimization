@@ -1,0 +1,48 @@
+---
+title: metrics_csv_utils
+type: code
+path: experiments/exp040/codes/metrics_csv_utils.py
+group: experiments/exp040/codes
+experiment: exp040
+loc: 121
+tags: [code, exp040]
+---
+
+# metrics_csv_utils
+
+> Read/write exp039 metrics CSVs (dedupe by epoch, sorted).
+
+**Source:** `experiments/exp040/codes/metrics_csv_utils.py` · 121 lines
+**Experiment:** [[exp040]]
+
+## Purpose
+
+```text
+Read/write exp039 metrics CSVs (dedupe by epoch, sorted).
+
+This experiment can produce duplicate epoch rows when training is resumed or a
+run restarts mid-epoch. These helpers rewrite CSVs keeping the *last* row per
+epoch and sorting by epoch.
+```
+
+## Constants
+
+| Name | Value |
+|------|-------|
+| `EPOCH_TIMING_HEADER` | `['epoch', 'train_sec', 'val_sec', 'total_sec', 'val_ran', 'train_loss', 'val_loss']` |
+
+## Functions
+
+- **`dedupe_csv_by_epoch(path: Path, header: list[str], *, epoch_col: str='epoch')`** — Keep last row per epoch; rewrite file sorted. Returns (rows_before, rows_after).
+- **`insert_epoch_row(path: Path, header: list[str], row: list)`** — Insert one row; dedupe file first; skip if epoch already exists. Returns True if inserted.
+- **`update_metrics_loss_csv(metrics_dir: Path, *, backup: bool=True)`** — Dedupe metrics/loss.csv and optional backup.
+- **`update_epoch_timing_csv(metrics_dir: Path, *, backup: bool=True)`** — Dedupe metrics/epoch_timing.csv and optional backup.
+- **`update_all_metrics_csv(metrics_dir: Path, *, backup: bool=True)`** — Dedupe all exp039 metrics CSVs that are epoch-indexed.
+
+## Imports
+
+- [[vae_logger]]
+
+## External dependencies
+
+`src_vae`

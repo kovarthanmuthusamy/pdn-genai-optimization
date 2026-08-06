@@ -14,9 +14,6 @@ MOVES = [
 ]
 
 ECADSTAR_FILES = [
-    "run_ecadstar_piemi_batch.ps1",
-    "capture_ecadstar_tools_coords.ahk",
-    "ecadstar_piemi_batch.ahk",
     "inspect_raw_folder.ps1",
 ]
 
@@ -32,9 +29,7 @@ TEXT_REPLACEMENTS = [
     ("Latent_opm/runs", "data/latent_runs"),
     ('repo_root / "Latent_opm" / "runs"', 'repo_root / "data" / "latent_runs"'),
     ("OUTPUT_ROOT = \"Latent_opm/runs\"", 'OUTPUT_ROOT = "data/latent_runs"'),
-    ("scripts/run_ecadstar_piemi_batch.ps1", "tools/ecadstar/run_ecadstar_piemi_batch.ps1"),
     ("scripts/ecadstar", "tools/ecadstar"),
-    ("scripts/capture_ecadstar", "tools/ecadstar/capture_ecadstar"),
     ("cd Data_Creation &&", "# legacy removed — use pipelines/data/"),
     ("Data_Creation/", "pipelines/data/"),
     ("python Latent_opm/", "python pipelines/latent/"),

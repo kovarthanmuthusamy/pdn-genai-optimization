@@ -7,17 +7,50 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import AutoMinorLocator, MaxNLocator
+from matplotlib.ticker import AutoMinorLocator, FuncFormatter, MaxNLocator, MultipleLocator
 from pathlib import Path
 from typing import Optional, List
 
 
+def _format_epoch_k(x: float, _pos: int) -> str:
+    """Format epoch ticks: plain below 1000, 'k' suffix at/above 1000."""
+    epoch = int(round(x))
+    if epoch == 0:
+        return "0"
+    if abs(epoch) >= 1000:
+        if epoch % 1000 == 0:
+            return f"{epoch // 1000}k"
+        return f"{epoch / 1000:g}k"
+    return str(epoch)
+
+
+def _epoch_tick_step(n_epochs: int) -> int:
+    """Pick a round epoch step that keeps ~6–12 readable x-axis labels."""
+    for step in (10, 20, 25, 50, 100, 200, 250, 500, 1000):
+        if n_epochs / step <= 12:
+            return step
+    return 1000
+
+
 def _apply_dense_ticks(ax, epochs: np.ndarray, *, y_nbins: int = 16, x_nbins: int = 24) -> None:
-    """Use more major/minor ticks so late-training convergence is easier to read."""
+    """Dense y-axis ticks; x-axis adapts so long runs (>1k epochs) stay readable."""
     n_epochs = int(epochs[-1]) if len(epochs) else 1
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=min(x_nbins, max(8, n_epochs // 4)), integer=True))
+
+    if n_epochs <= 400:
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=min(x_nbins, max(8, n_epochs // 8)), integer=True))
+        ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+    else:
+        step = _epoch_tick_step(n_epochs)
+        ax.xaxis.set_major_locator(MultipleLocator(step))
+        minor = step // 5 if step >= 50 else step // 2
+        ax.xaxis.set_minor_locator(MultipleLocator(minor))
+        if n_epochs >= 800:
+            ax.xaxis.set_major_formatter(FuncFormatter(_format_epoch_k))
+            ax.tick_params(axis="x", rotation=35)
+            for label in ax.get_xticklabels():
+                label.set_ha("right")
+
     ax.yaxis.set_major_locator(MaxNLocator(nbins=y_nbins, min_n_ticks=8))
-    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
     ax.yaxis.set_minor_locator(AutoMinorLocator(2))
     ax.grid(True, which='major', alpha=0.3)
     ax.grid(True, which='minor', alpha=0.12)

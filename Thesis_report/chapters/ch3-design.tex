@@ -1,0 +1,1011 @@
+% ch3-design.tex -- part of thesis_v3.tex; do not add \documentclass here.
+% Draft with the thesis-chapter workflow. Unsupported claims must use \fillin{...}.
+
+\chapter{Design and Implementation}
+\label{ch:design_implementation}
+
+This chapter describes what was built and how it is configured. It covers the construction and
+normalization of the multi-frequency dataset, the multi-modal variational autoencoder that acts as
+the power-integrity surrogate, the latent-space optimization stage that searches for decoupling
+capacitor placements, the experimental setup, and the active-learning loop that extends the training
+set with newly simulated layouts. It describes the method and what is implemented; results are
+reported in the following chapter and are not anticipated here.
+
+Notation used throughout: a placement is a binary vector $\mathbf{b} \in \{0,1\}^{52}$ over the 52
+decap slots of the board, the decap budget is $K = \sum_i b_i$, the power-integrity response is the
+input impedance magnitude $Z(f)$ sampled on 231 frequency bins spanning 1--600~MHz, and
+$Z_{\mathrm{target}}(f)$ is the target impedance mask against which a placement is judged. The
+spatial power-integrity distribution at a single inspection frequency is a heatmap $H$ on the
+$64 \times 64$ grid. \fillin{state the board under study (H-shape test vehicle) and its stackup /
+port definition in one paragraph here; the AL config names the ECADSTAR design file
+\texttt{H-shape.erf} with powerbus \texttt{Power\_GND} and port \texttt{IC1\_Port1}, but no committed
+artifact in this repository documents the board geometry itself.}
+
+\section{Data Preparation and Reprocessing}
+\label{sec:data_prep_reprocessing}
+
+\subsection{Raw Power-Integrity Simulation Outputs and File Structure}
+\label{subsec:raw_pi_outputs}
+
+Ground truth is produced by ECADSTAR power-integrity simulation. The raw export is converted into a
+layout store by \texttt{pipelines/data/processing\_multifreq.py}, which follows the repository-wide
+convention of a module-level \texttt{CONFIGURATION} block instead of command-line arguments. It
+writes four artifacts: a \texttt{layouts/} tree, a \texttt{heatmap/} tree, a \texttt{PI\_freq/} tree,
+and a \texttt{manifest.csv} index.
+
+Per design, the layout store keeps the occupancy vector \texttt{occ.npy} of shape $(52,)$ and the
+impedance spectrum \texttt{imp.npy} of shape $(231,)$. These two shapes are the fixed interface of
+the whole framework: the occupancy graph encoder is built over
+\texttt{NUM\_SLOTS = len(LABELS\_ORDERED)} slots and the impedance graph encoder over
+\texttt{NUM\_BINS = 231} bins. A row of the manifest is therefore one (design, inspection frequency)
+pair: the same layout appears once per anchor frequency, each time with its own spatial heatmap,
+while occupancy and the full spectrum are properties of the layout alone.
+
+\fillin{describe the ECADSTAR simulation setup that generated the raw export: solver settings,
+excitation, meshing, and how the spatial heatmap is exported. The AL-side simulation call is
+documented (\texttt{engineer.exe <design.erf> -{}-batch <file.peb> -{}-batch-auto-exit} in
+docs/data-pipeline.md sec.5) but the original bulk data generation is not described in any committed
+artifact.}
+
+\fillin{confirm the stored heatmap tensor resolution as a dataset property. The AL config sets
+\texttt{heatmap\_grid\_size = 64} and the decoder's final FiLM stage is annotated $64 \times 64$, but
+\texttt{dataset\_meta.json} records no heatmap shape field, so $64 \times 64$ is inferred from the
+model and the AL config rather than read from the dataset.}
+
+\figplace{Data flow from ECADSTAR export through processing\_multifreq.py to the layout store (layouts/, heatmap/, PI\_freq/, manifest.csv).}
+
+\subsection{Multi-frequency Dataset Construction and Normalization}
+\label{subsec:multifreq_dataset}
+
+The normalized training set used by \texttt{exp059\_capacity\_freq} is
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded}. Its \texttt{dataset\_meta.json} records
+stage \texttt{normalized}, source script \texttt{pipelines/normalize/multifreq.py} and generation
+timestamp \texttt{2026-07-06T13:39:03.768907+00:00}. The counts are 582997 manifest rows, 24979
+unique layouts and 24979 layout directories, with 582997 heatmap files and 582997 PI\_freq files.
+
+The dataset is multi-frequency in the sense that each layout is simulated at a set of anchor
+inspection frequencies. \texttt{dataset\_meta.json} lists 24 anchors in MHz: 10.0, 63.0, 80.0, 100.0,
+120.0, 150.0, 170.0, 180.0, 200.0, 230.0, 250.0, 270.0, 280.0, 300.0, 330.0, 350.0, 370.0, 390.0,
+400.0, 420.0, 430.0, 450.0, 470.0 and 500.0. Coverage is not uniform: \texttt{samples\_per\_mhz} is
+24979 for every anchor except 80~MHz, which has 8480.
+\fillin{state whether the reduced 80~MHz coverage (8480 versus 24979) is deliberate or the residue of
+an interrupted simulation batch; no committed artifact explains it.}
+The anchor set is also the subject of a documentation conflict that this thesis does not resolve:
+\texttt{docs/dataset.md} sec.4 refers to a ``Full 16-MHz set'' and
+\texttt{docs/normalization-and-losses.md} sec.1.4 names the anchors (10, 70, 120, 200, 270, 400)~MHz,
+while \texttt{dataset\_meta.json} lists the 24 values above.
+\fillin{resolve conflict between dataset\_meta.json (24 anchors), docs/dataset.md sec.4 (16 anchors)
+and docs/normalization-and-losses.md sec.1.4 (six anchors); the dataset metadata is the artifact
+actually consumed at training time, the two documents predate exp059.}
+
+Before statistics are fitted, the unbounded build applies a decap-budget filter: \texttt{MAX\_K = 30}
+in \texttt{pipelines/normalize/build\_train\_norm\_unbounded.py}. $K$ is recovered per design from
+$(\mathrm{occ} > 0.5).\mathrm{sum}()$ and layouts with $K > 30$ are dropped both from the statistics
+fit and from the written output.
+
+Three modalities are normalized separately.
+
+\paragraph{Heatmaps.} The normalization mode is
+\texttt{robust\_log1p\_per\_mhz\_unbounded} with \texttt{unbounded = true}. The forward transform is
+\begin{equation}
+z \;=\; \frac{\operatorname{log1p}(\Omega) - \mathrm{median}_{\mathrm{MHz}}}{\mathrm{IQR}_{\mathrm{MHz}}},
+\qquad
+\Omega \;=\; \mathrm{expm1}\!\left(z \cdot \mathrm{IQR}_{\mathrm{MHz}} + \mathrm{median}_{\mathrm{MHz}}\right),
+\label{eq:heatmap_norm}
+\end{equation}
+where $\Omega$ is the physical impedance value of a heatmap pixel in ohms and the median and
+interquartile range are fitted per anchor frequency. Two example entries: at 10.0~MHz the median is
+0.05887173116207123 and the IQR is 0.03866304084658623; at 500.0~MHz the median is
+1.3578120470046997 and the IQR is 0.6529430150985718. The per-anchor statistics therefore differ by
+more than an order of magnitude across the anchor set. Global QC references are stored alongside: \texttt{clip\_min} $= -1.6791870594024658$,
+\texttt{clip\_max} $= 6.275787830352783$, \texttt{z\_max} $= 11.23223876953125$ and
+\texttt{background\_value} $= -3.1792$. In the unbounded mode these clip values are QC references
+rather than training bounds. The exp059 config mirrors the same constants
+(\texttt{background\_value} $=-3.1792$, \texttt{heatmap\_z\_clip\_min} $=-1.6791870594024658$,
+\texttt{heatmap\_z\_clip\_max} $=6.275787830352783$) and sets \texttt{heatmap\_clip\_recon = false},
+so reconstructions are not clipped to that band.
+
+Foreground/background separation uses a physical threshold \texttt{BG\_OHM = 0.05} in
+\texttt{pipelines/normalize/multifreq.py}. The robust clip percentiles 0.5 and 99.5 are defined in
+the same script but apply only when the bounded mode is selected. Both behaviours are switched by
+environment flags: \texttt{NORM\_ROBUST\_PER\_MHZ} (default \texttt{'1'}) and
+\texttt{NORM\_UNBOUNDED\_Z} (default \texttt{'0'}), so the unbounded build that produced this dataset
+sets the second flag explicitly.
+
+\paragraph{Impedance spectra.} The 231-bin spectrum is normalized by a single global log z-score with
+\texttt{log\_mean} $= -1.039238452911377$ and \texttt{log\_std} $= 1.7831873893737793$, fitted over
+\texttt{layout\_count} $= 24979$; the resulting range is \texttt{z\_min} $= -2.7170498371124268$ to
+\texttt{z\_max} $= 2.474900722503662$.
+
+\paragraph{Inspection frequency.} The scalar PI\_freq conditioning value is normalized in
+$\log_{10}$ space with \texttt{log10\_min} $= 6.0$ and
+\texttt{log10\_range} $= 2.778151250383644$. The stored band edges are
+\texttt{min\_hz} $= 1000000.0$ and \texttt{max\_hz} $= 600000000.0$, which is the 1--600~MHz span
+quoted throughout this thesis.
+
+\fillin{state why the heatmap uses per-MHz robust statistics while the impedance spectrum uses a
+single global log z-score. The two choices are visible in normalization\_stats.json but the reasoning
+is not written down anywhere in the repository.}
+
+\subsection{Data Splitting, Sampling, and Batch Construction}
+\label{subsec:data_splitting_sampling}
+
+The split is a layout-level holdout, not a row-level one: \texttt{split\_by\_design = true} with
+\texttt{train\_split = 0.9}. \texttt{\_split\_indices\_by\_design} assigns every row belonging to a
+\texttt{design\_id} --- that is, all of its anchor frequencies --- entirely to either train or
+validation, and the assignment is deterministic given the seed and the sorted design keys via
+\texttt{torch.randperm}. The dataloader's default split seed is 42.
+
+The reason for this design is recorded in the code itself rather than reconstructed: the docstring
+states that earlier code split frequencies within each design, which put the same layout in both
+splits and ``leaked layout identity into val and is unsuitable for GP / AL residual evaluation''.
+The experiment notes date the change to 2026-07-20, with seed 42 and \texttt{train\_split} 0.9
+giving approximately 22481 train and 2498 validation layouts, and record that it required a fresh
+retrain with \texttt{resume\_checkpoint} null, with prior artifacts archived under
+\texttt{archive\_pre\_layout\_holdout\_*}. Those two counts are stated in \texttt{notes.md} with a
+tilde and are not emitted by any artifact.
+\fillin{recompute the exact train/val layout counts for seed 42 and train\_split 0.9 and cite the
+emitting artifact, rather than the approximate figures in notes.md:54--62.}
+
+Batch construction has one behaviour that the configuration file does not describe accurately. The
+config sets \texttt{stratify\_by\_k = true}, \texttt{balance\_k = false} and
+\texttt{balance\_freq = false}. In this code path \texttt{stratify\_by\_k} only enables
+\texttt{precompute\_k} on the dataset (\texttt{dataloader\_base.py}:301); it does not stratify the
+split, and the weighted sampler is constructed only when \texttt{balance\_k} or
+\texttt{balance\_freq} is true (\texttt{dataloader\_base.py}:353--362), and both are false. No
+$K$-stratification and no $K$/frequency balancing is therefore active in exp059, despite the flag
+name.
+\fillin{resolve conflict between config.yaml:18 (stratify\_by\_k = true) and
+dataloader\_base.py:301,353--362 (flag only precomputes K; no stratified sampler built) --- decide
+whether the intended behaviour was ever exercised, or whether the flag should be removed.}
+
+With no balancing sampler active and \texttt{train\_samples\_per\_epoch = 64000} smaller than the
+training pool, each epoch draws 64000 rows with a \texttt{RandomSampler} with replacement. Batches
+are additionally built with cross-frequency pairs: a pair lookup table maps each training index to
+alternate-MHz rows of the same design, and \texttt{make\_multifreq\_collate\_with\_pairs} attaches
+the paired row to the batch. This is what the cross-frequency consistency loss of
+Section~\ref{subsec:objective_physics_reg} consumes.
+
+Loader settings are \texttt{batch\_size = 224} per GPU, \texttt{val\_batch\_size = 320},
+\texttt{num\_workers = 4}, \texttt{prefetch\_factor = 2}, \texttt{persistent\_workers = false} and
+\texttt{cache\_in\_ram = false}.
+
+\section{Multi-modal Variational Autoencoder as a Generative Surrogate}
+\label{sec:multimodal_vae_surrogate}
+
+\subsection{Architectural Design}
+\label{subsec:architectural_design}
+
+The surrogate is a variational autoencoder \cite{kingma2013auto} with several input modalities fused
+by a Product of Experts \cite{wu2018mvae}, conditioned on the decap budget $K$ and the inspection
+frequency in the manner of a conditional VAE \cite{sohn2015conditional}. The exp059 class is
+\texttt{MultiInputVAEPoeFreq}, a PoE-fusion subclass of \texttt{MultiInputVAE} that adds a PI\_freq
+expert writing the private latent dimensions and removes the U-Net skip connections.
+
+\paragraph{Latent structure.} The configured latent is \texttt{latent\_dim = 128} with
+\texttt{heatmap\_private\_dim = 40}, \texttt{cond\_dim = 32} and \texttt{freq\_fourier\_features = 16}.
+\texttt{imp\_peak\_dim} is not set in \texttt{config.yaml}; the constructor default of 8 applies. The
+latent is partitioned as $z = [z_{\mathrm{shared}} \mid z_{\mathrm{peak}} \mid z_{\mathrm{spatial}}]$
+with
+\begin{equation}
+d_{\mathrm{shared}} = d_{\mathrm{latent}} - d_{\mathrm{hm\text{-}priv}} - d_{\mathrm{imp\text{-}peak}},
+\qquad
+d_{\mathrm{layout}} = d_{\mathrm{shared}} + d_{\mathrm{imp\text{-}peak}} ,
+\label{eq:latent_partition}
+\end{equation}
+which for the exp059 values gives a shared block of 80 dimensions --- as stated in
+\texttt{notes.md}:15 --- and a layout block of 88. The decoder input widths follow the partition
+(\texttt{vae\_multi\_input\_simple.py}:294--296, with \texttt{layout\_latent\_dim} defined at :174).
+The heatmap decoder takes the full $z$ together with the $2\,\texttt{cond\_dim}$ conditioning vector.
+The occupancy decoder takes only $z_{\mathrm{shared}}$ (80 dimensions) plus a \texttt{cond\_dim}
+conditioning vector. The impedance decoder takes $z_{\mathrm{layout}} = [z_{\mathrm{shared}} \mid
+z_{\mathrm{peak}}]$ (88 dimensions) plus a \texttt{cond\_dim} conditioning vector and a
+64-dimensional occupancy graph context, annotated in the code as ``z\_layout + K + occ graph ctx''.
+A placement is therefore forced through the shared block alone, spectrum-peak structure has a private
+sub-block of its own, and frequency-specific spatial detail is carried in $z_{\mathrm{spatial}}$,
+which only the heatmap decoder reads.
+
+\paragraph{Product-of-Experts fusion.} Each modality contributes a Gaussian expert
+$\mathcal{N}(\mu_m, \sigma_m^2)$ and the fused posterior takes the standard PoE form: the combined
+precision is the sum of expert precisions and the combined mean is the precision-weighted mean of the
+expert means \cite{wu2018mvae}. A unit-Gaussian prior expert ($\mu = 0$, $\log \sigma^2 = 0$) is
+always appended as an anchor, so the product is well defined even when only one modality is present.
+Expert log-variances are clamped to $[-6.0, 1.0]$ and the fused PoE log-variance to $[-4.0, 2.0]$.
+\fillin{state why PoE was chosen over a mixture-of-experts fusion \cite{shi2019mmvae} for this
+problem; the trade-off is discussed in \cite{kutuzova2021defense} but no repository artifact records
+the decision for exp059.}
+
+\paragraph{Modality encoders.} The occupancy expert is a graph encoder over the 52 decap slots laid
+out on a $7 \times 8$ PCB grid, with 4-neighbour edges, optional self-loops and symmetric degree
+normalization, following the graph-convolution formulation of \cite{kipf2016graph}; it is implemented
+in plain PyTorch without \texttt{torch\_geometric}. The impedance expert is a chain-graph GNN over
+the 231 spectrum bins --- edges between consecutive bins, self-loops, symmetric normalization ---
+with a learned per-bin embedding, so neighbouring frequency bins exchange messages in the sense of
+\cite{gilmer2017message}. Graph hyperparameters are not set in \texttt{config.yaml}; the applied
+defaults are \texttt{graph\_hidden\_dim = 128}, \texttt{graph\_num\_layers = 3} and
+\texttt{graph\_dropout = 0.1}. The 64-dimensional occupancy and impedance features are fused by a
+\texttt{layout\_joint\_fusion} block (\texttt{Linear(128,64)} + \texttt{LayerNorm} +
+\texttt{LeakyReLU(0.1)}) before the two latent heads. The heatmap expert is a convolutional encoder
+with spatial bottleneck \texttt{HM\_BOTTLENECK = 8} ($8 \times 8$) and \texttt{HM\_DROPOUT = 0.05}.
+
+\paragraph{Conditioning.} The budget $K$ is conditioned through a discrete embedding
+\texttt{nn.Embedding(53, cond\_dim)} covering $K \in \{0,\dots,52\}$. The inspection frequency is
+conditioned through a \texttt{FreqConditioner}: sinusoidal Fourier features over
+\texttt{num\_fourier} bands are concatenated with the raw normalized frequency (input dimension
+$1 + 2\,\texttt{num\_fourier}$) and passed through a two-layer SiLU MLP to \texttt{cond\_dim}. The
+vector handed to the heatmap path is the concatenation $[k_{\mathrm{emb}}, f_{\mathrm{emb}}]$ of size
+$2\,\texttt{cond\_dim}$. Note that \texttt{FiLM2d} and \texttt{FreqConditioner} are imported from
+\texttt{experiments/exp043/codes/freq\_conditioning.py} (\texttt{vae\_multi\_input\_simple.py}:6), so
+the exp059 model stack is not self-contained in the way the other experiment forks are.
+\fillin{list every cross-experiment import in experiments/exp059\_capacity\_freq/codes/ (a grep for
+\texttt{experiments.exp0} over that directory settles it); an earlier draft claimed the
+freq\_conditioning import was the only one, which is not established.}
+
+Frequency modulation of the decoder uses FiLM \cite{perez2018film}, applied as
+\begin{equation}
+\mathrm{FiLM}(x) \;=\; x \odot (1 + \gamma) + \beta ,
+\label{eq:film}
+\end{equation}
+where $\gamma$ and $\beta$ are produced from the conditioning vector by a projection whose weight and
+bias are zero-initialised except for $\mathrm{bias}[:C] = 1.0$, so the layer starts close to the
+identity. \texttt{use\_heatmap\_film} is \texttt{true} in the config. \texttt{use\_multiscale\_film}
+is \emph{not} present in \texttt{config.yaml} and defaults to \texttt{True} in
+\texttt{vae\_model\_kwargs}, so multi-scale FiLM is active --- the value governing the headline
+architectural change of exp059 comes from a code default rather than from the experiment config file.
+With it enabled the heatmap decoder is FiLM-modulated at four scales: 128 channels at the
+$8 \times 8$ bottleneck, 64 channels at $16 \times 16$, a 32-channel stage, and 16 channels at
+$64 \times 64$.
+
+\paragraph{Decoder path.} U-Net skip connections were removed; the code states the reason directly:
+``No U-Net skips: decoder is latent+FiLM only (matches stage-2 / generation)''. The corresponding
+modules (\texttt{OptionalSkipFuse}, \texttt{\_last\_heatmap\_skips}, \texttt{heatmap\_skips}) were
+deleted, as recorded in \texttt{notes.md}:50--51. Spatial information about the placement instead
+enters through an occupancy spatial tower, which scatters the 52-dimensional occupancy onto the
+$7 \times 8$ grid and fuses occupancy features into the heatmap decoder at $16 \times 16$,
+$32 \times 32$ and $64 \times 64$.
+
+\paragraph{Layout-private head.} A layout-private head predicts the heatmap-private latent
+dimensions from occupancy, impedance and the conditioning vector, and acts as the distillation
+student for the full-encode teacher. The default hidden width is
+\texttt{layout\_private\_hidden = 384}, a frequency FiLM is applied to the predicted mean, and the
+output is squashed as $\mu_{\mathrm{priv}} \leftarrow 4.0 \tanh(\mu_{\mathrm{priv}} / 4.0)$.
+
+\paragraph{Modality dropout.} During training a Bernoulli keep mask with parameter
+$1 - p_{\mathrm{md}}$ is drawn over the three experts (heatmap, occupancy, impedance) and dropped
+experts are replaced by the prior. At least one expert is always kept, and the heatmap expert is
+force-kept once \texttt{modality\_dropout\_protect\_heatmap} is enabled. The schedule is
+\texttt{modality\_dropout = 0.06}, \texttt{modality\_dropout\_start = 0.06},
+\texttt{modality\_dropout\_anneal\_epochs = 18},
+\texttt{modality\_dropout\_protect\_heatmap\_epoch = 25} and
+\texttt{heatmap\_focus\_modality\_dropout = 0.03}. The design intent of the term is to keep the
+encoder usable when experts are missing at inference time: occupancy is the only modality available
+when a new placement is proposed and not yet simulated, and the active-learning loop scores such
+placements through the occupancy-only encode path.
+\fillin{cite an ablation or per-path evaluation showing that the occupancy-only encode path degrades
+without modality dropout. No such artifact exists in the repository, so the enabling role of the term
+is an untested design assumption rather than a measured effect.}
+
+\paragraph{Discrete occupancy read-out.} Occupancy is decoded to a hard top-$K$ binary vector before
+the heatmap decode, so the spatial prediction is conditioned on a CAD-realisable placement rather
+than a soft one: \texttt{occupancy\_binary\_decode = true} with
+\texttt{occupancy\_binary\_ste\_train = false}. The helper \texttt{topk\_occ\_binary} is fully
+vectorised, using a descending-sort threshold to support per-row variable $K$ and avoiding Python
+loops and GPU-to-CPU synchronisation on the decode hot path. It supports a straight-through mode in
+which the forward value is the hard top-$K$ vector and the gradient flows through the soft occupancy
+\cite{bengio2013straight}, but in exp059 training that mode is off.
+
+\paragraph{Inference paths.} The model exposes several encode paths; the four that matter for this
+work are \texttt{encode} (all modalities),
+\texttt{encode\_cross\_modal} (heatmap, impedance or occupancy+impedance),
+\texttt{encode\_layout\_latent\_full} (occupancy+impedance with the private head), and
+\texttt{encode\_occupancy\_latent} (occupancy only). The last is the one the active-learning loop and
+any forward design query depend on.
+
+\figplace{Block diagram of MultiInputVAEPoeFreq: three modality experts, PoE fusion with prior anchor, structured latent split, FiLM-conditioned heatmap decoder with occupancy spatial tower.}
+
+\subsection{Objective Functions and Physics-Informed Regularization}
+\label{subsec:objective_physics_reg}
+
+\paragraph{Reconstruction.} The reconstruction term is a weighted sum over the three modalities plus
+an occupancy consistency term,
+\begin{equation}
+\mathcal{L}_{\mathrm{recon}}
+= w_{\mathrm{hm}} \mathcal{L}_{\mathrm{hm}}
++ w_{\mathrm{occ}} \mathcal{L}_{\mathrm{occ}}
++ w_{\mathrm{imp}} \mathcal{L}_{\mathrm{imp}}
++ w_{\mathrm{occK}} \mathcal{L}_{\mathrm{occK}} ,
+\label{eq:recon}
+\end{equation}
+with \texttt{heatmap\_weight} $= 5.0$, \texttt{occupancy\_weight} $= 7.0$,
+\texttt{impedance\_weight} $= 4.0$ and \texttt{occ\_k\_consistency\_weight} $= 2.0$. A heatmap-focus
+phase starting at epoch 25 overrides these to heatmap 7.0, impedance 4.0, cross-frequency 1.1 and
+dynamic-range 3.0.
+\fillin{give the design rationale for the numeric loss weights (5.0 / 7.0 / 4.0 / 2.0 and the
+focus-phase overrides). notes.md explains the capacity and FiLM changes of exp059 but not how these
+weights were arrived at; a weight-sweep artifact would settle it.}
+
+Occupancy reconstruction uses a focal binary cross-entropy with
+\texttt{occupancy\_focal\_gamma} $= 1.5$ and a positive-class weight $(52-K)/K$ clamped to
+$[0.5, 10.0]$, which compensates for the fact that a placement with small $K$ is a strongly
+imbalanced binary target. The $K$-consistency term is a hinge that penalises
+$\mathrm{relu}(0.5 - \ell)$ on target-on slots and $\mathrm{relu}(\ell + 0.5)$ on target-off slots,
+where $\ell$ is the decoded occupancy logit.
+
+The impedance loss is a composite over the 231 bins with weights
+\texttt{impedance\_deriv\_weight} $= 1.4$, \texttt{impedance\_topk\_k} $= 20$,
+\texttt{impedance\_topk\_weight} $= 4.5$, \texttt{impedance\_under\_penalty} $= 2.8$,
+\texttt{impedance\_concavity\_weight} $= 2.5$, \texttt{impedance\_freq\_weight\_alpha} $= 2.0$,
+\texttt{impedance\_dual\_topk\_weight} $= 0.75$, \texttt{impedance\_peak\_index\_weight} $= 1.5$,
+\texttt{impedance\_peak\_mag\_weight} $= 2.0$ and \texttt{impedance\_num\_peaks} $= 8$. The peak terms
+are ramped in rather than applied from the start: \texttt{impedance\_peak\_start\_epoch} $= 25$,
+\texttt{impedance\_peak\_ramp\_epochs} $= 22$, \texttt{impedance\_peak\_focus\_epoch} $= 25$.
+
+Heatmap reconstruction carries several shape-sensitive terms in addition to the pixel loss:
+\texttt{heatmap\_pearson\_weight} $= 0.75$, \texttt{heatmap\_grad\_vector\_weight} $= 2.0$ and
+\texttt{heatmap\_grad\_direction\_weight} $= 1.0$ with a minimum gradient magnitude of 0.08 and a
+gradient Huber delta of 0.5. Extreme-percentile pixels are treated separately by top-region Huber
+terms: \texttt{heatmap\_peak\_topregion\_weight} $= 2.5$ at $q = 0.95$ and
+\texttt{heatmap\_valley\_topregion\_weight} $= 2.5$ at $q = 0.05$, both with Huber delta 0.5. A
+soft-argmax peak-location loss uses \texttt{heatmap\_peak\_loc\_weight} $= 2.5$ at temperature 0.035;
+the corresponding valley-location loss is disabled (\texttt{heatmap\_valley\_loc\_weight} $= 0.0$).
+
+\paragraph{Latent terms.} The KL divergence is computed per dimension as
+\begin{equation}
+\mathrm{KL}_j = -\tfrac{1}{2}\left(1 + \log \sigma_j^2 - \mu_j^2 - \exp(\log \sigma_j^2)\right),
+\label{eq:kl}
+\end{equation}
+clamped from below by \texttt{free\_bits} $= 0.12$ before averaging, so a dimension carrying less
+than that much information is not pushed further toward the prior. Beta annealing is disabled
+(\texttt{use\_beta\_annealing = false}) with \texttt{beta\_final} $= 0.03$, i.e. a fixed
+$\beta$-weighted KL in the sense of \cite{higgins2017beta}. Three further latent regularizers are
+added to the total: a hinge $w_{\mathrm{hinge}} \, \mathrm{relu}(|\mu| - \tau)^2$ with
+\texttt{mu\_hinge\_weight} $= 0.1$ and \texttt{mu\_hinge\_threshold} $= 4.0$; a batch-mean bias term
+$w_{\mathrm{bias}} \, \overline{\mu}^2$ with \texttt{mu\_bias\_weight} $= 0.05$; and a per-expert KL
+averaged over experts with \texttt{per\_expert\_kl\_weight} $= 0.02$. A sigma regularizer keeps the
+fused posterior standard deviation inside a band around \texttt{sigma\_reg\_target} $= 0.45$,
+penalising values below the target and above $1.3 \times$ the target, with
+\texttt{sigma\_reg\_weight} $= 1.5$.
+\fillin{explain the choice of sigma\_reg\_target 0.45 and free\_bits 0.12; no artifact records how
+they were selected.}
+
+\paragraph{Cross-frequency, distillation and jitter.} Cross-frequency training decodes the latent at
+an alternate MHz value and compares the result with the paired alternate-MHz heatmap supplied by the
+pair lookup of Section~\ref{subsec:data_splitting_sampling}: \texttt{cross\_freq\_weight} $= 1.2$
+from \texttt{cross\_freq\_start\_epoch} $= 20$, with
+\texttt{cross\_freq\_layout\_mix\_prob} $= 0.45$ and \texttt{cross\_freq\_use\_encode\_z = true}.
+Distillation transfers the full-encode teacher onto the layout student:
+\texttt{latent\_distill\_weight} $= 2.5$ (private dimensions multiplied by 3.0, log-variance term
+0.3) and \texttt{output\_distill\_weight} $= 2.5$, the latter implemented as a Huber loss between the
+layout decode and the detached teacher decode. Frequency jitter is applied on the decode side with
+\texttt{freq\_jitter\_prob} $= 0.6$ and \texttt{freq\_jitter\_log10\_sigma} $= 0.1$.
+
+\paragraph{Spectral anti-blur term --- implemented but not active.} A 2D-FFT log-magnitude $L_1$
+anti-blur loss (\texttt{\_heatmap\_spectral\_loss}) is implemented in
+\texttt{train\_vae\_simple.py}:191--221, together with an optional Gaussian MHz bump that would
+emphasise a mid-band frequency window. It is not applied in exp059. The weight key
+\texttt{heatmap\_spectral\_weight} is absent from \texttt{config.yaml}, the \texttt{getattr} lookup
+at \texttt{train\_vae\_simple.py}:199 therefore returns the default 0.0, and the function returns
+\texttt{None} for any non-positive weight, so the term never enters the total. This must be stated
+because \texttt{notes.md}:20--23 presents the frequency-weighted spectral loss as one of the three
+headline changes of exp059, listing \texttt{heatmap\_spectral\_weight} $= 1.5$,
+\texttt{mid\_boost} $= 1.5$, centre 200~MHz and width 80~MHz. Those keys do not exist in the current
+\texttt{config.yaml}.
+\fillin{resolve conflict between notes.md:20--23 (spectral anti-blur loss as a headline exp059
+change) and config.yaml (no heatmap\_spectral\_weight key, term inactive) --- either restore the keys
+and rerun, or correct the note.}
+
+\paragraph{Physics regularization --- implemented and configured, but not active in exp059.} The
+module \texttt{physics\_loss.py} implements three physics terms. \emph{Radius influence} penalises
+reconstructed foreground pixels that are cold where a frequency-conditioned critic says decap
+coverage is weak. \emph{Critic supervision} supervises a \texttt{PhysicsCritic} CNN on the inverted
+min--max normalised foreground of the target heatmap; the critic is a dual-branch network taking the
+occupancy grid plus a frequency embedding (\texttt{freq\_emb\_dim} $= 16$) and producing a spatial
+effectiveness map, and it is detached inside the radius-influence loss so that VAE gradients do not
+corrupt it. \emph{Anti-resonance} encodes the requirement that every impedance peak be preceded in
+frequency by a resonance dip:
+\begin{equation}
+\begin{aligned}
+s^{\mathrm{peak}} &= \min\!\left(\mathrm{relu}(c - l), \; \mathrm{relu}(c - r)\right), \qquad
+s^{\mathrm{dip}} = \min\!\left(\mathrm{relu}(l - c), \; \mathrm{relu}(r - c)\right), \\
+\mathcal{L}_{\mathrm{ar}} &= \mathrm{mean}\!\left(s^{\mathrm{peak}} \cdot \exp(-10.0 \cdot d^{\mathrm{prior}})\right),
+\end{aligned}
+\label{eq:anti_resonance}
+\end{equation}
+where $c$, $l$ and $r$ are the centre, left and right bin values of the impedance channel and
+$d^{\mathrm{prior}}$ is the running cumulative maximum of prior dip scores.
+
+The exp059 config sets non-zero weights for all three: \texttt{physics\_ri\_weight} $= 1.0$,
+\texttt{physics\_critic\_sup\_weight} $= 2.0$, \texttt{physics\_ar\_weight} $= 0.5$, with
+\texttt{physics\_critic\_warmup\_epochs} $= 11$, \texttt{physics\_slope\_anneal\_epochs} $= 22$ and
+\texttt{physics\_fg\_clip\_min} $= -1.6791870594024658$. \texttt{PhysicsLoss} is instantiated at
+\texttt{train\_core.py}:1393, and its parameters do reach the optimizer and are stored in the
+checkpoints. Nevertheless the three terms never contribute to the total loss in this experiment.
+\texttt{train\_vae\_simple.py}:340 monkey-patches the live epoch function
+(\texttt{\_tr.\_run\_epoch = \_run\_epoch\_encode}); the replacement deletes the \texttt{physics} and
+\texttt{pw} arguments (\texttt{run\_epoch\_encode.py}:101) and calls the loss with
+\texttt{physics=None} (\texttt{run\_epoch\_encode.py}:141), and \texttt{\_vae\_loss\_exp055}
+likewise forwards \texttt{physics=None} (\texttt{train\_vae\_simple.py}:236). Since
+\texttt{train\_core.vae\_loss} guards the radius-influence, critic-supervision and anti-resonance
+terms with \texttt{if physics is not None} (\texttt{train\_core.py}:609--613), none of them is added.
+
+The exp059 surrogate is consequently \emph{not} physics-informed in its training objective, and this
+thesis does not describe it as such. The physics prior that is actually active at optimization time
+sits in Stage 2, which as implemented runs on the \texttt{exp038\_true\_multi} stack and not on
+exp059 (see the scope limitation in Section~\ref{subsec:opt_problem_formulation}). There the latent
+optimizer applies an anti-resonance term with \texttt{PHYSICS\_AR\_WEIGHT} $= 0.5$ (overridable by
+the checkpoint config's \texttt{physics\_ar\_weight}); see
+Section~\ref{subsec:opt_procedure_feasibility}.
+\fillin{state whether disabling the physics terms in the exp059 training loop was a deliberate
+ablation or an unintended consequence of the epoch-function monkey-patch. No note or commit message
+in the repository explains the disconnect, and the answer changes how
+Section~\ref{subsec:objective_physics_reg} should be framed.}
+
+\subsection{Training, Inference}
+\label{subsec:training_inference}
+
+\paragraph{Launch and configuration.} Training is launched as a module,
+\texttt{python -m experiments.exp059\_capacity\_freq.codes.train\_vae\_simple}, with
+\texttt{VAE\_EXPERIMENT\_DIR} set and \texttt{VAE\_CONFIG\_PATH} unset. Configuration is read by
+\texttt{load\_yaml\_config}, which strips \texttt{\#} comment lines and calls \texttt{json.loads} ---
+despite the \texttt{.yaml} extension the file is JSON. An optional \texttt{VAE\_CONFIG\_PATH}
+environment override is layered on top of \texttt{config.yaml}, and this is the mechanism the
+active-learning fine-tune uses (Section~\ref{sec:active_learning}). The exp059 trainer monkey-patches
+the shared \texttt{train\_core}: \texttt{Config}, \texttt{build\_vae\_model},
+\texttt{\_run\_epoch}, \texttt{heatmap\_loss}, \texttt{vae\_loss}, \texttt{\_on\_stats\_loaded}, the
+dataloader factory, the YAML loader and the impedance loss are all replaced by exp059 versions.
+
+\paragraph{Optimizer and schedule.} The optimizer is AdamW with \texttt{weight\_decay} $= 1 \times
+10^{-4}$, selected as fused, then \texttt{foreach}, then a plain fallback on CUDA. The scheduler is
+\texttt{ReduceLROnPlateau} in \texttt{min} mode with \texttt{lr\_factor} $= 0.5$,
+\texttt{lr\_patience} $= 15$ and \texttt{lr\_min} $= 1 \times 10^{-5}$. A separate impedance learning
+rate can be enabled after the peak-focus epoch: \texttt{impedance\_separate\_lr = true},
+\texttt{impedance\_decoder\_lr\_mult} $= 1.0$, \texttt{impedance\_peak\_focus\_epoch} $= 25$.
+
+The current \texttt{config.yaml} states \texttt{learning\_rate} $= 1.5 \times 10^{-5}$,
+\texttt{num\_epochs} $= 510$, \texttt{reset\_lr\_on\_resume = true} and
+\texttt{resume\_checkpoint} $=$
+\texttt{experiments/exp059\_capacity\_freq/checkpoints/last\_model.pt}. \texttt{notes.md}:25 states
+that the exp059 fresh training run used \texttt{learning\_rate} $= 2 \times 10^{-4}$,
+\texttt{num\_epochs} $= 500$ and \texttt{resume\_checkpoint} null. The config file no longer matches
+the note.
+\fillin{resolve conflict between notes.md:25 (2e-4 / 500 / null) and config.yaml:5,8,138 (1.5e-05 /
+510 / last\_model.pt) --- state which values produced the checkpoint whose results are reported, and
+cite the run log that settles it.}
+
+\paragraph{Numerical stability.} The policy is deliberately conservative: \texttt{amp = 'off'},
+\texttt{tf32 = false}, \texttt{compile = false}, \texttt{training\_force\_fp32 = true},
+\texttt{training\_skip\_nonfinite\_batches = true} and
+\texttt{training\_grad\_clip\_norm} $= 1.0$, with log-variance clamped to $[-10.0, 10.0]$, a
+reconstruction $z$ soft floor of $-8.0$ and a finite loss cap of $1000000.0$. Gradient clipping is
+applied as \texttt{torch.nn.utils.clip\_grad\_norm\_(params, 1.0)} in the training step.
+\fillin{state why AMP and TF32 were disabled for exp059 --- whether a specific instability was
+observed, and in which run.}
+
+\paragraph{Curriculum.} The milestone epochs in the current config are
+\texttt{cross\_freq\_start\_epoch} $= 20$, \texttt{heatmap\_focus\_start\_epoch} $= 25$,
+\texttt{modality\_dropout\_protect\_heatmap\_epoch} $= 25$,
+\texttt{impedance\_peak\_start\_epoch} $= 25$, \texttt{beta\_end\_epoch} $= 25$,
+\texttt{physics\_critic\_warmup\_epochs} $= 11$ and \texttt{penalty\_warmup\_epochs} $= 11$.
+
+\paragraph{Validation and monitoring.} Validation runs on epoch 1, on each checkpoint interval and on
+the final epoch (\texttt{val\_on\_checkpoint\_only = true}), with
+\texttt{checkpoint\_interval} $= 5$ and \texttt{keep\_last\_n\_checkpoints} $= 0$. The off-anchor
+evaluation runs every 5 epochs at 155.0, 250.0 and 265.0~MHz with weights 2.5, 3.0 and 2.5
+respectively, over at most 20 batches, and with \texttt{eval\_use\_occ\_only\_layout = true} so that
+the evaluated decode path is the occupancy-only one. The name is only partly accurate for this
+frequency list: 155.0 and 265.0 are absent from the 24 training anchors listed in
+Section~\ref{subsec:multifreq_dataset} and are genuinely held out, whereas 250.0 is a training anchor
+and carries the largest of the three weights, so it acts as an in-distribution reference inside the
+same metric. The experiment directory also contains
+\texttt{checkpoints/best\_off\_anchor\_model.pt}, so this metric doubles as a checkpoint-selection
+criterion and not only as a monitor.
+\fillin{state why 250~MHz, a training anchor, sits in eval\_off\_anchor\_mhz with the highest weight
+of the three, and confirm exactly which aggregate quantity best\_off\_anchor\_model.pt is selected
+on.}
+Each run writes \texttt{metrics/loss.csv},
+\texttt{metrics/heatmap\_peak\_split.csv}, \texttt{metrics/impedance\_split.csv},
+\texttt{metrics/off\_anchor\_eval.csv}, \texttt{metrics/epoch\_timing.csv} and
+\texttt{metrics/timing.json}.
+
+\paragraph{Distributed training.} DDP is enabled (\texttt{use\_ddp = true}) with
+\texttt{ddp\_base\_batch\_size} $= 160$ and \texttt{ddp\_linear\_lr\_scale = true}, so the learning
+rate is multiplied by $(\texttt{batch\_size} \times \texttt{world\_size}) /
+\texttt{ddp\_base\_batch\_size}$. Initialisation uses the \texttt{nccl} backend with a default
+30-minute timeout (overridable by \texttt{NCCL\_TIMEOUT\_MINUTES}), and the model is wrapped with
+\texttt{find\_unused\_parameters=True}.
+\fillin{state why find\_unused\_parameters was enabled. The setting is in distributed\_train.py but
+carries no comment, note or commit message giving a reason, so the natural explanation --- expert
+branches left unused by modality dropout --- is not evidenced.}
+Two-GPU training is launched with
+\texttt{torchrun -{}-standalone -{}-nproc\_per\_node=2 -m experiments.exp059\_capacity\_freq.codes.train\_vae\_simple}.
+
+\paragraph{Layout / occupancy-only mixing probabilities.} \texttt{config.yaml}:47--48 sets
+\texttt{layout\_train\_prob} $= 0.65$ and \texttt{occ\_only\_encode\_prob} $= 0.4$. Both
+\texttt{notes.md}:12--14 and \texttt{docs/cursor-handoff.md}:33--37 describe the exp059 capacity phase
+as full-encode only, with both probabilities at 0.
+The same conflict covers the neighbouring keys, which this chapter has taken from the config file
+throughout.
+\fillin{resolve conflict between config.yaml (layout\_train\_prob 0.65, occ\_only\_encode\_prob 0.4,
+eval\_use\_occ\_only\_layout true, latent\_distill\_weight 2.5, output\_distill\_weight 2.5) and
+notes.md:12--14 plus cursor-handoff.md:33--37, which describe the capacity phase with all of these at
+0 or false --- the config file no longer reflects the capacity study it is supposed to document, so
+state which setting produced the reported capacity results.}
+
+\fillin{document the training hardware and software environment: GPU model and count, driver, CUDA
+and PyTorch versions, and wall-clock time per epoch. No committed artifact in the repository records
+this; metrics/epoch\_timing.csv gives timings but not the machine.}
+
+\fillin{report the exp059 model parameter count. train\_core.py:1424 prints it at runtime but no
+artifact stores it.}
+
+\subsection{Auxiliary Guidance Network for Latent-Space Optimization}
+\label{subsec:aux_guidance_network}
+
+This subsection heading does not correspond to any component in the current model track, and that has
+to be said plainly rather than papered over. No module, class or function named ``Auxiliary Guidance
+Network'' exists anywhere in the repository; the term appears only in the thesis table of contents.
+
+The nearest artifact is \texttt{surrogate\_impedance.py}, a feed-forward network that maps an
+occupancy vector directly to an impedance spectrum and is used by Stage 2 to score candidate
+placements without invoking the VAE impedance head. It exists only in the legacy experiment forks
+\texttt{exp037\_lat\_change}, \texttt{exp038\_true\_multi},
+\texttt{exp039\_improved\_heatmap}, \texttt{exp040} and \texttt{exp041}; it is absent from exp057,
+exp058, exp059 and exp060. In the exp038 fork it maps occupancy $(52,)$ to an impedance log-$z$
+spectrum $(1, 231)$ and its docstring states that PI\_freq is not used. Its configuration is
+\texttt{hidden\_dims} $=(256, 512, 512, 512, 256)$, dropout 0.1, \texttt{num\_epochs} 200,
+\texttt{batch\_size} 128, \texttt{learning\_rate} $3 \times 10^{-4}$, \texttt{lr\_patience} 15,
+\texttt{lr\_factor} 0.5, \texttt{lr\_min} $1 \times 10^{-5}$,
+\texttt{weight\_decay} $1 \times 10^{-4}$, \texttt{topk\_k} 20, \texttt{topk\_weight} 7.0 and
+\texttt{under\_penalty} 2.8. Stage 2 loads it from
+\texttt{experiments/exp038\_true\_multi/checkpoints/surrogate\_best.pt} when \texttt{USE\_SURROGATE}
+is on, which is the default, and otherwise falls back to the VAE impedance decoder head.
+
+\fillin{decide what this subsection is meant to contain. Either (a) rename the heading to
+``Impedance Surrogate for Latent-Space Optimization'' and present the exp038 surrogate above as the
+component, stating that it belongs to the legacy Stage-2 stack and not to exp059; or (b) implement
+and describe an exp059-native guidance network. As it stands there is no exp059 component under this
+name to describe.}
+
+\section{Latent-Space Optimization of Decoupling Capacitor Placement}
+\label{sec:latent_opt_decap}
+
+\subsection{Problem Formulation}
+\label{subsec:opt_problem_formulation}
+
+Stage 2 inverts the surrogate. With all network weights frozen, the search variable is the latent
+vector $z$ rather than the placement itself, following the latent-space inverse-design template of
+\cite{gomezbombarelli2018automatic}. For a fixed budget $K$, the decoded occupancy probabilities
+$p(z) \in [0,1]^{52}$ are read out to a placement by a hard top-$K$ selection,
+\begin{equation}
+\mathbf{b}(z, K) = \mathrm{top}_K\!\left(p(z)\right) \in \{0,1\}^{52},
+\qquad \sum_{i} b_i = K ,
+\label{eq:topk_readout}
+\end{equation}
+and the predicted spectrum $\hat{Z}(f)$ over the 231 bins is compared with the target mask
+$Z_{\mathrm{target}}(f)$. A candidate is declared feasible only when the predicted curve lies at or
+below the feasibility boundary at \emph{every} one of the 231 bins,
+\begin{equation}
+\hat{Z}(f_j) \le Z_{\mathrm{boundary}}(f_j) \quad \text{for all } j = 1,\dots,231,
+\qquad
+Z_{\mathrm{boundary}} = Z_{\mathrm{target}} - m,
+\label{eq:feasibility_design}
+\end{equation}
+with \texttt{BOUNDARY\_MARGIN} $m = 0.1$. The objective mode is \texttt{'gap\_max'} and the loss is
+computed in the normalized log space (\texttt{LOSS\_SPACE = 'log'}), so the base term rewards margin
+below the boundary and penalises excursions above it,
+\begin{equation}
+\mathcal{L}_{\mathrm{base}}
+= -\,w_{\mathrm{gap}} \cdot \mathrm{gap}
++ w_{\mathrm{exceed}} \cdot \mathrm{exceed},
+\qquad
+w_{\mathrm{gap}} = 1.0, \; w_{\mathrm{exceed}} = 25.0 ,
+\label{eq:stage2_base}
+\end{equation}
+where \texttt{exceed} is a mean of $\mathrm{relu}(\hat{Z} - Z_{\mathrm{boundary}})$ raised to
+\texttt{EXCEED\_POWER} $= 2.0$ over the bins, plus a maximum-excursion term.
+\fillin{write out the exact form of the maximum-excursion component of the exceed term and of the
+gap term from optimize.py:313--329; the extraction recorded the weights and the mean component but
+not the full expression.}
+
+The target mask is loaded from \texttt{configs/target\_impedance.npy}. It is required to have shape
+$(231,)$ after squeezing, is interpreted in ohms, and is converted into the model's normalized log
+space by $(\log Z_{\mathrm{target}} - \mu_{\log}) / \sigma_{\log}$ when
+\texttt{LOSS\_SPACE == 'log'}. The stored array has shape $(231, 1)$ and dtype float64, with minimum
+0.8 and maximum 49.99999999999999.
+\fillin{document the provenance and definition of the target impedance mask: who set the 0.8 ohm
+floor and the 49.99999999999999 ohm ceiling, against which specification, and with which script. The
+.npy file carries no unit metadata and no generating script was found.}
+
+\paragraph{Scope limitation.} \texttt{pipelines/latent/optimize.py} still defaults to
+\texttt{EXPERIMENT = "exp038\_true\_multi"} for both the VAE occupancy decoder and the impedance
+surrogate checkpoint, and it imports \texttt{MultiInputVAE} from
+\texttt{experiments/exp038\_true\_multi/codes/vae\_multi\_input\_simple.py}. Stage 2 as implemented is
+therefore not wired to exp059, a limitation also recorded in
+\texttt{docs/latent-optimization.md} sec.7. Everything described in this section is the method as
+implemented against exp038, and no end-to-end inverse-design result may be attributed to the exp059
+surrogate. A second, smaller inconsistency points the same way: the Stage-2 default normalization
+statistics path is \texttt{datasets/data\_multifreq\_norm/normalization\_stats.json}, a directory that
+does not exist in the current checkout, whereas the exp059 training set is
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded}.
+\fillin{resolve conflict between optimize.py:105 (datasets/data\_multifreq\_norm/, missing) and
+config.yaml:134 (datasets/data\_multifreq\_train\_norm\_unbounded) --- and record the work needed to
+wire Stage 2 to the exp059 checkpoint.}
+
+\subsection{Optimization Procedure and Feasibility Assessment}
+\label{subsec:opt_procedure_feasibility}
+
+The search is a plain gradient descent on $z$ with everything else frozen. Settings are
+\texttt{K\_LIST} $= 1 \dots 25$, \texttt{NUM\_CANDIDATE\_SEEDS} $= 32$, \texttt{NUM\_STEPS} $= 1200$,
+\texttt{LR} $= 5 \times 10^{-2}$, \texttt{GRAD\_CLIP} $= 5.0$, \texttt{INIT\_SHARED\_TEMP} $= 0.8$
+and \texttt{OPTIMIZE\_BATCH\_PER\_K = True}, so the 32 seeds for one budget are optimized as a batch.
+Seeds may be drawn randomly per run and saved to \texttt{run\_config.json}, or fixed to
+$0 \dots N-1$; the mode is selected by \texttt{LATENT\_OPT\_SEED\_MODE} and defaults to
+\texttt{'random'}.
+\fillin{reconcile the three different budget ranges in the framework: Stage 2 searches $K = 1
+\dots 25$, active learning acquires $K = 3 \dots 10$, and the dataset is filtered to $K \le 30$.
+Nothing in the repository explains the relationship.}
+
+\paragraph{Straight-through top-$K$.} The read-out of Equation~\ref{eq:topk_readout} is not
+differentiable, and this is the load-bearing detail of Stage 2. The implementation uses a
+straight-through estimator \cite{bengio2013straight},
+\begin{equation}
+\mathbf{b} = \mathrm{top}_K^{\mathrm{hard}}(p) + p - \mathrm{sg}[p],
+\label{eq:ste_design}
+\end{equation}
+where $\mathrm{sg}[\cdot]$ denotes the stop-gradient operator: the forward value is the hard top-$K$
+vector and the gradient is passed to $p$ unchanged. The code documents the reason directly ---
+``Without this the top-K argsort severs the gradient and $z$ never moves on the spectrum target.''
+The alternative of relaxing the discrete selection with a Gumbel-softmax or concrete relaxation
+\cite{jang2016gumbel, maddison2016concrete} is not used here.
+
+One qualification matters for interpreting Stage 2. The STE is applied only on the surrogate branch:
+when the impedance surrogate is loaded the forward pass is
+$\mathrm{surrogate}(\mathrm{ste\_topk}(p, K))$, whereas without it the impedance comes from
+\texttt{model.decode\_impedance(z, K)} and the occupancy top-$K$ is not in the gradient path at all.
+\texttt{USE\_SURROGATE} defaults to \texttt{True}, so the STE branch is the default, but the fallback
+VAE-head branch does not exercise it.
+
+\paragraph{Regularization of the search.} Several terms keep the search inside the region where the
+decoder is trustworthy and keep the 32 seeds from collapsing onto one another. A latent prior term
+uses \texttt{Z\_L2\_WEIGHT} $= 0.05$ with \texttt{Z\_PRIOR\_MODE = 'agg\_posterior'}, penalising
+$((z - \mu)/\sigma)^2$ against the aggregate posterior rather than against the unit prior, and a
+posterior-boundary hinge with \texttt{POSTERIOR\_BOUNDARY\_WEIGHT} $= 10.0$ activates beyond a
+Mahalanobis-style radius of \texttt{POSTERIOR\_SIGMA\_LIMIT} $= 2.5$. Spectrum-shape terms are
+\texttt{SHAPE\_REG\_WEIGHT} $= 2.0$ with \texttt{SHAPE\_MIN\_STD\_DLOG} $= 0.12$, which penalises
+degenerate flat spectra, and \texttt{SHAPE\_TRACK\_WEIGHT} $= 2.0$ for MSE tracking of the target.
+Peak-alignment terms are \texttt{PEAK\_LOSS\_WEIGHT} $= 1.0$, \texttt{PEAK\_INDEX\_WEIGHT} $= 3.0$,
+\texttt{PEAK\_MAG\_WEIGHT} $= 2.0$, \texttt{DUAL\_TOPK\_WEIGHT} $= 2.5$,
+\texttt{IMPEDANCE\_NUM\_PEAKS} $= 8$ and \texttt{IMPEDANCE\_TOPK\_K} $= 20$, all overridable through
+\texttt{LATENT\_OPT\_*} environment variables. Seed diversity is encouraged by penalising the mean
+pairwise cosine similarity across the parallel seeds with \texttt{DIVERSITY\_WEIGHT} $= 0.35$, and
+occupancy confidence by \texttt{OCC\_CONFIDENCE\_WEIGHT} $= 0.5$. Finally the anti-resonance physics
+prior of Equation~\ref{eq:anti_resonance} is applied here with \texttt{PHYSICS\_AR\_WEIGHT} $= 0.5$,
+overridable by the checkpoint config's \texttt{physics\_ar\_weight}. This is the physics term that is
+genuinely active in an optimization objective, and it belongs to Stage 2 as implemented against
+\texttt{exp038\_true\_multi}, not to exp059: as Section~\ref{subsec:objective_physics_reg} records,
+no physics term enters the exp059 training objective at all.
+
+\paragraph{Selection and reporting.} Among the feasible candidates for a budget $K$, the selection
+metric is \texttt{SELECT\_METRIC = 'max\_ohm'}: candidates are ranked by the maximum predicted
+impedance in ohms across the spectrum, and the lowest peak wins. The alternative \texttt{'mean'}
+would rank by the mean instead. If no candidate for a budget is feasible, the run writes an explicit
+\texttt{no\_solution.json} for that $K$ rather than emitting a best-effort placement, which keeps
+infeasibility distinguishable from a poor solution in the downstream reports.
+
+Surrogate feasibility is a screening verdict, not a sign-off. A placement that Stage 2 declares
+feasible has only been checked against the surrogate's own prediction, and requires ground-truth
+re-simulation in ECADSTAR before any claim about the physical board is made.
+
+\figplace{Stage-2 loop: frozen decoder, gradient on z, STE top-K read-out into the impedance surrogate, feasibility test against the target mask.}
+
+\section{Experimental Setup}
+\label{sec:experimental_setup}
+
+The model track used for all training and active learning reported in this thesis is
+\texttt{exp059\_capacity\_freq}; \texttt{exp057\_structured\_graph} and
+\texttt{exp058\_asymmetric\_kl} are legacy and \texttt{exp060\_multitype\_occ} is an exploratory fork.
+Each experiment directory under \texttt{experiments/} is a self-contained copy of the training stack,
+so a change in one fork does not propagate to the others and checkpoints are not cross-loadable
+between them.
+
+Training data is \texttt{datasets/data\_multifreq\_train\_norm\_unbounded}, described in
+Section~\ref{subsec:multifreq_dataset}: 582997 manifest rows over 24979 layouts and 24 anchor
+frequencies, split by layout at \texttt{train\_split} 0.9 with seed 42. Configuration lives in
+\texttt{experiments/exp059\_capacity\_freq/config.yaml} for the capacity phase and in
+\texttt{config\_al\_finetune.yaml} for the active-learning fine-tune; the runtime override mechanism
+is \texttt{VAE\_CONFIG\_PATH}.
+
+\fillin{state the compute environment used for the reported runs: GPU model and count, host memory,
+CUDA and PyTorch versions, and the total training wall-clock time. This is not recorded in any
+committed artifact and must not be taken from a live shell.}
+
+Simulation of newly proposed layouts runs on ECADSTAR under Windows, driven from WSL. The AL config
+names \texttt{erf\_path}
+\texttt{C:\textbackslash Users\textbackslash muthusamy\textbackslash Desktop\textbackslash design\textbackslash H-shape.emc\textbackslash H-shape.erf},
+powerbus \texttt{Power\_GND}, \texttt{peb\_components} \texttt{IC1\_Port1},
+\texttt{heatmap\_only\_peb} true and \texttt{wait\_timeout\_sec} 18000. The simulation steps of the
+pipeline cannot be executed without that host.
+
+The residual Gaussian process used for acquisition (Section~\ref{sec:active_learning}) is implemented
+with GPyTorch \cite{gardner2018gpytorch} as an \texttt{ApproximateGP} trained with a
+\texttt{VariationalELBO}.
+
+Two documentation caveats apply when reading the repository alongside this chapter.
+\texttt{docs/normalization-and-losses.md} is the most detailed normalization and loss reference in
+the repository but is dated 2026-06-22 and describes the exp050 Tier-A configuration; it lists a
+six-anchor set and a heatmap weight of 4.0, neither of which matches the exp059 dataset or config, so
+it is usable for method description but not for numbers. \texttt{docs/training-procedure.md} is
+written for the exp054-to-exp057 lineage and states its own caveat that exact epoch counts, weights
+and off-anchor MHz lists are config-specific and should always be taken from the experiment's
+\texttt{config.yaml}.
+
+\section{Active Learning for scaling the model}
+\label{sec:active_learning}
+
+The surrogate is trained on a fixed pool of simulated layouts, and the layouts that matter for
+inverse design --- placements the optimizer wants to propose --- are not necessarily well represented
+in that pool. The active-learning loop closes this gap in the standard pool-based way
+\cite{settles2009active, batchal2022batch}: generate a large pool of candidate layouts, score them,
+send only the highest-scoring batch to the expensive ECADSTAR simulator, ingest the labels, and
+fine-tune the surrogate on the enlarged set.
+
+\paragraph{Entry point and control.} The entry point is \texttt{pipelines/active\_learning/run.py};
+\texttt{active\_learning\_pi/al/pipeline.py} refuses to run directly and instructs the user to edit
+the \texttt{CONFIG} block in \texttt{run.py}. The default config is
+\texttt{active\_learning\_pi/config/exp059\_gp\_error.json}, with
+\texttt{exp059.json} (Monte-Carlo acquisition) and \texttt{exp059\_random.json} (equal-budget random
+control) named as alternatives in the same block. \texttt{COMMAND = 'full'} runs the whole cycle;
+\texttt{PROPOSE\_ONLY = True} runs generation and inference only, with no ECAD simulation and no
+fine-tune, which is the mode used for dry runs. The cycle is described here as eight steps ---
+per-$K$ acquisition (generate, infer, select), PEB construction, ECADSTAR simulation, ingest with
+normalization and pre-fine-tune evaluation, overlay construction with fine-tune, and post-fine-tune
+evaluation with the decision report --- but the step count is computed at runtime and is 8 only when
+fine-tuning and post-fine-tune evaluation are all enabled, otherwise 7 or 6.
+
+\paragraph{Candidate pool.} For exp059 the pool spans \texttt{k\_min} $= 3$ to \texttt{k\_max} $= 10$
+with \texttt{k\_sweep\_per\_pool = true}, \texttt{candidates\_per\_k} $= 1600$,
+\texttt{worst\_per\_k} $= 80$ and \texttt{total\_ecad\_per\_cycle} $= 640$. Candidates are random
+$K$-hot occupancy vectors over the 52 slots. Generation is seeded deterministically per iteration and
+per budget: $\texttt{seed} = \texttt{candidate\_seed} + \texttt{iteration} \times 10000 + K$ with
+\texttt{candidate\_seed} $= 42$, so a cycle can be reproduced exactly. Each candidate is also
+assigned an inspection frequency from the grid
+$[120, 150, 155, 170, 180, 200, 230, 250, 265, 270, 280, 300]$~MHz under per-$K$ strata quotas
+$120{:}30$, $150{:}50$, $155{:}100$, $170{:}40$, $180{:}50$, $200{:}90$, $230{:}90$, $250{:}140$,
+$265{:}130$, $270{:}80$, $280{:}70$, $300{:}70$. An exploration slice adds
+\texttt{explore\_candidates\_per\_k} $= 160$ further candidates drawn from a continuous 120--320~MHz
+range quantized to 5~MHz, with band edges $[120, 180, 230, 280, 320]$. Selection applies the MHz
+quotas together with a \texttt{min\_uncertainty\_percentile} of 40, and when
+\texttt{mhz\_strata\_per\_k} is set while \texttt{worst\_mhz\_strata\_per\_k} is null the ECAD-side
+quotas are auto-scaled from the pool strata to that budget's \texttt{worst\_n}.
+\fillin{give the rationale for the MHz strata quotas (why 250~MHz receives 140 candidates per $K$ and
+155~MHz receives 100). No artifact states it.}
+
+These numbers conflict with the written AL documentation. \texttt{docs/active-learning.md} sec.3--4
+states \texttt{candidates\_per\_k} 400, \texttt{worst\_per\_k} 10, 80 ECAD simulations per cycle and
+off-anchor frequencies 90/265/435/510~MHz; the exp059 config states 1600, 80, 640 and 155/250/265.
+That document is exp057-era.
+\fillin{resolve conflict between docs/active-learning.md sec.3--4 (exp057-era budgets) and
+active\_learning\_pi/config/exp059\_gp\_error.json (current budgets) by updating the document.}
+
+\paragraph{Acquisition by a residual Gaussian process.} The acquisition mode for the primary exp059
+run is \texttt{gp\_error}; \texttt{inference\_pool.predict\_candidates} dispatches between
+\texttt{gp\_error}, \texttt{random} and \texttt{mc}, defaulting to \texttt{mc} when unset. The
+\texttt{gp\_error} mode does not ask the VAE how confident it is. It fits a separate Gaussian process
+whose regression target is the surrogate's own error on labelled data, and ranks candidates by that
+predicted error. The configured settings are feature path \texttt{'pred'}, target \texttt{'p99\_ae'}
+(the physical-foreground 99th-percentile absolute error), regressor \texttt{'svgp'},
+$\kappa = 0.5$, \texttt{n\_fit} $= 4000$, \texttt{n\_inducing} $= 256$, \texttt{svgp\_epochs} $= 80$,
+seed 0, \texttt{novelty\_weight} $= 0.0$ and \texttt{score\_mode} \texttt{'mu'}. Other residual
+targets are available in the implementation: \texttt{peak\_px}, \texttt{peak\_soft\_px},
+\texttt{peak\_sharp\_px}, \texttt{struct}, \texttt{mae}, \texttt{mse} and \texttt{imp\_mse}.
+
+The acquisition function implemented is the upper confidence bound
+\begin{equation}
+a(x) = \mu_e(x) + \kappa \, \sigma_e(x),
+\label{eq:gp_ucb}
+\end{equation}
+in the form of \cite{srinivas2010gp}, where $\mu_e$ and $\sigma_e$ are the posterior mean and
+standard deviation of the error GP. With \texttt{score\_mode = 'mu'} the acquisition returns $\mu_e$
+only, and the novelty term is added only under \texttt{score\_mode = 'ucb\_novelty'}. The production
+exp059 run therefore ranks purely by predicted error and does not use $\sigma_e$ at all. The
+docstring at \texttt{inference\_pool.py}:177--179 nevertheless states that \texttt{gp\_error}
+candidates are ranked ``by UCB $\mu_e + \kappa\,\sigma_e$''.
+\fillin{resolve conflict between inference\_pool.py:177--179 (docstring says UCB with sigma) and
+exp059\_gp\_error.json score\_mode = 'mu' resolved at gp\_error\_surrogate.py:350--352 (mean only,
+sigma unused); docs/gp-error-surrogate.md sec.5 states the mu default explicitly.}
+
+The GP inputs come from a feature path that requires no simulation: the model encodes the candidate
+occupancy with \texttt{encode\_occupancy\_latent}, decodes it, re-encodes the model's \emph{own}
+predicted heatmap, and uses the resulting posterior mean as the GP input. This is what allows
+candidates to be scored before any ECAD label exists. The fitted GP artifact is cleared at the start
+of every per-$K$ acquisition (\texttt{per\_k\_acquire.py}:66--69), so a fresh fit is performed in each
+cycle rather than a cached one reused.
+\fillin{confirm the reason for clearing the cached GP fit each cycle --- the obvious candidate is
+that fine-tuning shifts the latent space the GP is fitted in, but per\_k\_acquire.py records only the
+clearing itself, with no comment or note stating why.}
+
+This construction is assembled from three separate literatures rather than taken from one canonical
+precedent. The sparse variational GP that makes it tractable at candidate-pool scale comes from the
+inducing-point variational formulation of \cite{titsias2009variational} and its stochastic extension
+\cite{hensman2013bigdata}, implemented here in GPyTorch \cite{gardner2018gpytorch}. The acquisition
+rule is GP-UCB \cite{srinivas2010gp}. The underlying idea of modelling a separate discrepancy term
+rather than trusting the primary model's own uncertainty is the model-discrepancy decomposition of
+\cite{kennedy2001calibration}. No source found in the literature review combines them as a unit for
+active learning of a neural surrogate in engineering design, and this chapter does not claim one.
+Modelling error with a second model is also a deliberate departure from asking the network itself,
+for example by Monte-Carlo dropout \cite{gal2016dropout}, which is the mechanism the \texttt{mc} mode
+implements.
+\fillin{state the design rationale for choosing the residual-GP over MC-dropout uncertainty in the
+author's own words; the framework document motivates it but the decision is not recorded as a
+comparison in any artifact.}
+
+\paragraph{Controls.} The random control assigns uniform random scores from
+\texttt{np.random.default\_rng(seed + iteration)}, preserving the ECAD budget exactly so that the
+comparison is equal-budget. The Monte-Carlo mode retains its parameters in the exp059 config:
+\texttt{mc\_passes} 4, \texttt{mc\_latent\_passes} 4, \texttt{mc\_decoder\_passes} 8,
+\texttt{mc\_decoder\_dropout} true, \texttt{score\_metric} \texttt{'auto\_bad'}, with score weights
+\texttt{decoder\_dropout\_rce} 1.0, \texttt{latent\_heatmap\_mse} 1.0, \texttt{p99\_var} 1.0,
+\texttt{p99\_range} 0.5, \texttt{peak\_loc\_spread} 0.5, \texttt{peak\_cv} 0.25 and
+\texttt{prior\_tension} 0.35.
+
+No comparative claim is made here about the three acquisition modes.
+\texttt{docs/cursor-handoff.md} sec.3D still lists the exp059 acquisition A/B
+(\texttt{validate\_acquisition\_ab.py}) as an open task and the project's own claim ledger records
+\texttt{acq\_ab\_gp\_vs\_mc} as UNCERTAIN, so the chapter describes the mechanisms and leaves their
+relative merit to be established.
+
+\paragraph{Inference settings.} Scoring runs with \texttt{inference\_mode} \texttt{'layout'},
+\texttt{pi\_ref\_mhz} $= 200.0$, \texttt{shared\_temp} $= 1.5$ and \texttt{heatmap\_grid\_size}
+$= 64$, with the board mask \texttt{configs/binary\_mask.npy} (a $64 \times 64$ boolean array) and
+\texttt{normalization\_stats\_json} pointing at the unbounded training set, so that scoring uses the
+same normalization the model was trained under.
+
+\paragraph{Simulation, ingest and fine-tune.} Selected layouts are exported as PEB batches and
+simulated by ECADSTAR, as described in Section~\ref{sec:experimental_setup}. Labels are ingested and
+robustly normalized, then merged into an overlay dataset
+\texttt{datasets/data\_multifreq\_al\_overlay\_exp059}, which is mixed into training with a per-sample
+\texttt{al\_overlay\_sample\_weight} $= 128.0$ applied to the overlay rows.
+\fillin{state the reason for the 128.0 overlay sample weight and how the value was chosen; the AL
+config and config\_al\_finetune.yaml both set it, but no artifact records the intent or a comparison
+against the value used in the training code's default.}
+The fine-tune resumes from
+\texttt{checkpoints/last\_model.pt} and sets $\texttt{num\_epochs} = \texttt{checkpoint\_epoch} +
+\texttt{extra\_epochs}$ with \texttt{extra\_epochs} $= 45$ for exp059. The merged runtime
+configuration is written to \texttt{config\_al\_finetune.runtime.yaml} and passed to the trainer via
+\texttt{VAE\_CONFIG\_PATH}.
+
+The fine-tune's modality-mixing probabilities are a documented conflict that affects what was
+actually executed. \texttt{experiments/exp059\_capacity\_freq/config\_al\_finetune.yaml}:11--12 sets
+\texttt{layout\_train\_prob} $= 0.9$ and \texttt{occ\_only\_encode\_prob} $= 0.7$ (together with
+\texttt{latent\_distill\_weight} 2.5, \texttt{output\_distill\_weight} 2.5,
+\texttt{eval\_use\_occ\_only\_layout} true and early stopping with patience 3, min delta 0.01, kind
+\texttt{'layout\_cross'}). The \texttt{finetune} block of
+\texttt{active\_learning\_pi/config/exp059\_gp\_error.json} sets 0.65 and 0.4, and
+\texttt{write\_runtime\_finetune\_config} copies the AL JSON keys over the values in
+\texttt{config\_al\_finetune.yaml} (\texttt{finetune\_run.py}:94--117). At runtime the AL fine-tune
+therefore uses 0.65 and 0.4, not the 0.9 and 0.7 that \texttt{docs/cursor-handoff.md} sec.2 and
+\texttt{CLAUDE.md} both state.
+\fillin{resolve conflict between config\_al\_finetune.yaml:11--12 (0.9 / 0.7), exp059\_gp\_error.json
+finetune block (0.65 / 0.4) and the documentation in cursor-handoff.md sec.2 and CLAUDE.md (0.9 /
+0.7). finetune\_run.py:94--117 makes the AL JSON win, so the executed values are 0.65 / 0.4 --- state
+whether that was intended.}
+
+\paragraph{Reporting.} Decision reporting is gated on minimum sample sizes:
+\texttt{decision\_min\_rank\_n} $= 30$ and \texttt{decision\_min\_ecad\_n} $= 20$, with
+\texttt{infer\_scope} \texttt{'ingested'} so that only the newly ECAD-labelled layouts are re-scored.
+Every cycle writes \texttt{scored\_candidates.json}, \texttt{acquisition\_rank\_quality.json},
+\texttt{eval\_off\_anchor\_pre\_finetune.json}, \texttt{eval\_off\_anchor\_post\_finetune.json},
+\texttt{eval\_cycle\_summary.json}, \texttt{CYCLE\_EVAL\_REPORT.md}, \texttt{DECISION\_REPORT.md} and
+\texttt{decision\_ledger.json}. The results chapter draws its active-learning numbers from these
+files.
+
+The loop has been executed on exp059: the run \texttt{al\_exp059\_gp\_error\_001} contains iterations
+\texttt{iter\_0001} through \texttt{iter\_0004}, and \texttt{iter\_0004/k\_sweep\_summary.json}
+records acquisition mode \texttt{gp\_error}, $K$ values $[3,4,5,6,7,8,9,10]$,
+\texttt{candidates\_per\_k} 1600, \texttt{worst\_per\_k} 80, \texttt{total\_candidates} 12800 and
+\texttt{total\_selected} 640. This is stated here only as evidence that the pipeline described above
+runs end to end; no performance figure from those runs belongs in this chapter.
+
+\figplace{Active-learning cycle: candidate generation, residual-GP scoring, PEB export, ECADSTAR simulation, overlay build, fine-tune, decision report.}
+
+% ---------------------------------------------------------------
+% FILL IN checklist:
+%   - Board description (H-shape test vehicle): geometry, stackup, port definition. Needs a
+%     committed board-spec artifact or the author's own description.
+%   - ECADSTAR bulk data-generation setup (solver, excitation, meshing, heatmap export). Only the
+%     AL-side CLI invocation is documented (docs/data-pipeline.md sec.5).
+%   - Stored heatmap tensor resolution as a dataset property (dataset_meta.json has no shape field).
+%   - Whether the 80 MHz anchor shortfall (8480 vs 24979) is deliberate.
+%   - Anchor-count conflict: dataset_meta.json (24) vs docs/dataset.md sec.4 (16) vs
+%     docs/normalization-and-losses.md sec.1.4 (six anchors).
+%   - Why heatmaps use per-MHz robust stats but impedance uses one global log z-score.
+%   - Exact train/val layout counts for seed 42, train_split 0.9 (notes.md gives ~22481/2498).
+%   - stratify_by_k conflict: config.yaml:18 true vs dataloader_base.py:301,353-362 (no sampler).
+%   - Complete list of cross-experiment imports in experiments/exp059_capacity_freq/codes/ (grep for
+%     "experiments.exp0"). The earlier "only one cross-experiment import" claim was withdrawn.
+%   - Ablation or per-path evaluation showing the occupancy-only encode path degrades without
+%     modality dropout. No such artifact exists; the enabling role is an untested assumption.
+%   - Rationale for PoE over MoE fusion for this problem.
+%   - Rationale for the numeric loss weights 5.0 / 7.0 / 4.0 / 2.0 and the focus-phase overrides.
+%   - Rationale for sigma_reg_target 0.45 and free_bits 0.12.
+%   - Spectral anti-blur conflict: notes.md:20-23 headline change vs absent config key (inactive).
+%   - Why the physics losses are constructed but never applied (deliberate ablation vs side effect of
+%     the _run_epoch monkey-patch). No note or commit message explains it.
+%   - Training hyperparameter conflict: notes.md:25 (2e-4 / 500 / null) vs config.yaml (1.5e-05 /
+%     510 / last_model.pt) -- state which produced the reported checkpoint.
+%   - Why AMP and TF32 were disabled for exp059.
+%   - Why find_unused_parameters=True was enabled in DDP (no comment or note records a reason).
+%   - Why 250 MHz, a training anchor, is in eval_off_anchor_mhz with the highest weight (3.0), and
+%     which aggregate quantity checkpoints/best_off_anchor_model.pt is selected on.
+%   - Capacity-phase mixing probabilities: config.yaml:47-48 (0.65 / 0.4) vs notes.md:12-14 and
+%     cursor-handoff.md:33-37 (0 / 0).
+%   - Training hardware / software environment and wall-clock time (no committed artifact).
+%   - exp059 model parameter count (printed at train_core.py:1424, not stored).
+%   - Decision on subsec:aux_guidance_network -- rename to the exp038 impedance surrogate, or
+%     implement an exp059-native component. No exp059 component of that name exists.
+%   - Full expression of the Stage-2 exceed maximum-excursion term and gap term (optimize.py:313-329).
+%   - Provenance of configs/target_impedance.npy (0.8 ohm floor, 49.99999999999999 ohm ceiling).
+%   - Stage-2 normalization path conflict: optimize.py:105 (missing directory) vs config.yaml:134;
+%     plus the work needed to wire Stage 2 to the exp059 checkpoint.
+%   - Reconciliation of the three budget ranges: Stage 2 K=1..25, AL K=3..10, dataset K<=30.
+%   - Rationale for the AL MHz strata quotas (250 MHz -> 140, 155 MHz -> 100 per K).
+%   - AL budget conflict: docs/active-learning.md sec.3-4 (exp057-era) vs exp059_gp_error.json.
+%   - GP score conflict: inference_pool.py:177-179 docstring (UCB with sigma) vs score_mode 'mu'.
+%   - Reason the cached GP fit is cleared at the start of every per-K acquire (per_k_acquire.py:66-69
+%     shows the clearing; no comment states why).
+%   - Reason for the 128.0 AL overlay sample weight and how the value was chosen.
+%   - Author's rationale for residual-GP over MC-dropout uncertainty.
+%   - AL fine-tune mixing conflict: config_al_finetune.yaml (0.9 / 0.7) vs exp059_gp_error.json
+%     (0.65 / 0.4, wins at runtime) vs cursor-handoff.md sec.2 and CLAUDE.md (0.9 / 0.7).
+%
+% Citation verification queue:
+%   - STILL note=VERIFY in refs.bib (bibliographic fields not confirmed): settles2009active,
+%     maddison2016concrete, higgins2017beta, shi2019mmvae. These four must be checked before
+%     submission.
+%   - hensman2013bigdata, titsias2009variational, gardner2018gpytorch, kennedy2001calibration were
+%     added to refs.bib this session; the chapter audit reports full author/year/title fields and no
+%     VERIFY note on them.
+%   - All 21 cite keys used here resolve to entries in Thesis_report/refs.bib; none is invented.
+%     Full list: kingma2013auto, sohn2015conditional, higgins2017beta, wu2018mvae,
+%     kutuzova2021defense, shi2019mmvae, perez2018film, kipf2016graph, gilmer2017message,
+%     bengio2013straight, jang2016gumbel, maddison2016concrete, gomezbombarelli2018automatic,
+%     srinivas2010gp, gal2016dropout, settles2009active, batchal2022batch, gardner2018gpytorch,
+%     titsias2009variational, hensman2013bigdata, kennedy2001calibration.
+%   - The residual-GP construction is stated in the text as an ASSEMBLY of three literatures
+%     (SVGP, GP software, model discrepancy). Do not let editing collapse it into one precedent.
+%
+% Evidence warnings:
+%   - INACTIVE LOSSES: the physics terms (ri/cs/ar) and the spectral anti-blur loss are configured
+%     and implemented but never enter the exp059 total loss. The chapter states both explicitly.
+%     The model must not be described as physics-informed in its training objective.
+%   - subsec:aux_guidance_network has no implementation under that name anywhere in the repository.
+%     The label is kept as approved; the subsection says so and describes the nearest artifact
+%     (exp038 surrogate_impedance.py, legacy forks only).
+%   - Stage 2 (pipelines/latent/optimize.py) defaults to EXPERIMENT = 'exp038_true_multi' and is NOT
+%     wired to exp059. No end-to-end inverse-design result may be attributed to the exp059 surrogate.
+%   - The STE is applied only on the surrogate branch (surrogate(_ste_topk(occ, K))); the fallback
+%     VAE-head branch does not exercise it.
+%   - acq_ab_gp_vs_mc is UNCERTAIN and the exp059 acquisition A/B is still an open task. No claim of
+%     GP superiority over MC or random appears in this chapter, and none may be added.
+%   - use_multiscale_film, the headline architectural change of exp059, is set by a code default in
+%     exp059_common.py:43, not by config.yaml.
+%   - Stale documents: docs/normalization-and-losses.md (2026-06-22, exp050 Tier A),
+%     docs/training-procedure.md (exp054-exp057 lineage), docs/active-learning.md (exp057-era
+%     budgets), docs/dataset.md (16-anchor claim), root README.md (presents exp057 as current).
+%     None of these were used as a source for numbers.
+%   - Training hardware was deliberately left as \fillin rather than taken from a live shell.
+%   - EVIDENCE-BLOCK ERROR: the extracted facts state "the occupancy and impedance decoders see only
+%     the shared part". That is wrong for the impedance decoder. vae_multi_input_simple.py:294-296
+%     gives dec_in_occ = shared_latent_dim + cond_dim but dec_in_imp = layout_latent_dim + cond_dim
+%     + 64, and :174 defines layout_latent_dim = shared_latent_dim + imp_peak_dim. The chapter now
+%     follows the code. Do not restore the facts-block wording.
+%   - The shared=80 statement is at notes.md:15 (the facts block cited :16). PhysicsLoss is
+%     instantiated at train_core.py:1393 and the physics guard is train_core.py:609-613 (earlier
+%     draft cited 1392 and 608). Line numbers corrected in the text.
+%   - Off-anchor evaluation is a misnomer for one of its three frequencies: 250.0 MHz is a training
+%     anchor and carries the highest weight (3.0). Only 155.0 and 265.0 are held out.
+%   - RATIONALE CLAUSES REMOVED: five "so that / which is required because / is what makes" clauses
+%     -- per-anchor normalization, modality dropout, find_unused_parameters, the 128.0 overlay
+%     weight, and the per-cycle GP cache clearing -- asserted a mechanism with no ablation, comment
+%     or note behind it. They are now either design intent or \fillin. Do not reinstate them as fact.
+% ---------------------------------------------------------------

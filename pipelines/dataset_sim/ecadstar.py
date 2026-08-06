@@ -82,6 +82,50 @@ def parse_pi_number(name: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+_KILL_PS = (
+    "$titles=@('*eCADSTAR*PI/EMI*','*PI/EMI Analysis*');"
+    "$procs=Get-Process | Where-Object {"
+    " $mt=$_.MainWindowTitle;"
+    " if([string]::IsNullOrEmpty($mt)){$false}"
+    " else{ ($titles | Where-Object { $mt -like $_ }).Count -gt 0 } };"
+    "$ids=@($procs | ForEach-Object { $_.Id });"
+    "foreach($p in $procs){ try{ Stop-Process -Id $p.Id -Force -ErrorAction Stop }catch{} }"
+    "if($ids.Count -gt 0){ Write-Output ('KILLED ' + ($ids -join ',')) }"
+    "else{ Write-Output 'NONE' }"
+)
+
+
+def kill_ecadstar_windows(*, verbose: bool = True) -> list[int]:
+    """Force-close any running ECADStar PI/EMI instance (matched by window title).
+
+    Mirrors the manual recovery kill: find the "eCADSTAR PI/EMI Analysis" window
+    and Stop-Process it. Use ONLY before a fresh ERF open (never on skipopen — that
+    would destroy the persistent instance). Returns the list of killed PIDs; [] if
+    none were running or PowerShell is unavailable.
+    """
+    try:
+        proc = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", _KILL_PS],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        if verbose:
+            print(f"  kill_ecadstar: skipped (PowerShell unavailable: {exc})")
+        return []
+
+    out = (proc.stdout or "").strip()
+    if out.startswith("KILLED"):
+        pids = [int(x) for x in out.split(" ", 1)[1].split(",") if x.strip().isdigit()]
+        if verbose:
+            print(f"  Killed stale ECADStar PID(s): {pids}")
+        return pids
+    if verbose:
+        print("  No running ECADStar PI/EMI instance to kill.")
+    return []
+
+
 def clear_ecadstar_lock(erf_path: str) -> bool:
     erf = resolve_windows_path(erf_path)
     lock = erf.parent / f"{erf.stem}.rlk"
@@ -122,123 +166,71 @@ def stage_peb_for_ecadstar(
     return staged[0] if staged else peb_path
 
 
-def run_ecadstar_batch(peb_path: Path, *, erf_path: str, repo_root: Path, ahk_exe: str | None, skip_open_erf: bool) -> int:
+def run_ecadstar_batch_headless(
+    peb_path: Path,
+    *,
+    erf_path: str,
+    engineer_exe: str,
+    impulse_port: int | None = None,
+    timeout_sec: int = 172_800,
+    verbose: bool = True,
+) -> int:
+    """Run a PI/EMI batch fully headless via ``engineer.exe --batch --batch-auto-exit``.
+
+    This is the native eCADSTAR batch interface — no AutoHotkey, no GUI focus, no
+    window activation. ``engineer.exe`` opens the .erf, executes the .peb batch,
+    writes PI-1..N outputs, and quits itself (``--batch-auto-exit``). Because the
+    call blocks until the process exits, process self-exit is the ground-truth
+    completion signal.
+
+    Returns 0 on clean self-exit, 124 on timeout (process force-killed), or -1 if
+    PowerShell is unavailable.
+    """
     erf = resolve_windows_path(erf_path)
     if not erf.is_file():
         raise FileNotFoundError(f"ERF not found: {erf}")
     if not peb_path.is_file():
         raise FileNotFoundError(f"PEB not found: {peb_path}")
 
-    ps_script = repo_root / "tools" / "ecadstar" / "run_ecadstar_piemi_batch.ps1"
-    if not ps_script.is_file():
-        raise FileNotFoundError(f"AHK runner not found: {ps_script}")
+    erf_win = windows_path_str(erf)
+    peb_win = windows_path_str(peb_path)
+    exe_win = engineer_exe if _is_windows_abs(engineer_exe) else windows_path_str(Path(engineer_exe))
 
-    cmd = [
-        "powershell.exe",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        windows_path_str(ps_script),
-        "-ErfPath",
-        windows_path_str(erf),
-        "-PebPath",
-        windows_path_str(peb_path),
-    ]
-    if ahk_exe:
-        cmd.extend(["-AhkExe", str(ahk_exe)])
-    if skip_open_erf:
-        cmd.append("-SkipOpenErf")
+    argline = f'"{erf_win}" --batch "{peb_win}" --batch-auto-exit'
+    if impulse_port is not None:
+        argline += f" --impulse-port {int(impulse_port)}"
 
-    log_hint = Path(os.environ.get("TEMP", "/tmp")) / "ecadstar_piemi_batch.log"
-    print(f"Running ECADSTAR: Load Batch → {windows_path_str(peb_path)}")
-    print(f"  Log (Windows): {log_hint}")
-    proc = subprocess.run(cmd, cwd=str(repo_root), env=os.environ.copy())
+    timeout_ms = int(timeout_sec * 1000)
+    ps = (
+        f"$exe = '{exe_win}';"
+        f"$argline = '{argline}';"
+        "$p = Start-Process -FilePath $exe -ArgumentList $argline -PassThru -NoNewWindow;"
+        f"if ($p.WaitForExit({timeout_ms})) {{ Write-Output ('HEADLESS_EXIT code=' + $p.ExitCode); exit 0 }}"
+        " else { Write-Output 'HEADLESS_TIMEOUT'; try { $p.Kill() } catch {}; exit 124 }"
+    )
+
+    if verbose:
+        print(f"Running ECADSTAR headless: engineer.exe --batch → {peb_win}")
+        print(f"  engineer.exe : {exe_win}")
+        print("  --batch-auto-exit (no GUI window / no AutoHotkey / background-safe)")
+
+    try:
+        proc = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", ps],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        print(f"  headless run failed (PowerShell unavailable: {exc})")
+        return -1
+
+    out = (proc.stdout or "").strip()
+    err = (proc.stderr or "").strip()
+    if verbose and out:
+        print(f"  {out}")
+    if err:
+        print(f"  [engineer stderr] {err}")
     return int(proc.returncode)
-
-
-_BATCH_START_MARKERS = ("Perform batch step", "Batch file", "read successfully")
-
-
-def _peb_name_in_log(text: str, peb_path: Path) -> bool:
-    name = peb_path.name
-    if name in text:
-        return True
-    win = windows_path_str(peb_path)
-    return win in text or win.replace("\\", "/") in text
-
-
-def _pi_log_shows_batch_started(log_path: Path, peb_path: Path, since_ts: float) -> bool:
-    if not log_path.is_file():
-        return False
-    if log_path.stat().st_mtime < since_ts - 2.0:
-        return False
-    text = log_path.read_text(encoding="utf-8", errors="replace")
-    if not _peb_name_in_log(text, peb_path):
-        return False
-    return any(marker in text for marker in _BATCH_START_MARKERS)
-
-
-def _pi_folder_has_fresh_activity(folder: Path, since_ts: float) -> bool:
-    if not folder.is_dir():
-        return False
-    for path in folder.rglob("*"):
-        if path.is_file() and path.stat().st_mtime >= since_ts - 2.0:
-            return True
-    return False
-
-
-def wait_for_batch_started(
-    emc_output_dir: str,
-    *,
-    peb_path: Path,
-    batch_start_ts: float,
-    timeout_sec: int,
-    poll_sec: int,
-) -> None:
-    """Block until PI-1 log confirms this PEB batch started (backup to AHK wait)."""
-    emc = resolve_windows_path(emc_output_dir)
-    pi1 = emc / "PI-1"
-    pi_log = pi1 / "log.txt"
-    peb_path = peb_path.resolve()
-
-    print(
-        f"\nConfirming ECADStar batch started for {peb_path.name} "
-        f"(keep RDP on PI/EMI, timeout {timeout_sec}s)…"
-    )
-    deadline = time.time() + timeout_sec
-    poll_index = 0
-    while time.time() < deadline:
-        poll_index += 1
-        if _pi_log_shows_batch_started(pi_log, peb_path, batch_start_ts):
-            print(f"  ✓ Batch started — {peb_path.name} seen in PI-1/log.txt")
-            return
-        if _pi_folder_has_fresh_activity(pi1, batch_start_ts):
-            print(
-                f"  ✓ Batch activity in PI-1/ (mtime after {_fmt_ts(batch_start_ts)})"
-            )
-            return
-        if poll_index == 1 or poll_index in {2, 5, 10}:
-            print(
-                f"  … waiting for batch start ({poll_index}) — "
-                f"PI-1/log exists={pi_log.is_file()}  "
-                f"keep PI/EMI visible"
-            )
-            if pi_log.is_file():
-                age = pi_log.stat().st_mtime
-                print(
-                    f"     PI-1/log.txt mtime={_fmt_ts(age)}  "
-                    f"fresh={age >= batch_start_ts - 2.0}"
-                )
-        time.sleep(poll_sec)
-
-    raise SystemExit(
-        f"ECADStar batch did not start within {timeout_sec}s\n"
-        f"  PEB: {windows_path_str(peb_path)}\n"
-        f"  Check: {windows_path_str(pi_log)}\n"
-        f"  AHK log: %TEMP%\\ecadstar_piemi_batch.log\n"
-        f"  Keep RDP focused on PI/EMI during Load Batch."
-    )
 
 
 def _pi_folder_index(emc_dir: Path) -> dict[int, Path]:

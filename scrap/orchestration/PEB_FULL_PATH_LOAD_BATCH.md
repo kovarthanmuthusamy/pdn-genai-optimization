@@ -1,5 +1,10 @@
 # Load Batch: full PEB path paste
 
+> **SUPERSEDED (2026-08-04).** The AutoHotkey "paste the PEB path into the Load Batch
+> dialog" flow is gone. The headless CLI now passes the full `.peb` path directly via
+> `engineer.exe --batch <full-path.peb>`. See `docs/ecadstar_headless_cli.md`. Kept
+> for history.
+
 ## Change
 
 ECADStar Load Batch automation now pastes the **full Windows path** to the `.peb` file (e.g. `C:\Users\...\pi_distribution_K30_freq_sweep.peb`) instead of the filename only.

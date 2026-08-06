@@ -119,11 +119,20 @@ class Config:
     heatmap_focus_modality_dropout: float = 0.05
     # Match inference: train with occ+imp layout latent part of the time.
     layout_train_prob: float = 0.4
+    # When layout branch is taken, use occupancy-only encode (imp → prior) with this prob.
+    occ_only_encode_prob: float = 0.0
+    eval_use_occ_only_layout: bool = False
     # Cross-freq loss always uses layout z (matches sweep / layout_cross eval).
     cross_freq_layout_z_only: bool = False
     # Log cross-freq / layout metrics at these MHz during checkpoint val.
     eval_off_anchor_mhz: tuple[float, ...] = (80.0, 250.0)
+    eval_off_anchor_mhz_weights: dict | None = None  # optional per-MHz weights, e.g. {"90": 2.0}
     eval_off_anchor_max_batches: int = 30
+    # AL fine-tune: stop when weighted off-anchor FG MSE stops improving.
+    al_finetune_early_stop: bool = False
+    al_finetune_early_stop_patience: int = 2  # consecutive off-anchor evals without gain
+    al_finetune_early_stop_min_delta: float = 0.01
+    al_finetune_early_stop_kind: str = "layout_cross"
     occupancy_weight: float = 8.0   # val occ ~0.35 still dominates recon
     impedance_weight: float = 3.0
     impedance_deriv_weight: float = 1.5
@@ -691,7 +700,14 @@ def _forward_train_batch(
         and bool((torch.rand((), device=pi.device) < c.layout_train_prob).item())
     )
     if use_layout:
-        z = base.encode_layout_latent(occ, imp, K, pi)
+        use_occ_only = (
+            c.occ_only_encode_prob > 0.0
+            and bool((torch.rand((), device=pi.device) < c.occ_only_encode_prob).item())
+        )
+        if use_occ_only:
+            z = base.encode_occupancy_latent(occ, K, pi)
+        else:
+            z = base.encode_layout_latent(occ, imp, K, pi)
     else:
         z = z_post
     pi_dec = _jitter_pi_freq_norm(pi, c, train=train)
@@ -824,6 +840,8 @@ def print_curriculum_summary(c: Config) -> None:
         f"imp_peak@{c.impedance_peak_start_epoch}→{c.impedance_peak_focus_epoch} "
         f"(ramp {c.impedance_peak_ramp_epochs}), "
         f"layout_train_prob={c.layout_train_prob}, "
+        f"occ_only_encode_prob={c.occ_only_encode_prob}, "
+        f"eval_use_occ_only_layout={c.eval_use_occ_only_layout}, "
         f"cross_freq_layout_z_only={c.cross_freq_layout_z_only}",
     )
 
@@ -1463,6 +1481,9 @@ def train_vae() -> None:
             )
     train_times: list[float] = []
     val_times: list[float] = []
+    best_oa_score = float("inf")
+    oa_patience = 0
+    early_stopped = False
 
     for epoch in range(start, c.num_epochs):
         if (
@@ -1579,21 +1600,64 @@ def train_vae() -> None:
                     p.unlink()
             else:
                 print(f"  checkpoint → {ckpt_path.name}")
-            if c.eval_off_anchor_mhz:
-                from experiments.exp057_structured_graph.codes.eval_off_anchor import run_off_anchor_eval, should_run_off_anchor
-                if should_run_off_anchor(ep, c):
-                    t_oa0 = time.perf_counter()
-                    run_off_anchor_eval(
-                        model,
-                        val_ld,
-                        bg=c.background_value + 0.5,
-                        off_anchor_mhz=c.eval_off_anchor_mhz,
-                        max_batches=c.eval_off_anchor_max_batches,
-                        device=c.device,
-                        out_csv=metrics_dir / f"off_anchor_eval_epoch_{ep}.csv",
+
+        if c.eval_off_anchor_mhz and run_val and is_main_process():
+            from experiments.exp057_structured_graph.codes.eval_off_anchor import (
+                off_anchor_aggregate_score,
+                run_off_anchor_eval,
+                should_run_off_anchor,
+            )
+            if should_run_off_anchor(ep, c):
+                t_oa0 = time.perf_counter()
+                oa_rows = run_off_anchor_eval(
+                    model,
+                    val_ld,
+                    bg=c.background_value + 0.5,
+                    off_anchor_mhz=c.eval_off_anchor_mhz,
+                    max_batches=c.eval_off_anchor_max_batches,
+                    device=c.device,
+                    out_csv=metrics_dir / f"off_anchor_eval_epoch_{ep}.csv",
+                )
+                print(f"  off-anchor eval: {time.perf_counter() - t_oa0:.1f}s", flush=True)
+                if getattr(c, "al_finetune_early_stop", False) and oa_rows:
+                    oa_score = off_anchor_aggregate_score(
+                        oa_rows,
+                        kind=str(getattr(c, "al_finetune_early_stop_kind", "layout_cross")),
+                        weights=getattr(c, "eval_off_anchor_mhz_weights", None),
                     )
-                    if is_main_process():
-                        print(f"  off-anchor eval: {time.perf_counter() - t_oa0:.1f}s", flush=True)
+                    min_delta = float(getattr(c, "al_finetune_early_stop_min_delta", 0.01))
+                    if oa_score < best_oa_score - min_delta:
+                        best_oa_score = oa_score
+                        oa_patience = 0
+                        lat = VAETrainingLogger.build_latent_stats(val)
+                        per_k = val.get("per_K_latent_stats", {})
+                        torch.save(
+                            _ckpt_dict(ep, model, opt, tr["total_loss"], val, c, lat, per_k, physics, sched),
+                            ckpt_dir / "best_off_anchor_model.pt",
+                        )
+                        print(
+                            f"  off-anchor score {oa_score:.4f} (best) → best_off_anchor_model.pt",
+                            flush=True,
+                        )
+                    else:
+                        oa_patience += 1
+                        print(
+                            f"  off-anchor score {oa_score:.4f}  "
+                            f"(best {best_oa_score:.4f}, patience {oa_patience}/"
+                            f"{c.al_finetune_early_stop_patience})",
+                            flush=True,
+                        )
+                        if oa_patience >= int(c.al_finetune_early_stop_patience):
+                            print(
+                                f"  Early stop @ epoch {ep}: off-anchor FG MSE plateau",
+                                flush=True,
+                            )
+                            early_stopped = True
+
+        if early_stopped:
+            if is_main_process():
+                print(f"Stopping finetune early at epoch {ep}", flush=True)
+            break
 
         barrier()
 
@@ -1632,7 +1696,15 @@ def train_vae() -> None:
         logger.log_latent_stats(log_dir / "latent_stats.csv", c.num_epochs, compute_beta(c.num_epochs - 1, c), val)
 
     if is_main_process():
-        if val.get("modality_stats"):
+        best_oa_path = ckpt_dir / "best_off_anchor_model.pt"
+        if getattr(c, "al_finetune_early_stop", False) and best_oa_path.is_file():
+            import shutil
+            shutil.copy2(best_oa_path, ckpt_dir / "last_model.pt")
+            print(
+                f"  last_model.pt ← best_off_anchor_model.pt (score={best_oa_score:.4f})",
+                flush=True,
+            )
+        elif val.get("modality_stats"):
             lat = VAETrainingLogger.build_latent_stats(val)
             torch.save(_ckpt_dict(c.num_epochs, model, opt, tr["total_loss"], val, c, lat,
                                   val.get("per_K_latent_stats", {}), physics, sched),

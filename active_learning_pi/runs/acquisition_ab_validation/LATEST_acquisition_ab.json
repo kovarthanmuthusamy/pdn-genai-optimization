@@ -1,0 +1,43 @@
+{
+  "experiment": "experiments/exp057_structured_graph",
+  "checkpoint": "experiments/exp057_structured_graph/checkpoints/last_model.pt",
+  "path": "pred",
+  "target": "mse",
+  "n_total": 640,
+  "n_fit": 384,
+  "n_test": 256,
+  "budget_k": 40,
+  "kappa": 0.5,
+  "novelty_weight": 0.25,
+  "gp_kind": "sklearn",
+  "methods": {
+    "gp_mu_only": {
+      "spearman_vs_true_y": 0.23052400434882117,
+      "top_k_mean_true_y": 0.7631233626545859,
+      "lift_vs_random_top_k": 1.4095649200917832,
+      "mean_score": 0.545665762961336
+    },
+    "gp_ucb_only": {
+      "spearman_vs_true_y": 0.22908560311284046,
+      "top_k_mean_true_y": 0.7738843920977889,
+      "lift_vs_random_top_k": 1.4294416141487565,
+      "mean_score": 1.0430050021139565
+    },
+    "gp_ucb_novelty": {
+      "spearman_vs_true_y": 0.012236066605630577,
+      "top_k_mean_true_y": 0.599885524473104,
+      "lift_vs_random_top_k": 1.1080483611807384,
+      "mean_score": 1.1030547582701067
+    },
+    "random": {
+      "spearman_vs_true_y": 0.030075532158388648,
+      "top_k_mean_true_y": 0.5413892980572299,
+      "lift_vs_random_top_k": 1.0,
+      "mean_score": 0.4873839944639568
+    }
+  },
+  "pass_gp_beats_random": true,
+  "timestamp": "2026-07-20T20:42:35",
+  "primary_method": "gp_mu_only",
+  "verdict": "PASS \u2014 GP(mu) top-k true residual > random and Spearman>0"
+}

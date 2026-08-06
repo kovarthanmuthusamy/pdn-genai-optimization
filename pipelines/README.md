@@ -52,4 +52,4 @@ python pipelines/active_learning/run.py
 
 Import-only helpers live under `libs/` (`data_creation`, `peb`, `dataset_meta`). Pipelines import those modules; they are not run directly unless noted in their docstring.
 
-See also: [`../REPO_LAYOUT.md`](../REPO_LAYOUT.md), [`../docs/CONFIG_ONLY_SCRIPTS.md`](../docs/CONFIG_ONLY_SCRIPTS.md).
+See also: [`../docs/data-pipeline.md`](../docs/data-pipeline.md), [`../docs/README.md`](../docs/README.md).

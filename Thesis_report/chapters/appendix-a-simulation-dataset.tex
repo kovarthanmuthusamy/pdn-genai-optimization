@@ -1,0 +1,1039 @@
+% appendix-a-simulation-dataset.tex -- part of thesis_v3.tex; do not add \documentclass here.
+% Draft with the thesis-chapter workflow. Unsupported claims must use \fillin{...}.
+
+\chapter{Power Integrity Simulation Environment and Dataset Specification}
+\label{ch:appendix_simulation_dataset}
+
+This appendix is reference material. It records the simulation environment that produced the
+ground-truth labels, the file formats that carry them, and the on-disk specification of the
+datasets used for training and for active learning. Tables are preferred to prose throughout;
+each table is preceded by one short orienting paragraph. Everything stated here is taken from
+repository artifacts (source code, configuration files, run reports, dataset metadata) as read on
+2026-08-05, except Section~\ref{sec:appA_multitype}, whose figures are read from the Windows
+simulation host --- a progress file, per-band output folders and a running process --- and carry
+the observation timestamps given with them. Quantities that exist only inside the eCADSTAR project
+on the Windows host --- solver settings, stack-up, port geometry, board dimensions, capacitor
+models for the binary dataset --- are marked as gaps rather than reconstructed.
+
+\section{Simulation environment}
+\label{sec:appA_sim_env}
+
+\subsection{Solver and invocation}
+\label{subsec:appA_solver}
+
+All power-integrity labels are produced by the eCADSTAR PI/EMI analysis engine, driven in batch
+mode from WSL. There is no GUI automation path: the AutoHotkey driver was removed and the headless
+CLI is the only route to the engine, with no fallback and no toggle to switch back
+(\texttt{docs/ecadstar\_headless\_cli.md}; \texttt{active\_learning\_pi/al/ecadstar.py}). One
+residual key remains in the primary active-learning configuration, a null \texttt{ahk\_exe} entry
+under \texttt{ecadstar}, which is no longer read by any driver.
+
+\begin{table}[htbp]
+\centering
+\caption{Solver executable and command-line interface.}
+\label{tab:appA_solver}
+\begin{tabular}{p{0.30\textwidth} p{0.60\textwidth}}
+\hline
+Item & Value \\
+\hline
+Engine executable &
+\texttt{C:\textbackslash{}Program Files\textbackslash{}eCADSTAR\textbackslash{}eCADSTAR
+2023.0\textbackslash{}Analysis\textbackslash{}bin\textbackslash{}engineer.exe} \\
+Argument line &
+\texttt{"<erf>" -{}-batch "<peb>" -{}-batch-auto-exit}, optionally extended with
+\texttt{-{}-impulse-port <n>} \\
+\texttt{-b} / \texttt{-{}-batch <file>} & execute the given batch file after the design loads \\
+\texttt{-be} / \texttt{-{}-batch-auto-exit} & quit the application when the batch finishes \\
+\texttt{-p} / \texttt{-{}-impulse-port <n>} & IMPULSE model-library server port \\
+Positional argument & the design riffile (\texttt{.erf} / \texttt{.rif}) \\
+\hline
+\end{tabular}
+\end{table}
+
+The launcher (\texttt{pipelines/dataset\_sim/ecadstar.py}, function
+\texttt{run\_ecadstar\_batch\_headless}) starts the engine through PowerShell
+\texttt{Start-Process -PassThru -NoNewWindow} and then blocks on \texttt{WaitForExit(timeout\_ms)}.
+Return codes are \texttt{0} for a clean self-exit, \texttt{124} when the timeout expires and the
+process is killed, and \texttt{-1} when PowerShell is unavailable. The default timeout is
+\texttt{172\_800} seconds. Windows paths held in the configuration files are converted from WSL
+form by \texttt{resolve\_windows\_path} / \texttt{windows\_path\_str}.
+
+\subsection{Design under analysis and host directories}
+\label{subsec:appA_design_paths}
+
+A single board design is simulated throughout. All of the paths below are absolute Windows paths;
+the simulation half of this work is therefore reproducible only on that host.
+
+\begin{table}[htbp]
+\centering
+\caption{Design, power bus and host directories used by every simulation pipeline.}
+\label{tab:appA_paths}
+\begin{tabular}{p{0.28\textwidth} p{0.62\textwidth}}
+\hline
+Item & Value \\
+\hline
+Design file &
+\texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}Desktop\textbackslash{}design\textbackslash{}H-shape.emc\textbackslash{}H-shape.erf} \\
+EMC output directory &
+\texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}Desktop\textbackslash{}design\textbackslash{}H-shape.emc}
+(engine writes \texttt{PI-1} \ldots{} \texttt{PI-N}) \\
+PEB staging directory &
+\texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}Desktop\textbackslash{}design\textbackslash{}PEB} \\
+Raw output root &
+\texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}Desktop\textbackslash{}Raw}
+(\texttt{RAW\_ROOT\_WIN}) \\
+PEB build directory &
+\texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}Desktop\textbackslash{}Raw\textbackslash{}peb}
+(\texttt{PEB\_DIR\_WIN}) \\
+Analysed power bus & \texttt{Power\_GND} \\
+Spectrum export port(s) & \texttt{IC1\_Port1,IC2\_Port2} (combinations pipeline);
+\texttt{IC1\_Port1} (multi-type pipeline and the AL PEB builder) \\
+\hline
+\end{tabular}
+\end{table}
+
+The two port strings are a configuration difference between pipelines, not a defect found in an
+artifact. \fillin{state which port convention applies to the 231-bin spectra actually stored in
+\texttt{datasets/data\_multifreq\_train}; settle it by inspecting the harvested CSV filenames for a
+legacy PI folder against \texttt{peb\_components} in the pipeline that produced it}
+
+\subsection{Solver settings not recorded in the repository}
+\label{subsec:appA_solver_gaps}
+
+The following belong to the eCADSTAR project itself and were not found in any tracked file. They
+are listed explicitly so that the appendix does not imply knowledge it does not have.
+
+\begin{table}[htbp]
+\centering
+\caption{Simulation parameters that live in the eCADSTAR project on the Windows host and are not
+recoverable from the repository.}
+\label{tab:appA_solver_gaps}
+\begin{tabular}{p{0.38\textwidth} p{0.52\textwidth}}
+\hline
+Parameter group & Status \\
+\hline
+Frequency sweep definition, number of sweep points &
+\fillin{export the PI analysis setup from \texttt{H-shape.erf} and record the sweep definition; the
+only repository trace is the 231-point axis in \texttt{configs/Frequency\_data\_hz.npy} and the
+\texttt{EXPECTED\_IMP\_LENGTH = 231} check} \\
+Mesh / plane-pair settings &
+\fillin{record from the eCADSTAR PI analysis setup dialog} \\
+Port definitions and locations (\texttt{IC1\_Port1}, \texttt{IC2\_Port2}) &
+\fillin{record port placement and reference from the design} \\
+Layer stack-up, dielectric and copper material parameters &
+\fillin{export stack-up table from \texttt{H-shape.erf}} \\
+Board outline dimensions &
+\fillin{record board size; needed to give the $64\times64$ heatmap grid a physical scale} \\
+Decap C / ESR / ESL for the single-type (binary) dataset &
+\fillin{record the capacitor model attached to slots \texttt{C1}--\texttt{C52} in the binary
+campaign; the \texttt{TYPE\_CATALOG} in
+\texttt{scrap/generation/generate\_peb\_multitype.py} covers only the multi-type pipeline} \\
+\hline
+\end{tabular}
+\end{table}
+
+\figplace{Annotated board view of H-shape.erf showing the 52 decap slots, the IC port(s) and the power-bus outline.}
+
+\section{Batch file format and simulation phases}
+\label{sec:appA_peb}
+
+\subsection{PEB structure}
+\label{subsec:appA_peb_structure}
+
+A PEB file is XML. Its root element is
+\texttt{<Batch Analysis="PI" Version="2" PowerBus="\{powerbus\}">}, and it contains an
+\texttt{<Iterate>} list of \texttt{<Group>} blocks, one group per layout row. Each group first
+writes the 52 component enable lines, then the analysis command for that group.
+
+\begin{table}[htbp]
+\centering
+\caption{Elements emitted inside a PEB group.}
+\label{tab:appA_peb_elements}
+\begin{tabular}{p{0.26\textwidth} p{0.64\textwidth}}
+\hline
+Purpose & Emitted line \\
+\hline
+Slot occupancy (52 lines) &
+\texttt{<Edit Table="Component" Name="C\{i+1\}" Column="Name" Value="true|false"/>} for
+\texttt{C1}\ldots\texttt{C52} \\
+PI-Distribution group &
+\texttt{<Loop Analysis="PI-Distribution" Count="1"><EditPIDistribution
+Frequency="\{freq\}"/></Loop>} \\
+PI-Spectrum group &
+\texttt{<CreatePISpectrum Component="\{components\}" Format="ARV,CSV" />} \\
+Frequency string format &
+\texttt{f"\{int(round(float(mhz)))\}e6"} (Hz) \\
+\hline
+\end{tabular}
+\end{table}
+
+For the multi-type campaign the per-component block grows from one line to four: Component/Name,
+Component/Value (capacitance), PI Decap/ESR and PI Decap/ESL. Empty slots write \texttt{false} and
+a value of \texttt{0}.
+
+\subsection{Two-phase dataset simulation}
+\label{subsec:appA_two_phase}
+
+Dataset simulation is split into an impedance phase and a per-band distribution phase. Both phases
+iterate over the same layout rows, and each produces one \texttt{PI-$n$} output folder per row.
+
+\begin{table}[htbp]
+\centering
+\caption{Simulation phases and their harvested artifacts.}
+\label{tab:appA_phases}
+\begin{tabular}{p{0.20\textwidth} p{0.34\textwidth} p{0.36\textwidth}}
+\hline
+Phase & PEB builder & Harvested file \\
+\hline
+Impedance &
+\texttt{build\_impedance\_peb}, spectrum only (\texttt{include\_distribution=False}), one PEB over
+all rows &
+first \texttt{*.csv} in the PI folder whose name contains \texttt{ic1} (case-insensitive) \\
+Distribution &
+\texttt{build\_distribution\_peb}, distribution only (\texttt{include\_spectrum=False}), one PEB
+per MHz band &
+\texttt{<PI-n>/Power\_GND/Z\_\{MHz:04d\}.000MHz.map} \\
+\hline
+\end{tabular}
+\end{table}
+
+After a batch, \texttt{wait\_for\_pi\_outputs} polls the EMC directory until \texttt{PI-1} through
+\texttt{PI-N} are present, checking for \texttt{.map} files when the mode is \texttt{distribution}
+and for \texttt{.csv} files when the mode is \texttt{impedance}. CSV row $i$ of the layout list maps
+to \texttt{PI-$(i+1)$} in eCADSTAR script order. In the merged combination list the legacy rows keep
+the low indices, \texttt{PI-1}\ldots\texttt{PI-19499}, and the newer combinations follow at
+\texttt{PI-19500}\ldots\texttt{PI-29499}.
+
+\subsection{Pipeline configuration constants}
+\label{subsec:appA_pipeline_config}
+
+The runnable pipelines take no command-line arguments; their behaviour is fixed by a configuration
+block of module-level constants. The values below are those present in the block at the time of
+reading.
+\fillin{establish whether \texttt{SWEEP\_MHZ} was edited between campaigns and which band sets were
+actually simulated; \texttt{logs/append\_queue/done.jsonl} records the bands that completed}
+
+\begin{table}[htbp]
+\centering
+\caption{Single-type combinations simulation pipeline
+(\texttt{pipelines/dataset\_sim/run\_combinations\_sim\_pipeline.py}).}
+\label{tab:appA_comb_pipeline}
+\begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
+\hline
+Constant & Value \\
+\hline
+\texttt{SWEEP\_MHZ} & \texttt{[170, 180, 280, 430, 470, 490, 550, 590]} \\
+Input CSV & \texttt{data/heatmaps/peb\_with\_29k/all\_combinations\_merged.csv} \\
+\texttt{ECADSTAR\_WAIT\_TIMEOUT\_SEC} & \texttt{172\_800} \\
+\texttt{ECADSTAR\_WAIT\_POLL\_SEC} & \texttt{120} \\
+\hline
+\end{tabular}
+\end{table}
+
+\fillin{note whether the 490, 550 and 590\,MHz bands in \texttt{SWEEP\_MHZ} ever reached the
+dataset --- they are absent from the 24 anchors in
+\texttt{datasets/data\_multifreq\_train/dataset\_meta.json}; the append queue in
+\texttt{logs/append\_queue/done.jsonl} would settle it}
+
+\subsection{Active-learning batches}
+\label{subsec:appA_al_batches}
+
+The active-learning loop exports all selected candidates of a cycle into one combined PEB
+(\texttt{active\_learning\_pi/al/peb\_batch.py}, \texttt{build\_peb\_from\_selection}), carrying a
+per-sample frequency formatted as \texttt{"\{int(round(mhz))\}e6"}. The builder sets
+\texttt{include\_distribution=True} and \texttt{include\_spectrum = not heatmap\_only}. In the
+primary configuration both \texttt{heatmap\_only\_peb} and \texttt{heatmap\_only\_labels} are
+\texttt{true}, so AL batches request PI-Distribution output only.
+
+\begin{table}[htbp]
+\centering
+\caption{eCADSTAR settings in the primary AL configuration
+(\texttt{active\_learning\_pi/config/exp059\_gp\_error.json}, key \texttt{ecadstar}).}
+\label{tab:appA_al_ecadstar}
+\begin{tabular}{p{0.45\textwidth} p{0.30\textwidth}}
+\hline
+Key & Value \\
+\hline
+\texttt{clear\_lock\_file} & \texttt{true} \\
+\texttt{wait\_for\_pi} & \texttt{true} \\
+\texttt{wait\_timeout\_sec} & \texttt{18000} \\
+\texttt{wait\_batch\_start\_timeout\_sec} & \texttt{900} \\
+\texttt{wait\_poll\_sec} & \texttt{40} \\
+\hline
+\end{tabular}
+\end{table}
+
+Label ingestion (\texttt{active\_learning\_pi/al/ingest\_labels.py}) reads \texttt{PI-1} through
+\texttt{PI-N} from the EMC directory, copies the \texttt{.map} file for each candidate's frequency
+into \texttt{labels\_dir/sample\_\{i:03d\}/}, and writes \texttt{occupancy.npy},
+\texttt{pi\_freq\_mhz.npy} and \texttt{heatmap.npy}, the last produced by
+\texttt{create\_Heatmaps} at grid size 64.
+
+\section{From solver output to tensors}
+\label{sec:appA_encoding}
+
+\subsection{Decap slots and occupancy vectors}
+\label{subsec:appA_occupancy}
+
+Decap slots are arranged on a $7\times8$ board grid. Four cells are declared invalid ---
+$(0,3)$, $(0,4)$, $(6,3)$ and $(6,4)$ --- leaving $7\times8-4 = 52$ valid positions, labelled
+\texttt{C1} through \texttt{C52}. A placement is therefore the binary vector
+$\mathbf{b}\in\{0,1\}^{52}$, with budget $K = \sum_i b_i$. On disk an occupancy vector is a
+length-52 \texttt{float32} array; it is binarised with a threshold of $0.5$.
+
+\figplace{The 7x8 slot grid with the four invalid cells shaded and the C1--C52 labelling order.}
+
+\subsection{Impedance spectra}
+\label{subsec:appA_impedance}
+
+The exported PI-Spectrum CSV is read with delimiter \texttt{;}, \texttt{skiprows=4} and
+\texttt{usecols=[1]}. A vector is rejected unless its length is exactly 231
+(\texttt{EXPECTED\_IMP\_LENGTH = 231}). The impedance $Z(f)$ used throughout the thesis is this
+231-bin vector.
+
+\begin{table}[htbp]
+\centering
+\caption{Frequency axis and target curve stored under \texttt{configs/}.}
+\label{tab:appA_freq_axis}
+\begin{tabular}{p{0.34\textwidth} p{0.56\textwidth}}
+\hline
+Artifact & Contents \\
+\hline
+\texttt{configs/Frequency\_data\_hz.npy} &
+shape \texttt{(231,)}, minimum \texttt{1000000.0}\,Hz, maximum \texttt{600000000.0}\,Hz;
+first values \texttt{1000000, 1100000, 1200000, 1300000, 1400000}; last values
+\texttt{5.8e+08, 5.9e+08, 6.0e+08} \\
+\texttt{configs/target\_impedance.npy} &
+shape \texttt{(231, 1)}, minimum \texttt{0.8}, maximum \texttt{49.99999999999999} \\
+\hline
+\end{tabular}
+\end{table}
+
+Neither file carries metadata about its own construction.
+\fillin{document how the 231-point frequency grid was generated (the \texttt{.npy} has no
+provenance); the eCADSTAR sweep definition in \texttt{H-shape.erf} would settle it}
+\fillin{document how $Z_{\mathrm{target}}(f)$ in \texttt{configs/target\_impedance.npy} was
+specified --- per-band values, derivation, and the design rule behind the 0.8 and 50 limits}
+
+\subsection{PI-distribution heatmaps}
+\label{subsec:appA_heatmap}
+
+Each \texttt{.map} file is parsed and interpolated onto a fixed $64\times64$ grid. The steps
+implemented in \texttt{libs/data\_creation/heatmap.py} are listed below in the order applied.
+
+\begin{table}[htbp]
+\centering
+\caption{Heatmap construction from a PI-Distribution \texttt{.map} file.}
+\label{tab:appA_heatmap_steps}
+\begin{tabular}{p{0.34\textwidth} p{0.56\textwidth}}
+\hline
+Step & Setting \\
+\hline
+Coordinate handling & shifted to the minimum, scaled by \texttt{1e-5} \\
+Value floor & $z$ values floored at \texttt{0.01} \\
+Duplicate vertices & averaged \\
+Interpolation & \texttt{RBFInterpolator}, kernel \texttt{thin\_plate\_spline},
+\texttt{smoothing=0} \\
+Fallback & cubic \texttt{griddata} with nearest-neighbour NaN fill \\
+Grid size & \texttt{64} \\
+Stored tensor & \texttt{np.stack([Zi * mask\_board, mask\_board], axis=0)}: channel 0 is the masked
+interpolated impedance, channel 1 is the mask \\
+Board mask & \texttt{configs/binary\_mask.npy}, \texttt{(64, 64)} boolean, \texttt{3432} True
+pixels \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Dataset layout and metadata}
+\label{sec:appA_dataset_layout}
+
+\subsection{Directory structure}
+\label{subsec:appA_dir_structure}
+
+Datasets use a layout-store organisation: per-layout quantities are written once under a design
+directory, and per-sample quantities (one per layout--frequency pair) are written under flat
+sample directories.
+
+\begin{table}[htbp]
+\centering
+\caption{Layout-store dataset structure.}
+\label{tab:appA_store}
+\begin{tabular}{p{0.34\textwidth} p{0.56\textwidth}}
+\hline
+Path & Contents \\
+\hline
+\texttt{layouts/\{design\_id\}/occ.npy} & occupancy vector, shape \texttt{(52,)} \\
+\texttt{layouts/\{design\_id\}/imp.npy} & impedance, reshaped to \texttt{(-1, 1)}, i.e.
+\texttt{(231, 1)} in the raw store \\
+\texttt{heatmap/sample\_N.npy} & the 2-channel $64\times64$ stack \\
+\texttt{PI\_freq/sample\_N.npy} & the sample's frequency in Hz, \texttt{float64} \\
+\texttt{manifest.csv} & one row per sample \\
+\texttt{dataset\_meta.json} & dataset-level metadata \\
+\hline
+\end{tabular}
+\end{table}
+
+The manifest columns are \texttt{sample\_name}, \texttt{design\_id}, \texttt{freq\_label},
+\texttt{freq\_mhz}, \texttt{freq\_hz}, \texttt{source\_folder}, \texttt{append\_tag},
+\texttt{pi\_number} and \texttt{decap\_index} --- nine columns in total.
+
+\subsection{\texttt{dataset\_meta.json} fields}
+\label{subsec:appA_meta_fields}
+
+\begin{table}[htbp]
+\centering
+\caption{Fields written by \texttt{libs/dataset\_meta.py}.}
+\label{tab:appA_meta_fields}
+\begin{tabular}{p{0.30\textwidth} p{0.60\textwidth}}
+\hline
+Field & Notes \\
+\hline
+\texttt{schema\_version} & integer \\
+\texttt{stage} & \texttt{raw} or \texttt{normalized} \\
+\texttt{source\_script} & the script that produced the dataset \\
+\texttt{generated\_at\_utc} & ISO-8601 UTC timestamp \\
+\texttt{dataset\_root} & absolute path to the dataset root, as written by
+\texttt{libs/dataset\_meta.py} line 172 \\
+\texttt{storage} & \texttt{layout\_store} \\
+\texttt{counts} & \texttt{manifest\_rows}, \texttt{unique\_layouts}, \texttt{heatmap\_files},
+\texttt{pi\_freq\_files}, \texttt{layout\_directories} \\
+\texttt{size} & \texttt{total\_bytes}, \texttt{total\_mb}, \texttt{by\_subdirectory\_mb} \\
+\texttt{pi\_frequencies\_mhz} & the anchor list \\
+\texttt{samples\_per\_mhz}, \texttt{samples\_per\_freq\_label} & per-band coverage \\
+\hline
+\multicolumn{2}{l}{\emph{Additional fields on normalized sets:}} \\
+\texttt{normalization} & \texttt{stats\_file}, \texttt{has\_heatmap\_stats} \\
+\texttt{mode} & e.g.\ \texttt{full} \\
+\texttt{source\_dataset} & the raw set it derives from; also written as an absolute path \\
+\texttt{heatmap\_norm} & normalization mode name \\
+\texttt{max\_k\_filter} & budget cut-off applied \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Dataset inventory and version control}
+\label{subsec:appA_inventory}
+
+\textbf{None of the dataset directories are under version control.} The repository
+\texttt{.gitignore} ignores \texttt{datasets/}, \texttt{data\_multi\_norm\_robust/},
+\texttt{checkpoints/}, \texttt{**/checkpoints/}, \texttt{*.pt} and \texttt{*.pth};
+\texttt{git check-ignore} confirms that
+\texttt{datasets/data\_multifreq\_train/manifest.csv} and
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json} are matched by
+\texttt{.gitignore} line 20 (\texttt{datasets/}). Reproducing any result in this thesis therefore
+requires rebuilding the datasets from the raw eCADSTAR output on the Windows host, or obtaining the
+directories separately.
+
+\begin{table}[htbp]
+\centering
+\caption{Dataset directories present on the working machine (all git-ignored). Paths are absolute.}
+\label{tab:appA_inventory}
+\begin{tabular}{p{0.56\textwidth} p{0.34\textwidth}}
+\hline
+Path & Role \\
+\hline
+\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train} & raw training set \\
+\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train\_norm\_unbounded} & normalized set;
+training input for exp059 \\
+\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train\_norm\_robust} & bounded robust
+normalization, earlier experiments \\
+\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train\_K5} & $K\le5$ subset \\
+\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_al\_overlay\_exp057} & AL overlay
+(legacy) \\
+\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_al\_overlay\_exp058} & AL overlay
+(legacy) \\
+\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_al\_overlay\_exp059} & AL overlay
+(current track) \\
+\texttt{/home/ubuntu/genai\_pdn/data\_multi\_norm\_robust} & older backup at the repository root \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{datasets/data\_multifreq\_al\_overlay\_exp060} is referenced by
+\texttt{experiments/exp060\_multitype\_occ/config.yaml} line 23 but does not exist on disk.
+
+The current model track, \texttt{exp059\_capacity\_freq}, trains from \texttt{data\_dir}
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded}. The primary AL configuration uses the
+same \texttt{data\_dir}, \texttt{normalization\_stats\_json}
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json} and
+\texttt{overlay\_data\_dir} \texttt{datasets/data\_multifreq\_al\_overlay\_exp059}.
+
+\fillin{state the train/validation/test split definition for the normalized dataset --- no split
+artifact was located in the dataset directories read for this appendix; the split logic in the
+exp059 dataloader would settle it}
+
+\section{Dataset statistics}
+\label{sec:appA_dataset_stats}
+
+\subsection{Layout pool}
+\label{subsec:appA_layout_pool}
+
+The layout pool is a merged combination list. The merge report
+(\texttt{data/heatmaps/merged\_combinations\_report.json}, generated
+\texttt{2026-07-01T13:13:39.245630+00:00}) records \texttt{n\_old} 19499 rows from
+\texttt{all\_combinations.csv}, \texttt{n\_new} 10000 rows from \texttt{combinations.csv},
+\texttt{overlap\_rows} 0, giving 29499 merged rows. The merged CSV read by the simulation pipeline
+is \texttt{data/heatmaps/peb\_with\_29k/all\_combinations\_merged.csv}, which has 29499 lines.
+The output path recorded in the merge report itself
+(\texttt{data/heatmaps/all\_combinations\_merged.csv}) no longer exists at that location; see
+Section~\ref{sec:appA_inconsistencies}.
+
+\subsection{Raw training set}
+\label{subsec:appA_raw_set}
+
+This dataset root is written to by the append worker, which was still being triggered while this
+appendix was assembled; the values below are the state at the read time given in the table and must
+be re-read before submission. The counts have not changed across the re-reads made for this
+appendix, but \texttt{generated\_at\_utc} has.
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{datasets/data\_multifreq\_train} (raw), as read on 2026-08-06.}
+\label{tab:appA_raw}
+\begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
+\hline
+Field & Value \\
+\hline
+\texttt{schema\_version} & 1 \\
+\texttt{stage} & \texttt{raw} \\
+\texttt{source\_script} &
+\texttt{pipelines/data/append\_merged\_combinations\_multifreq.py} \\
+\texttt{generated\_at\_utc} & \texttt{2026-08-05T19:28:42.489387+00:00} \\
+\texttt{dataset\_root} & \texttt{/home/ubuntu/genai\_pdn/\allowbreak datasets/data\_multifreq\_train} \\
+\texttt{storage} & \texttt{layout\_store} \\
+\texttt{manifest\_rows} & 688477 \\
+\texttt{unique\_layouts} & 29499 \\
+\texttt{heatmap\_files} & 688477 \\
+\texttt{pi\_freq\_files} & 688477 \\
+\texttt{layout\_directories} & 29499 \\
+\texttt{total\_mb} & 43307.27 \\
+\quad heatmap & 43113.86 \\
+\quad layouts & 39.05 \\
+\quad PI\_freq & 89.3 \\
+\texttt{samples\_per\_mhz} & 29499 at every anchor except 80\,MHz, which has 10000 \\
+\hline
+\end{tabular}
+\end{table}
+
+\fillin{explain why the 80\,MHz band covers only 10000 of the 29499 layouts --- no artifact was
+located that records the reason; the per-band append log in \texttt{logs/append\_queue/done.jsonl}
+and the 80\,MHz raw folder count would settle it}
+
+\subsection{Frequency anchors}
+\label{subsec:appA_anchors}
+
+The anchor list is the set of inspection frequencies at which PI-Distribution heatmaps exist.
+\texttt{datasets/data\_multifreq\_train/dataset\_meta.json} lists 24 anchors, in MHz:
+10.0, 63.0, 80.0, 100.0, 120.0, 150.0, 170.0, 180.0, 200.0, 230.0, 250.0, 270.0, 280.0, 300.0,
+330.0, 350.0, 370.0, 390.0, 400.0, 420.0, 430.0, 450.0, 470.0, 500.0.
+
+Anchor resolution at load time follows a four-step order, per \texttt{docs/dataset.md}:
+\texttt{dataset\_meta.json} \texttt{pi\_frequencies\_mhz}, then \texttt{manifest.csv}
+\texttt{freq\_mhz}, then \texttt{datasets/data\_multifreq\_train/dataset\_meta.json}, then the
+legacy YAML defaults. That documentation statement was not verified against the implementation in
+\texttt{src\_vae/others/multifreq\_anchors.py} line by line.
+
+Three sources give three different anchor counts. \texttt{docs/dataset.md} lines 96--101 describe a
+``Full 16-MHz set'' and ``Same 16 MHz in combinations sim batches''; the legacy fallback
+\texttt{configs/multifreq\_anchors.yaml} lists 20 anchors (10, 63, 80, 100, 120, 150, 170, 200,
+230, 250, 270, 300, 330, 350, 370, 390, 400, 420, 450, 500), omitting 180, 280, 430 and 470\,MHz;
+\texttt{dataset\_meta.json} lists the 24 above. Per the resolution order in
+\texttt{docs/dataset.md} lines 42--51, the \texttt{dataset\_meta.json} list is what is actually
+loaded, and \texttt{configs/multifreq\_anchors.yaml} is declared a fallback used only when no
+metadata or manifest is present.
+\fillin{resolve the conflict between the ``16-MHz set'' description in \texttt{docs/dataset.md}
+lines 96--101, the 20-anchor list in \texttt{configs/multifreq\_anchors.yaml}, and the 24-anchor
+list in \texttt{datasets/data\_multifreq\_train/dataset\_meta.json}; decide which is stale and
+correct the documentation}
+
+\fillin{document the provenance of the 24-anchor selection --- no artifact was located that records
+why these particular frequencies were chosen}
+
+\subsection{Normalized training set}
+\label{subsec:appA_norm_set}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{datasets/data\_multifreq\_train\_norm\_unbounded} (normalized; the exp059 training
+input).}
+\label{tab:appA_norm}
+\begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
+\hline
+Field & Value \\
+\hline
+\texttt{stage} & \texttt{normalized} \\
+\texttt{source\_script} & \texttt{pipelines/normalize/multifreq.py} \\
+\texttt{generated\_at\_utc} & \texttt{2026-07-06T13:39:03.768907+00:00} \\
+\texttt{mode} & \texttt{full} \\
+\texttt{source\_dataset} & \texttt{/home/ubuntu/genai\_pdn/\allowbreak datasets/data\_multifreq\_train} \\
+\texttt{heatmap\_norm} & \texttt{robust\_log1p\_per\_mhz\_unbounded} \\
+\texttt{max\_k\_filter} & 30 \\
+\texttt{manifest\_rows} & 582997 \\
+\texttt{unique\_layouts} & 24979 \\
+\texttt{heatmap\_files} & 582997 \\
+\texttt{pi\_freq\_files} & 582997 \\
+\texttt{layout\_directories} & 24979 \\
+\texttt{total\_mb} & 9344.12 \\
+\quad heatmap & 9180.49 \\
+\quad layouts & 33.06 \\
+\quad PI\_freq & 75.61 \\
+\texttt{samples\_per\_mhz} & 24979 at every anchor except 80\,MHz, which has 8480 \\
+\texttt{pi\_frequencies\_mhz} & the same 24 anchors as the raw set \\
+\hline
+\end{tabular}
+\end{table}
+
+The budget filter is applied by \texttt{pipelines/normalize/build\_train\_norm\_unbounded.py},
+which sets \texttt{DATA\_DIR} to \texttt{datasets/data\_multifreq\_train}, \texttt{OUTPUT\_DIR} to
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded} and \texttt{MAX\_K} to 30, so only layouts
+with $K \le 30$ enter the normalized set. Note that this normalized set was generated on
+2026-07-06, whereas the raw set it names as its source was last refreshed on 2026-08-05; the two
+artifacts are not snapshots of the same moment, and the $K\le30$ filter accounts for only part of
+the difference in counts.
+
+\subsection{$K\le5$ subset}
+\label{subsec:appA_k5}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{datasets/data\_multifreq\_train\_K5} and its dry-run report.}
+\label{tab:appA_k5}
+\begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
+\hline
+Field & Value \\
+\hline
+\texttt{source\_script} & \texttt{pipelines/data/copy\_multifreq\_k\_subset.py} \\
+\texttt{generated\_at\_utc} & \texttt{2026-08-02T17:03:40.514745+00:00} \\
+\texttt{manifest\_rows} & 131766 \\
+\texttt{unique\_layouts} & 5650 \\
+\texttt{total\_mb} & 8288.11 \\
+\texttt{pi\_frequencies\_mhz} & the same 24 anchors \\
+\texttt{samples\_per\_mhz} & 5650 at every anchor except 80\,MHz, which has 1816 \\
+\hline
+\multicolumn{2}{l}{\emph{Dry-run report
+(\texttt{datasets/data\_multifreq\_train\_K5\_dry\_run\_report.json},
+\texttt{2026-08-02T17:01:03.238318+00:00}):}} \\
+\texttt{max\_k} & 5 \\
+\texttt{designs\_total} / \texttt{designs\_kept} & 29499 / 5650 \\
+\texttt{manifest\_rows\_total} / \texttt{\dots\_kept} & 688477 / 131766 \\
+\hline
+\end{tabular}
+\end{table}
+
+The same report carries \texttt{k\_hist\_all}, the budget histogram of the full raw pool. Selected
+entries: $K=2$: 1326; $K=3$: 1483; $K=4$: 1440; $K=5$: 1401; $K=20$: 912; $K=21$: 319; and 226 each
+for $K=26$ through $K=50$.
+\fillin{reproduce the complete \texttt{k\_hist\_all} histogram as a table or bar chart from
+\texttt{datasets/data\_multifreq\_train\_K5\_dry\_run\_report.json} if the budget distribution is
+discussed in the main text}
+
+\subsection{Active-learning overlay (exp059)}
+\label{subsec:appA_overlay}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{datasets/data\_multifreq\_al\_overlay\_exp059}, read from disk on 2026-08-05.}
+\label{tab:appA_overlay}
+\begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
+\hline
+Item & Value \\
+\hline
+\texttt{manifest.csv} & 2001 lines (header plus 2000 rows) \\
+Layout directories & 2000 \\
+Subdirectories & \texttt{PI\_freq/}, \texttt{heatmap/}, \texttt{layouts/} \\
+Other files & \texttt{normalization\_stats.json},
+\texttt{al\_heatmap\_only\_design\_ids.json} \\
+\texttt{dataset\_meta.json} & absent \\
+\texttt{design\_id} form &
+e.g.\ \texttt{al\_al\_exp059\_gp\_error\_001\_i0001\_c009} \\
+\texttt{source\_folder} & \texttt{active\_learning} \\
+Overlay \texttt{normalization\_stats.json} &
+same key structure as the training set; \texttt{background\_value} \texttt{-3.1792},
+\texttt{storage} \texttt{layout\_store}, \texttt{max\_k\_filter} 30 \\
+\hline
+\end{tabular}
+\end{table}
+
+Because the overlay has no \texttt{dataset\_meta.json}, its counts were read from the directory
+listing rather than from a written metadata artifact.
+
+\section{Normalization statistics}
+\label{sec:appA_normalization}
+
+\subsection{File structure}
+\label{subsec:appA_norm_structure}
+
+\texttt{normalization\_stats.json} has seven top-level keys: \texttt{background\_value},
+\texttt{Heatmap}, \texttt{Impedance}, \texttt{PI\_freq}, \texttt{multifreq\_manifest},
+\texttt{storage} and \texttt{max\_k\_filter}. It is assembled in
+\texttt{pipelines/normalize/multifreq.py}.
+
+\subsection{Heatmap normalization}
+\label{subsec:appA_heatmap_norm}
+
+Per-MHz heatmap statistics are computed on $\log(1+x)$ of the foreground pixels of that band. The
+median and the interquartile range (IQR, $q_{75}-q_{25}$, floored at
+\texttt{ROBUST\_IQR\_EPS = 1e-4}) define a robust $z$-score
+$z = (\log(1+x_{\mathrm{fg}}) - \mathrm{median})/\mathrm{IQR}$. \texttt{clip\_min} is the 0.5th
+percentile of $z$ and \texttt{clip\_max} the 99.5th; the background fill value is
+$\mathrm{round}(\texttt{clip\_min} - 1.5, 4)$. In \emph{unbounded} mode the $z$-score is applied
+without clipping to $[\texttt{clip\_min}, \texttt{clip\_max}]$; the clip is applied only when the
+mode is not unbounded. The stored statistics still record the clip bounds.
+
+\begin{table}[htbp]
+\centering
+\caption{Global heatmap statistics,
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json}, key
+\texttt{Heatmap}.}
+\label{tab:appA_heatmap_stats}
+\begin{tabular}{p{0.36\textwidth} p{0.50\textwidth}}
+\hline
+Key & Value \\
+\hline
+\texttt{norm\_mode} & \texttt{robust\_log1p\_per\_mhz\_unbounded} \\
+\texttt{unbounded} & \texttt{true} \\
+\texttt{clip\_min} & \texttt{-1.6791870594024658} \\
+\texttt{clip\_max} & \texttt{6.275787830352783} \\
+\texttt{z\_max} & \texttt{11.23223876953125} \\
+\texttt{background\_value} & \texttt{-3.1792} \\
+\texttt{log\_mean} & \texttt{0.0} \\
+\texttt{log\_std} & \texttt{1.0} \\
+\texttt{fg\_pixel\_count} & \texttt{2000845704} \\
+\texttt{anchors\_mhz} & length 24 \\
+\texttt{by\_mhz} & 24 keys \\
+\hline
+\end{tabular}
+\end{table}
+
+Each \texttt{by\_mhz} entry carries \texttt{median}, \texttt{iqr}, \texttt{clip\_min},
+\texttt{clip\_max}, \texttt{background\_value}, \texttt{fg\_pixel\_count}, \texttt{z\_min} and
+\texttt{z\_max}. The first four bands are reproduced below; the remaining 20 are in the same file
+under the same key.
+
+\begin{table}[htbp]
+\centering
+\caption{Per-MHz heatmap statistics, first four anchors.}
+\label{tab:appA_heatmap_by_mhz}
+\begin{tabular}{r r r r r}
+\hline
+MHz & median & iqr & clip\_min & clip\_max \\
+\hline
+10.0 & 0.05887173116207123 & 0.03866304084658623 & -0.7351016402244568 & 3.4719114303588867 \\
+63.0 & 0.41589492559432983 & 0.23903468251228333 & -0.6570155620574951 & 3.969606876373291 \\
+80.0 & 0.5136411190032959 & 0.29707127809524536 & -0.6531781554222107 & 6.275787830352783 \\
+100.0 & 0.6201565265655518 & 0.357897512614727 & -1.2004997730255127 & 5.350724220275879 \\
+\hline
+\end{tabular}
+\end{table}
+
+\fillin{if the full per-band table is wanted in the thesis, extract all 24 \texttt{by\_mhz} entries
+from \texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json}}
+
+\subsection{Impedance and frequency normalization}
+\label{subsec:appA_imp_norm}
+
+Impedance is normalized by a natural-log $z$-score,
+$z = (\log(\max(Z, \texttt{1e-10})) - \texttt{log\_mean})/\texttt{log\_std}$, and saved per layout
+as \texttt{imp.npy} of shape \texttt{(1, n\_freq)} in the normalized store.
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{Impedance} and \texttt{PI\_freq} statistics blocks of the normalized training set.}
+\label{tab:appA_imp_freq_stats}
+\begin{tabular}{p{0.36\textwidth} p{0.50\textwidth}}
+\hline
+Key & Value \\
+\hline
+\texttt{Impedance.layout\_count} & 24979 \\
+\texttt{Impedance.log\_mean} & \texttt{-1.039238452911377} \\
+\texttt{Impedance.log\_std} & \texttt{1.7831873893737793} \\
+\texttt{Impedance.z\_min} & \texttt{-2.7170498371124268} \\
+\texttt{Impedance.z\_max} & \texttt{2.474900722503662} \\
+\texttt{PI\_freq.min\_hz} & \texttt{1000000.0} \\
+\texttt{PI\_freq.max\_hz} & \texttt{600000000.0} \\
+\texttt{PI\_freq.log10\_min} & \texttt{6.0} \\
+\texttt{PI\_freq.log10\_range} & \texttt{2.778151250383644} \\
+\texttt{PI\_freq.count} & \texttt{688477} \\
+\texttt{PI\_freq.anchor\_mhz} & length 24 \\
+\texttt{PI\_freq.unique\_mhz\_rounded} & length 24 \\
+\texttt{PI\_freq.expected\_anchors\_mhz} & length 24 \\
+\texttt{multifreq\_manifest.rows} & 582997 \\
+\texttt{multifreq\_manifest.unique\_design\_id} & 24979 \\
+\texttt{multifreq\_manifest.max\_k\_filter} & 30 \\
+\texttt{multifreq\_manifest} per-MHz counts & 24979 at every anchor except 80.0\,MHz with 8480 \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{PI\_freq.count} (688477) equals the \emph{raw} manifest row count, while
+\texttt{multifreq\_manifest.rows} in the same file is 582997, the normalized manifest row count.
+This is recorded as an inconsistency in Section~\ref{sec:appA_inconsistencies} rather than resolved
+here.
+
+\section{Multi-type decap campaign (exp060) --- in flux}
+\label{sec:appA_multitype}
+
+The multi-type occupancy fork replaces the binary slot state with a per-slot type code. Its
+simulation campaign was still running when the evidence for this appendix was first collected and
+has since completed all 24 bands; the figures below were re-read on 2026-08-06 and are marked with
+their source. What has \emph{not} happened is ingestion: no multi-type dataset directory was found
+under \texttt{datasets/}, so nothing in this section is a dataset specification, and exp060 still
+has no training input of its own.
+
+\subsection{Type catalog and combination list}
+\label{subsec:appA_multitype_catalog}
+
+\begin{table}[htbp]
+\centering
+\caption{Multi-type decap catalog
+(\texttt{scrap/generation/generate\_peb\_multitype.py}, \texttt{TYPE\_CATALOG}).}
+\label{tab:appA_type_catalog}
+\begin{tabular}{l r r r}
+\hline
+Type & $C$ & ESR & ESL \\
+\hline
+1 & \texttt{100e-9}\,F & \texttt{8.9e-3}\,$\Omega$ & \texttt{222e-12}\,H \\
+2 & \texttt{47e-9}\,F & \texttt{21.4e-3}\,$\Omega$ & \texttt{154e-12}\,H \\
+empty & \texttt{false} and \texttt{0} & --- & --- \\
+\hline
+\end{tabular}
+\end{table}
+
+The combination list \texttt{data/heatmaps/combinations\_multitype\_combined\_15000.csv} holds
+15000 rows of 52 integer type codes (0 empty, 1 type-1, 2 type-2). Its sampler report
+(\texttt{data/heatmaps/combinations\_multitype\_sample\_report.json}, seed 42, generated
+\texttt{2026-08-02T18:07:25.393879+00:00}) records \texttt{per\_k}
+$\{1{:}104,\ 2{:}5304,\ 3{:}4797,\ 4{:}3197,\ 5{:}1598\}$, families \texttt{type1\_only} 4576 /
+\texttt{type2\_only} 4576 / \texttt{mixed} 5848, and \texttt{nonzero\_type\_counts}
+$\{1{:}23015,\ 2{:}22866\}$. \texttt{docs/multitype\_peb\_pipeline.md} contradicts itself on these
+numbers; see Section~\ref{sec:appA_inconsistencies}.
+
+\subsection{Simulation pipeline configuration}
+\label{subsec:appA_multitype_pipeline}
+
+\texttt{pipelines/dataset\_sim/run\_multitype\_sim\_pipeline.py} reads the 15000-row CSV from row 0
+with \texttt{MAX\_LAYOUTS} \texttt{None}, \texttt{USE\_ANCHOR\_MHZ} \texttt{False} and an explicit
+\texttt{SWEEP\_MHZ} list of the same 24 anchors (10\ldots500\,MHz). \texttt{TRIGGER\_APPEND\_AFTER\_MOVE}
+is \texttt{True}.
+
+The append worker started by that pipeline
+(\texttt{pipelines/dataset\_sim/run\_append\_worker.py}) runs
+\texttt{pipelines/data/append\_merged\_combinations\_multifreq.py} with \texttt{OUTPUT\_ROOT} set to
+\texttt{datasets/data\_multifreq\_train}, i.e.\ the single-type dataset root; that is the worker's
+only output root. The worker log for the most recent jobs reports ``Tasks to run: 0'' and ``Nothing
+to append''. This is stated as observed configuration, with no interpretation of intent.
+\fillin{resolve the conflict between \texttt{TRIGGER\_APPEND\_AFTER\_MOVE=True} in
+\texttt{run\_multitype\_sim\_pipeline.py} line 120 and the single-type-only
+\texttt{OUTPUT\_ROOT} in \texttt{run\_append\_worker.py} lines 44--46; decide where multi-type raw
+output is meant to be ingested and record the intended dataset root}
+
+Append jobs are queued per MHz in \texttt{logs/append\_queue/pending.jsonl}, and completed jobs are
+recorded in \texttt{logs/append\_queue/done.jsonl} with fields \texttt{mhz}, \texttt{append\_tag},
+\texttt{raw\_root}, \texttt{enqueued\_at}, \texttt{started\_at}, \texttt{finished\_at} and
+\texttt{returncode}. As read on 2026-08-06 the file holds 24 records, one per band, all with
+\texttt{raw\_root}
+\texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}Desktop\textbackslash{}Raw}.
+The \texttt{merged\_470} record is dated 2026-07-05; the other 23 fall between 2026-08-03 and
+2026-08-05. The last record is \texttt{mhz} 500, \texttt{append\_tag} \texttt{merged\_500},
+\texttt{enqueued\_at} \texttt{2026-08-05T19:27:53.160450+00:00}, \texttt{finished\_at}
+\texttt{2026-08-05T19:29:02.065218+00:00}, \texttt{returncode} 0. Twenty-three of the 24 records
+carry \texttt{returncode} 0; \texttt{merged\_80} (\texttt{finished\_at}
+\texttt{2026-08-03T17:38:40.736791+00:00}) carries \texttt{returncode} 1.
+
+Three timestamps sit close together and are recorded here without an inference about which process
+wrote what: \texttt{merged\_500} was enqueued at \texttt{2026-08-05T19:27:53.160450+00:00}, the
+multi-type progress file was last updated at \texttt{2026-08-05T19:27:53.164372+00:00}
+(\autoref{tab:appA_multitype_state}), and
+\texttt{datasets/data\_multifreq\_train/dataset\_meta.json} carries \texttt{generated\_at\_utc}
+\texttt{2026-08-05T19:28:42.489387+00:00} (\autoref{tab:appA_raw}).
+\fillin{establish whether any multi-type raw output was appended into
+\texttt{datasets/data\_multifreq\_train} by the append jobs of 2026-08-03 to 2026-08-05. The counts
+in \autoref{tab:appA_raw} are unchanged from the earlier read, which does not by itself settle it;
+the append worker's per-job log for \texttt{merged\_500}, and the \texttt{append\_tag} values in
+\texttt{datasets/data\_multifreq\_train/manifest.csv}, would.}
+
+\subsection{Campaign state}
+\label{subsec:appA_multitype_state}
+
+An earlier read of these artifacts caught the pipeline mid-run, with 23 of 24 bands complete. The
+values below replace that snapshot: the simulation process
+(\texttt{python -u pipelines/dataset\_sim/run\_multitype\_sim\_pipeline.py}) is no longer running,
+and the progress file records all 24 bands as done. This is the state of the \emph{raw simulation
+output on the Windows host}, not of a dataset.
+
+\begin{table}[htbp]
+\centering
+\caption{Multi-type simulation state. The progress-file rows were re-read on 2026-08-06; the folder
+counts were taken on 2026-08-05 after the final progress update.}
+\label{tab:appA_multitype_state}
+\begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
+\hline
+Item & Value at the observation timestamp \\
+\hline
+Progress file & \texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}Desktop\textbackslash{}Raw\textbackslash{}sim\_progress\_multitype.json} \\
+\texttt{impedance\_done} & \texttt{true} \\
+\texttt{distribution\_mhz\_done} & 24 bands: 10, 63, 80, 100, 120, 150, 170, 180, 200, 230, 250,
+270, 280, 300, 330, 350, 370, 390, 400, 420, 430, 450, 470, 500 --- the same 24 anchors as the
+single-type set \\
+\texttt{updated\_at} & \texttt{2026-08-05T19:27:53.164372+00:00} \\
+Band folders inspected & the \texttt{Impedance} folder and the \texttt{heatmaps\_450MHz} and
+\texttt{heatmaps\_500MHz} folders under the Raw root each contain 15000 PI folders, matching the
+15000-row combination list \\
+Multi-type dataset directory & none found under \texttt{datasets/} \\
+\hline
+\end{tabular}
+\end{table}
+
+\fillin{confirm the PI-folder count for the remaining 21 band folders under the Raw root; only
+\texttt{Impedance}, \texttt{heatmaps\_450MHz} and \texttt{heatmaps\_500MHz} were counted, and a
+completed band in \texttt{distribution\_mhz\_done} is not by itself proof of 15000 output folders}
+
+\fillin{record the dataset root that the multi-type raw output is ingested into, once ingestion has
+happened, together with the resulting counts, anchor list and normalization statistics; until then
+exp060 has no dataset specification and no result from it can be reported}
+
+\subsection{exp060 configuration}
+\label{subsec:appA_exp060_config}
+
+\texttt{experiments/exp060\_multitype\_occ/config.yaml} sets \texttt{n\_decap\_types} to 2 (line
+193) while still pointing \texttt{data\_dir} at
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded} (line 134), which is the single-type
+normalized dataset. No multi-type normalized dataset directory was found under \texttt{datasets/}
+at the read times given in \autoref{tab:appA_multitype_state}, so the completion of the simulation
+campaign has not yet produced a training input for exp060.
+\fillin{update or explain the exp060 \texttt{data\_dir}; it cannot supply the $52\times T$
+multi-type occupancy that \texttt{n\_decap\_types = 2} implies}
+
+\section{Recorded inconsistencies between artifacts}
+\label{sec:appA_inconsistencies}
+
+Five disagreements between repository artifacts were found while assembling this appendix. They are
+listed rather than silently resolved, because in each case the authoritative source is either
+ambiguous or the artifacts were written at different times.
+
+\begin{table}[htbp]
+\centering
+\caption{Conflicts between artifacts. Both sides are named; none is resolved here.}
+\label{tab:appA_conflicts}
+\begin{tabular}{p{0.20\textwidth} p{0.34\textwidth} p{0.34\textwidth}}
+\hline
+Subject & Source A & Source B \\
+\hline
+Anchor count &
+\texttt{docs/dataset.md}:96--101, ``Full 16-MHz set''; \texttt{configs/multifreq\_anchors.yaml}, 20
+anchors &
+\texttt{datasets/data\_multifreq\_train/dataset\_meta.json}, 24 anchors (the list actually loaded,
+per the resolution order in \texttt{docs/dataset.md}:42--51) \\
+\texttt{PI\_freq.count} &
+\texttt{PI\_freq.count} = 688477, the raw manifest row count &
+\texttt{multifreq\_manifest.rows} = 582997 in the same file,
+\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json} \\
+Artifact staleness &
+normalized meta generated \texttt{2026-07-06T13:39:03}; 24979 layouts / 582997 rows &
+raw meta generated \texttt{2026-08-05T19:28:42}; 29499 layouts / 688477 rows. The $K\le30$ filter
+explains part of the gap, but the two are not from the same moment \\
+Multi-type sampler &
+\texttt{docs/multitype\_peb\_pipeline.md}:75--77: per-$K$ $\{2{:}3750, 3{:}3750, 4{:}3750,
+5{:}3750\}$, families 5000 each, nonzero type counts $\{1{:}26258, 2{:}26242\}$ &
+\texttt{data/heatmaps/combinations\_multitype\_sample\_report.json} and the CSV on disk: per-$K$
+$\{1{:}104, 2{:}5304, 3{:}4797, 4{:}3197, 5{:}1598\}$, families 4576/4576/5848, nonzero
+$\{1{:}23015, 2{:}22866\}$. The same doc at lines 66--68 quotes the report's numbers, so it
+contradicts itself \\
+Merged CSV path &
+\texttt{merged\_combinations\_report.json} key \texttt{output\_csv} and
+\texttt{docs/dataset.md}:78--81 point to
+\texttt{data/heatmaps/all\_combinations\_merged.csv}, which is not present there &
+the 29499-row merged CSV on disk is
+\texttt{data/heatmaps/peb\_with\_29k/all\_combinations\_merged.csv}, which is what
+\texttt{run\_combinations\_sim\_pipeline.py}:50 reads \\
+Append worker root &
+\texttt{run\_multitype\_sim\_pipeline.py}:120 sets
+\texttt{TRIGGER\_APPEND\_AFTER\_MOVE=True} for the multi-type campaign &
+\texttt{run\_append\_worker.py}:44--46 has \texttt{OUTPUT\_ROOT =
+REPO\_ROOT/datasets/data\_multifreq\_train}, the single-type dataset, as its only output root \\
+\hline
+\end{tabular}
+\end{table}
+
+\fillin{decide, for each row of Table~\ref{tab:appA_conflicts}, which artifact is authoritative and
+either correct the stale one in the repository or state the resolution in the thesis text}
+
+\section{Reproducibility notes}
+\label{sec:appA_repro}
+
+Two constraints limit reproduction of the work in this appendix. First, the simulation half is
+bound to one Windows host: \texttt{engineer.exe}, the \texttt{.erf} design, the PEB staging
+directories and the Raw output root are all absolute
+\texttt{C:\textbackslash{}Users\textbackslash{}muthusamy\textbackslash{}\ldots} paths, and the AL
+loop cannot run its simulation steps without that machine. Second, every dataset directory is
+git-ignored, so the repository alone does not carry the data.
+
+\fillin{record a wall-clock simulation cost per layout and per band; \texttt{docs/ecadstar\_headless\_cli.md}
+lines 113--121 gives an observed rate for one resumed band, but no systematic timing artifact
+exists. A per-band timing table from \texttt{logs/append\_queue/done.jsonl} start/finish timestamps
+would settle it}
+
+\fillin{state whether \texttt{H-shape.erf} and the derived datasets can be released, and under what
+terms, so the reproducibility statement is complete}
+
+% ---------------------------------------------------------------
+% FILL IN checklist:
+%   - Port convention (IC1_Port1 vs IC1_Port1,IC2_Port2) behind the stored 231-bin spectra:
+%     check harvested CSV names in a legacy PI folder vs peb_components of the producing pipeline.
+%   - Solver settings block (Table tab:appA_solver_gaps): sweep definition, sweep points,
+%     mesh/plane-pair settings, port definitions, stack-up, materials, board dimensions,
+%     single-type decap C/ESR/ESL. All live in H-shape.erf on the Windows host; export them.
+%   - Whether 490/550/590 MHz from SWEEP_MHZ ever reached the dataset (logs/append_queue/done.jsonl).
+%   - Provenance of configs/Frequency_data_hz.npy (how the 231-point grid was generated).
+%   - Provenance of configs/target_impedance.npy (per-band values, derivation, 0.8 / 50 limits).
+%   - Train/validation/test split definition for the normalized dataset (exp059 dataloader).
+%   - Reason the 80 MHz band covers 10000 (raw) / 8480 (normalized) layouts instead of the pool.
+%   - Provenance of the 24-anchor selection.
+%   - Anchor-count conflict: docs/dataset.md "16-MHz set" vs 20-anchor YAML vs 24-anchor meta.
+%   - Full k_hist_all histogram, if the budget distribution is discussed in the main text.
+%   - Full 24-entry per-MHz heatmap statistics table, if wanted.
+%   - Append-root conflict for the multi-type campaign (TRIGGER_APPEND_AFTER_MOVE vs OUTPUT_ROOT).
+%   - Whether multi-type raw output was appended into datasets/data_multifreq_train by the
+%     2026-08-03..05 append jobs (per-job worker log for merged_500; append_tag values in manifest.csv).
+%   - PI-folder counts for the 21 band folders that were not counted (only Impedance, 450 and 500 MHz were).
+%   - Dataset root that the multi-type raw output is ingested into, plus its counts/anchors/stats.
+%   - Whether SWEEP_MHZ in run_combinations_sim_pipeline.py was edited between campaigns.
+%   - exp060 config data_dir vs n_decap_types = 2 (no multi-type dataset exists).
+%   - Per-row resolution of Table tab:appA_conflicts.
+%   - Wall-clock simulation cost per layout and per band.
+%   - Release/availability terms for H-shape.erf and the datasets.
+%
+% Citation verification queue:
+%   - None. This appendix cites no literature by instruction; every statement is sourced from a
+%     repository artifact named in the surrounding text.
+%
+% Evidence warnings:
+%   - Section sec:appA_multitype reports the Windows simulation host, not repository artifacts.
+%     The campaign has FINISHED: sim_progress_multitype.json lists all 24 bands with updated_at
+%     2026-08-05T19:27:53.164372+00:00 (re-read 2026-08-06) and the pipeline process is gone.
+%     Folder counts (15000) were taken on 2026-08-05 for Impedance, 450 MHz and 500 MHz only.
+%     No multi-type dataset directory was found under datasets/; exp060 still has no dataset
+%     specification and no exp060 result may be reported.
+%   - datasets/data_multifreq_train is written to by the append worker. generated_at_utc moved
+%     from 2026-08-05T15:24:43.778950+00:00 to 2026-08-05T19:28:42.489387+00:00 between reads
+%     while all counts stayed identical. tab:appA_raw carries the later value; re-read before
+%     submission. Whether multi-type output entered that root is an open question, flagged in
+%     subsec:appA_multitype_pipeline.
+%   - logs/append_queue/done.jsonl: merged_80 (2026-08-03T17:38:40.736791+00:00) has returncode 1.
+%     Not linked here to the 80 MHz coverage shortfall in tab:appA_raw - that link is unverified.
+%   - Five artifact conflicts are recorded in Table tab:appA_conflicts and none is resolved.
+%     Do not quote one side of any of them in the main text without the other.
+%   - datasets/data_multifreq_train_norm_unbounded/dataset_meta.json (2026-07-06) predates the raw
+%     set it derives from (2026-08-05). Any count taken from it is a snapshot, not current state.
+%   - datasets/data_multifreq_al_overlay_exp059 has no dataset_meta.json; its counts were read from
+%     a directory listing, so they carry no generation timestamp.
+%   - configs/multifreq_anchors.yaml is a legacy fallback (20 anchors) and must not be used as the
+%     anchor list in any chapter.
+%   - Anchor resolution order is quoted from docs/dataset.md; the implementation in
+%     src_vae/others/multifreq_anchors.py was not read line by line.
+%   - SWEEP_MHZ in run_combinations_sim_pipeline.py is a plain module constant with no history in
+%     the repository; no claim is made about when it was last edited or which sweep it reflects.
+%   - dataset_root and source_dataset in dataset_meta.json are absolute paths (libs/dataset_meta.py
+%     line 172), not repository-relative ones.
+%   - No result, accuracy, or performance claim appears in this appendix by design.
+% ---------------------------------------------------------------

@@ -1,0 +1,40 @@
+---
+title: run_epoch_encode
+type: code
+path: experiments/exp047/codes/run_epoch_encode.py
+group: experiments/exp047/codes
+experiment: exp047
+loc: 463
+tags: [code, exp047]
+---
+
+# run_epoch_encode
+
+> Training epoch loop for exp046 — encode z + U-Net skips + spatial losses on bounded data.
+
+**Source:** `experiments/exp047/codes/run_epoch_encode.py` · 463 lines
+**Experiment:** [[exp047]]
+
+## Functions
+
+- **`_pi_norm_to_mhz(pi_norm: torch.Tensor)`** — Batch PI norm → MHz.
+- **`_high_freq_mult(pi_norm: torch.Tensor, c: Config)`**
+- **`_layout_sharpening_loss(recon: torch.Tensor, target: torch.Tensor, pi_norm: torch.Tensor, c: Config, ps: float)`** — Extra peak/grad/spatial terms on layout batches; boosted at high MHz.
+- **`_latent_distill_loss(mu_student: torch.Tensor, mu_teacher: torch.Tensor, c: Config, base, logvar_student: torch.Tensor | None=None, logvar_teacher: torch.Tensor | None=None)`** — Pull the layout (student) latent toward the encode (teacher) latent.
+- **`_forward_train_batch(model, hm_enc: torch.Tensor, occ: torch.Tensor, imp: torch.Tensor, K: torch.Tensor, pi: torch.Tensor, c: Config, *, train: bool)`** — Encode for KL; decode with teacher U-Net skips on encode batches.
+- **`_cross_freq_decode(c: Config, base, *, hm_enc, occ, imp, K, pi, z_decode, pi_alt, hm_alt, ps: float, dynrange_weight: float | None, force_layout_z: bool=False)`** — Encode z + teacher skips for cross-freq heatmap loss.
+- **`_run_epoch(model, loader, c: Config, epoch: int, beta: float, md: float, physics: PhysicsLoss | None, pw: tuple[float, float, float] | None, imp_log_std: float, hm_log_mean: float, hm_log_std: float, *, train: bool, optimizer=None, scaler=None, collect_per_k: bool=False)`**
+
+## Imports
+
+- [[experiments.exp038_true_multi.codes.train_vae_simple]]
+- [[experiments.exp047.codes.spatial_metrics]]
+- [[pi_freq_utils]]
+
+## Imported by
+
+- [[experiments.exp047.codes.train_vae_simple]]
+
+## External dependencies
+
+`src_vae`, `torch`

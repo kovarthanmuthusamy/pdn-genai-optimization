@@ -139,13 +139,33 @@ class HeatmapNormStats:
             return float(nearest_anchor_mhz(float(m), self.anchors_mhz or load_anchors_mhz()))
         return float((self.anchors_mhz or load_anchors_mhz())[-1])
 
-    def bin_stats(self, mhz: float | None = None, *, pi_norm=None) -> HeatmapBinStats:
+    def bin_stats(
+        self,
+        mhz: float | None = None,
+        *,
+        pi_norm=None,
+        interp: bool = False,
+    ) -> HeatmapBinStats:
         if self.is_robust_per_mhz():
-            key = _mhz_key(self.resolve_mhz(mhz, pi_norm=pi_norm))
+            anchors = self.anchors_mhz or load_anchors_mhz()
+            # True (un-snapped) MHz for interpolation decisions.
+            if mhz is not None:
+                m_true = float(mhz)
+            elif pi_norm is not None:
+                _m = pi_norm_to_mhz(pi_norm)
+                m_true = float(_m.reshape(-1)[0]) if isinstance(_m, np.ndarray) else float(_m)
+            else:
+                m_true = float(anchors[-1])
+            snapped = float(nearest_anchor_mhz(m_true, anchors))
+            # Off-anchor + interp: linearly interpolate stats in log10(MHz) between
+            # the two bracketing anchors. Anchor-exact frequencies (training path)
+            # skip this and return their exact stats unchanged.
+            if interp and abs(m_true - snapped) > 1e-6 and len(self.by_mhz) >= 2:
+                return self._interp_bin_stats(m_true)
+            key = _mhz_key(snapped)
             if key in self.by_mhz:
                 return self.by_mhz[key]
-            m = self.resolve_mhz(mhz, pi_norm=pi_norm)
-            best = min(self.by_mhz.keys(), key=lambda k: abs(float(k) - m))
+            best = min(self.by_mhz.keys(), key=lambda k: abs(float(k) - m_true))
             return self.by_mhz[best]
         return HeatmapBinStats(
             median=self.log_mean,
@@ -155,6 +175,46 @@ class HeatmapNormStats:
             background_value=self.background_value,
             log_mean=self.log_mean,
             log_std=self.log_std,
+        )
+
+    def _interp_bin_stats(self, mhz: float) -> HeatmapBinStats:
+        """Log-frequency linear interpolation of per-MHz stats for off-anchor MHz.
+
+        Fixes off-anchor magnitude: nearest-anchor snapping crushes the scale when
+        the closest anchor is a low/degenerate band (e.g. 30 MHz -> 10 MHz ceiling
+        ~0.44 Ohm). Interpolating median/IQR/clip in log10(MHz) between the two
+        bracketing anchors restores the correct magnitude. Endpoints clamp.
+        """
+        anchor_keys = sorted(self.by_mhz.keys(), key=lambda k: float(k))
+        vals = [float(k) for k in anchor_keys]
+        if mhz <= vals[0]:
+            return self.by_mhz[anchor_keys[0]]
+        if mhz >= vals[-1]:
+            return self.by_mhz[anchor_keys[-1]]
+        lo = max(v for v in vals if v <= mhz)
+        hi = min(v for v in vals if v >= mhz)
+        if lo == hi:
+            return self.by_mhz[_mhz_key(lo)]
+        bl = self.by_mhz[_mhz_key(lo)]
+        bh = self.by_mhz[_mhz_key(hi)]
+        t = (math.log10(mhz) - math.log10(lo)) / (math.log10(hi) - math.log10(lo))
+
+        def lerp(a: float, b: float) -> float:
+            return float(a + t * (b - a))
+
+        if bl.z_max is not None and bh.z_max is not None:
+            z_max = lerp(bl.z_max, bh.z_max)
+        else:
+            z_max = bl.z_max if bl.z_max is not None else bh.z_max
+        return HeatmapBinStats(
+            median=lerp(bl.median, bh.median),
+            iqr=lerp(bl.iqr, bh.iqr) or 1.0,
+            clip_min=lerp(bl.clip_min, bh.clip_min),
+            clip_max=lerp(bl.clip_max, bh.clip_max),
+            background_value=lerp(bl.background_value, bh.background_value),
+            log_mean=lerp(bl.log_mean, bh.log_mean),
+            log_std=lerp(bl.log_std, bh.log_std) or 1.0,
+            z_max=z_max,
         )
 
     def clip_bounds(
@@ -223,7 +283,7 @@ class HeatmapNormStats:
         elif pi_norm is not None:
             mhz_f = self.resolve_mhz(pi_norm=pi_norm)
 
-        b = self.bin_stats(mhz_f, pi_norm=pi_norm)
+        b = self.bin_stats(mhz_f, pi_norm=pi_norm, interp=True)
         z = hm_norm
         if self._use_clip(apply_clip):
             z = z.clamp(b.clip_min, b.clip_max)

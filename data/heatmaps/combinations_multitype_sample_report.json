@@ -1,0 +1,94 @@
+{
+  "generated_at": "2026-08-02T18:07:25.393879+00:00",
+  "seed": 42,
+  "n_decaps": 52,
+  "mode": "combined",
+  "schema": {
+    "empty": 0,
+    "type1": 1,
+    "type2": 2
+  },
+  "combined": {
+    "output_csv": "/home/ubuntu/genai_pdn/data/heatmaps/combinations_multitype_combined_15000.csv",
+    "total_target": 15000,
+    "k_range": [
+      1,
+      5
+    ],
+    "k2_fully_enumerated": true,
+    "include_k1_single": true,
+    "shuffled": true,
+    "families": {
+      "type1_only": {
+        "targets_k3plus": {
+          "3": 1599,
+          "4": 1066,
+          "5": 533
+        },
+        "rows": 4576,
+        "unique": 4576,
+        "per_k": {
+          "1": 52,
+          "2": 1326,
+          "3": 1599,
+          "4": 1066,
+          "5": 533
+        },
+        "nonzero_type_counts": {
+          "1": 14430
+        }
+      },
+      "type2_only": {
+        "targets_k3plus": {
+          "3": 1599,
+          "4": 1066,
+          "5": 533
+        },
+        "rows": 4576,
+        "unique": 4576,
+        "per_k": {
+          "1": 52,
+          "2": 1326,
+          "3": 1599,
+          "4": 1066,
+          "5": 533
+        },
+        "nonzero_type_counts": {
+          "2": 14430
+        }
+      },
+      "mixed": {
+        "targets_k3plus": {
+          "3": 1599,
+          "4": 1065,
+          "5": 532
+        },
+        "rows": 5848,
+        "unique": 5848,
+        "per_k": {
+          "2": 2652,
+          "3": 1599,
+          "4": 1065,
+          "5": 532
+        },
+        "nonzero_type_counts": {
+          "1": 8585,
+          "2": 8436
+        }
+      }
+    },
+    "rows": 15000,
+    "unique": 15000,
+    "per_k": {
+      "1": 104,
+      "2": 5304,
+      "3": 4797,
+      "4": 3197,
+      "5": 1598
+    },
+    "nonzero_type_counts": {
+      "1": 23015,
+      "2": 22866
+    }
+  }
+}

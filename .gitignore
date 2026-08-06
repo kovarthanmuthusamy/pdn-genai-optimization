@@ -18,7 +18,6 @@ src_gan/
 temp_visuals/
 ppt/
 datasets/
-data/
 data_multi_norm_robust/
 .github/
 .cursor/

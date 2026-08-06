@@ -35,22 +35,133 @@ files under the same names, so a bare file name is not unique in the repository.
 \subsection{Impedance Behavior and Decoupling Strategies}
 \label{subsec:impedance_decoupling}
 
-\fillin{Textbook treatment of PDN impedance: why a switching load draws a
-transient current, how the voltage ripple relates to $Z(f)$ and the current
-spectrum, and the standard target-impedance rule of thumb. No source in this
-repository states any of this; it must be written from
-\cite{smith1999target} and a PI textbook chosen by the author.}
+A power delivery network has one job: hold the supply voltage at the load pins
+inside a tolerance while the current drawn by that load changes. A switching
+digital load does not draw a constant current. Each transition charges and
+discharges internal capacitance, so the current at the power pins carries a large
+transient component whose energy is spread over a wide frequency range rather
+than concentrated at the clock rate. Write $I(f)$ for the spectrum of that
+current and $Z(f)$ for the impedance the network presents at the port where the
+load is attached. The voltage disturbance seen at that port follows the
+frequency-domain form of Ohm's law,
+\begin{equation}
+\lvert V_{\mathrm{ripple}}(f) \rvert = \lvert Z(f) \rvert \cdot \lvert I(f) \rvert .
+\label{eq:ohm_freq}
+\end{equation}
+Equation~\ref{eq:ohm_freq} is what makes impedance the design variable. The
+requirement is stated on the ripple, but the current spectrum belongs to the
+silicon and not to the board, so the only factor the board designer controls is
+$Z(f)$.
 
-\fillin{Decoupling capacitor equivalent circuit (C, ESR, ESL), the series
-self-resonant frequency, and why a single capacitor value only decouples over a
-limited band. Not present in the repository in any form -- the simulation stack
-treats a slot as occupied or empty and nothing records the component model.}
+The target-impedance methodology turns that observation into a specification.
+An allowed ripple $\Delta V_{\max}$ and a worst-case transient current
+$I_{\max}$ are fixed, and their ratio
+\begin{equation}
+Z_{\mathrm{target}} = \frac{\Delta V_{\max}}{I_{\max}}
+\label{eq:target_impedance}
+\end{equation}
+becomes the impedance the network must stay below. The approach and the
+associated capacitor-selection procedure for CMOS power distribution are due to
+\cite{smith1999target}. Because the load has spectral content across a broad
+band, a single scalar is not enough in practice and the bound is imposed as a
+mask over frequency; \cite{bogatin2018signal} develops this as the
+frequency-domain target impedance method (ch.~13.22). That is the form used
+throughout this thesis: $Z_{\mathrm{target}}(f)$ over the $231$ bins spanning
+$1$--$600$~MHz, with the mask itself described below.
 
-\fillin{Anti-resonance between capacitor banks and between capacitors and the
-plane-pair/package inductance: the parallel-resonance mechanism and the standard
-mitigation strategies (value spreading, ESR damping, placement close to the
-load). Cite a PI reference; do not reconstruct the mechanism from the
-repository's heuristic loss term.}
+\subsubsection*{The decoupling capacitor as a series RLC circuit}
+
+At the frequencies of interest a decoupling capacitor is not well described by
+its capacitance alone. The standard lumped model is a series RLC branch
+combining the capacitance $C$, an equivalent series resistance $\mathrm{ESR}$
+and an equivalent series inductance $\mathrm{ESL}$:
+\begin{equation}
+Z_{\mathrm{cap}}(\omega) = \mathrm{ESR} + j\omega\,\mathrm{ESL}
++ \frac{1}{j\omega C},
+\qquad
+\lvert Z_{\mathrm{cap}} \rvert
+= \sqrt{\mathrm{ESR}^2 + \left(\omega\,\mathrm{ESL} - \frac{1}{\omega C}\right)^{2}},
+\label{eq:cap_rlc}
+\end{equation}
+with $\omega = 2\pi f$. The magnitude has a minimum at the series self-resonant
+frequency, where the inductive and capacitive reactances cancel:
+\begin{equation}
+f_{\mathrm{SRF}} = \frac{1}{2\pi\sqrt{\mathrm{ESL}\cdot C}} .
+\label{eq:srf}
+\end{equation}
+At $f_{\mathrm{SRF}}$ the impedance of the branch equals its $\mathrm{ESR}$.
+Below it the branch is capacitive and $\lvert Z_{\mathrm{cap}} \rvert$ falls with
+frequency as $1/(\omega C)$; above it the branch is inductive and
+$\lvert Z_{\mathrm{cap}} \rvert$ rises as $\omega\,\mathrm{ESL}$. The
+consequence is that one capacitor value is only useful over a limited band around
+its own self-resonance, which is why a real PDN uses several values and several
+parts rather than one large capacitor. The multilayer ceramic capacitor model,
+the equivalent series inductance and the loop-inductance approximation behind it
+are treated in \cite{bogatin2018signal} (ch.~13.12--13.14).
+
+\subsubsection*{Anti-resonance}
+
+Connecting capacitors in parallel does not lower the impedance everywhere.
+Consider two branches at a frequency at which one is already above its
+self-resonance, and therefore inductive, while the other is still below its own,
+and therefore capacitive. The parallel combination of an inductive and a
+capacitive branch has a parallel resonance, and at that frequency the two
+susceptances cancel in the opposite sense to Equation~\ref{eq:srf}: the
+combination presents an impedance \emph{peak} rather than a dip, limited only by
+the loss in the loop. The same mechanism acts between a capacitor bank and the
+inductance of the package and of the plane path that feeds it. Anti-resonant
+peaks, not the resonant dips, are what violate $Z_{\mathrm{target}}(f)$, and they
+are the reason adding a capacitor can make a design worse at some frequencies
+while improving it at others.
+
+The mitigations are all ways of either moving a peak, damping it, or lowering the
+inductance that creates it: spreading capacitor values so that the individual
+self-resonances and the peaks between them are staggered rather than aligned;
+choosing parts whose $\mathrm{ESR}$ is large enough to damp the parallel
+resonance instead of leaving it sharp; adding more capacitors, which
+\cite{bogatin2018signal} treats explicitly as a way of engineering a reduced
+parallel-resonant peak (ch.~13.16--13.17); and placing the capacitors so that the
+inductance between them and the load is small, which is taken up next.
+\fillin{Pin the value-spreading and ESR-damping strategies to a specific passage
+in \cite{bogatin2018signal} or replace them. Ch.~13.16--13.17 is confirmed from
+the publisher's table of contents to cover combining capacitors in parallel and
+reducing the parallel-resonant peak by adding more capacitors; the other two
+strategies are stated here from general design practice and were not read from a
+verified page.}
+
+\subsubsection*{Mounting inductance and why the slot matters}
+
+The $\mathrm{ESL}$ quoted for a part is only one contribution to the inductance
+of the current loop it forms with the load. The capacitor pads, the mounting
+vias down to the power and ground layers, and the path through the planes back to
+the point being decoupled all add to that loop. Above self-resonance the branch
+impedance is set by the total loop inductance $L_{\mathrm{loop}}$ rather than by
+$\mathrm{ESL}$ alone, so $\lvert Z \rvert \approx \omega L_{\mathrm{loop}}$ and
+the penalty for a large loop grows linearly with frequency. Two identical
+capacitors mounted differently, or sitting at different distances from the IC
+power pin, therefore do not decouple equally well. Optimizing the mounting of a
+capacitor is the subject of \cite{bogatin2018signal} ch.~13.15, with the
+loop-inductance approximation in ch.~13.14.
+
+This is the physical reason the placement problem is spatial rather than a
+counting problem. The vector $\mathbf{b} \in \{0,1\}^{52}$ selects both how many
+capacitors are fitted and where they sit relative to the observation port, and
+two placements with the same budget $K$ do not in general produce the same
+$Z(f)$. It is also why the occupancy modality is encoded on a graph whose edges
+follow board adjacency rather than being treated as an unordered set of $52$
+bits (Section~\ref{subsec:vae_multimodal}).
+
+At the upper end of the band the plane pair the capacitors connect to stops
+behaving as a single lumped node and becomes a distributed structure with
+resonances of its own, which also enter $Z(f)$
+\cite{novak2007frequency}.
+\fillin{Confirm against a physical copy of Novak and Miller that the book covers
+plane-pair cavity resonance, and cite the specific chapter. The table of contents
+could not be retrieved for this draft, so no statement about cavity modes, their
+frequencies or their spatial pattern is made here, and this sentence should
+either be substantiated or removed.}
+
+\subsubsection*{What the codebase encodes of this}
 
 The only anti-resonance statement that exists inside the codebase is a shape
 prior, not a circuit model. The physics loss module encodes the rule that every
@@ -366,9 +477,50 @@ The variational autoencoder \cite{kingma2013auto} learns a latent variable model
 by jointly training an encoder $q_\phi(\mathbf{z}\mid\mathbf{x})$ and a decoder
 $p_\theta(\mathbf{x}\mid\mathbf{z})$ against the evidence lower bound, trading
 reconstruction quality against a Kullback--Leibler term that pulls the
-approximate posterior toward a prior. \fillin{Write the ELBO out, define the
-reparameterization trick, and connect it to why the latent space is usable as a
-continuous search space -- one short derivation, standard textbook material.}
+approximate posterior toward a prior.
+
+Written out, for an observation $\mathbf{x}$ and a latent vector
+$\mathbf{z} \in \mathbb{R}^{d_{\mathrm{latent}}}$ with prior
+$p(\mathbf{z}) = \mathcal{N}(\mathbf{0}, \mathbf{I})$, the marginal likelihood
+$\log p_\theta(\mathbf{x})$ is intractable and training maximizes the evidence
+lower bound (ELBO) instead:
+\begin{equation}
+\log p_\theta(\mathbf{x}) \;\ge\;
+\mathcal{L}_{\mathrm{ELBO}}(\theta, \phi; \mathbf{x}) =
+\mathbb{E}_{q_\phi(\mathbf{z}\mid\mathbf{x})}\!\left[\log p_\theta(\mathbf{x}\mid\mathbf{z})\right]
+\;-\; D_{\mathrm{KL}}\!\left(q_\phi(\mathbf{z}\mid\mathbf{x}) \,\big\|\, p(\mathbf{z})\right),
+\label{eq:elbo}
+\end{equation}
+where $\theta$ are the decoder parameters, $\phi$ the encoder parameters and
+$D_{\mathrm{KL}}$ the Kullback--Leibler divergence. The first term is the
+reconstruction term: it rewards latents from which the decoder can reproduce the
+input. The second is a regularizer that pulls the approximate posterior
+$q_\phi(\mathbf{z}\mid\mathbf{x})$ toward the prior. The gap between
+$\log p_\theta(\mathbf{x})$ and the bound is
+$D_{\mathrm{KL}}(q_\phi(\mathbf{z}\mid\mathbf{x}) \,\|\, p_\theta(\mathbf{z}\mid\mathbf{x}))$,
+which is non-negative and vanishes only when the approximate posterior equals the
+true one \cite{kingma2013auto}.
+
+The encoder emits a mean $\boldsymbol{\mu}_\phi(\mathbf{x})$ and a diagonal
+variance $\boldsymbol{\sigma}^2_\phi(\mathbf{x})$, and the sampling step is made
+differentiable by the reparameterization trick: instead of sampling
+$\mathbf{z}$ from $q_\phi$ directly, one draws
+$\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ and sets
+\begin{equation}
+\mathbf{z} = \boldsymbol{\mu}_\phi(\mathbf{x})
++ \boldsymbol{\sigma}_\phi(\mathbf{x}) \odot \boldsymbol{\epsilon},
+\label{eq:reparam}
+\end{equation}
+with $\odot$ the elementwise product, so that the gradient of the first term of
+Equation~\ref{eq:elbo} with respect to $\phi$ passes through the sample
+\cite{kingma2013auto}. Equations~\ref{eq:elbo} and~\ref{eq:reparam} are what
+make the latent usable as a search domain later: the KL term keeps posteriors
+from spreading arbitrarily far from the prior, so the region of
+$\mathbb{R}^{d_{\mathrm{latent}}}$ that carries prior mass is the region the
+decoder has been trained on. Section~\ref{subsec:latent_space_opt} relies on
+this, and the Stage-2 objective carries an explicit prior term and a
+posterior-boundary term for that reason.
+
 The weighting of the KL term against reconstruction is the $\beta$-VAE
 formulation \cite{higgins2017beta}, and conditioning a VAE on side information
 follows the conditional generative framework of \cite{sohn2015conditional}.
@@ -378,9 +530,34 @@ The KL settings actually used in \texttt{exp059\_capacity\_freq} are
 $=0.03$, a per-expert KL weight of $0.02$, and a $\sigma$-regularization weight
 of $1.5$ toward a target of $0.45$
 (\texttt{experiments/exp059\_capacity\_freq/config.yaml:102--118}).
-\fillin{Explain what \texttt{free\_bits} and the $\sigma$-regularizer are doing
-here and why those particular values were chosen; the configuration records the
-values but no note records the reasoning.}
+
+The first of those settings addresses a known failure mode of
+Equation~\ref{eq:elbo}. The KL term is minimized outright by making
+$q_\phi(\mathbf{z}\mid\mathbf{x})$ equal to the prior for every input. In that
+regime the encoder carries no information about $\mathbf{x}$ and the decoder
+ignores the latent altogether; the approximate posterior has collapsed onto the
+prior, which is the failure mode named and analysed as posterior collapse in
+\cite{he2019posterior}. For this framework the consequence is
+specific rather than merely cosmetic: Stage 2 optimizes $\mathbf{z}$ against the
+target mask, and a latent the decoder ignores cannot steer the decoded placement.
+
+The countermeasure used here is free bits, or KL thresholding, introduced
+alongside the inverse-autoregressive-flow work of \cite{kingma2016iaf}. The idea
+is to stop penalizing the KL contribution of a latent dimension once it has
+fallen below a fixed threshold, so that each dimension may retain a minimum
+amount of information at no cost and the optimizer has no incentive to drive it to
+zero. \texttt{exp059\_capacity\_freq} sets \texttt{free\_bits} $= 0.12$, as
+recorded above.
+\fillin{Confirm the exact hinge form of the free-bits objective and the units of
+the threshold -- nats or bits, per latent dimension or per group of dimensions --
+directly from the PDF of \cite{kingma2016iaf}, and check it against the
+implementation in \texttt{experiments/exp059\_capacity\_freq/codes/}, before
+writing the equation. The formulation could not be read from the paper's own full
+text for this draft, so only the qualitative description above is given.}
+\fillin{Explain what the $\sigma$-regularizer (weight $1.5$ toward a target of
+$0.45$) is doing here, and why \texttt{free\_bits} $=0.12$, \texttt{beta\_final}
+$=0.03$ and the per-expert KL weight $0.02$ were chosen at those particular
+values; the configuration records the values but no note records the reasoning.}
 
 \subsubsection*{Product-of-Experts fusion}
 
@@ -745,9 +922,18 @@ The idea of optimizing a design by moving through a learned continuous latent
 space and decoding the result was established outside electronics by
 \cite{gomezbombarelli2018automatic}, which searches a VAE latent space of
 molecules and decodes candidates back to discrete structures.
-\fillin{One or two sentences on why a latent space can be an easier search domain
-than the discrete original space -- the author's own framing, not a claim to be
-sourced from the repository.}
+
+The argument for doing this is that it replaces a search over discrete objects
+with a search over a continuous vector. The set $\{0,1\}^{52}$ of placements
+supports no gradient: an objective evaluated on it can only be probed by flipping
+bits according to some hand-chosen move set, and there is no direction in which
+to step. Encoding designs into $\mathbb{R}^{d_{\mathrm{latent}}}$ and decoding
+them back yields a domain in which a candidate can be moved by a differentiable
+update instead. \cite{gomezbombarelli2018automatic} states this property
+directly for molecules: continuous representations ``allow the use of powerful
+gradient-based optimization to efficiently guide the search for optimized
+functional compounds''. This thesis applies the same argument to decap placement,
+subject to the qualification in the next paragraph.
 
 The obstacle for PDN placement is that the decoded object is discrete. A
 placement must be a $0/1$ vector with exactly $K$ ones before it can be handed to
@@ -1046,10 +1232,13 @@ corresponding chapter for each.}
 
 % ---------------------------------------------------------------
 % FILL IN checklist:
-%   - PDN impedance physics (transient current -> ripple -> Z(f), target-impedance
-%     rule of thumb): write from smith1999target + a PI textbook. No repo source.
-%   - Decap equivalent circuit (C/ESR/ESL) and self-resonance: literature only.
-%   - Anti-resonance mechanism: literature only; repo has a heuristic shape prior.
+%   - Anti-resonance mitigations: value spreading and ESR damping are written from
+%     general design practice. Pin them to a specific passage in bogatin2018signal or
+%     replace them. Only ch.13.16-13.17 (combining capacitors in parallel; reduced
+%     parallel-resonant peak by adding more capacitors) is confirmed from the TOC.
+%   - Plane-pair cavity resonance: one sentence cites novak2007frequency, whose TOC
+%     could NOT be fetched. Confirm from a physical copy and cite the chapter, or
+%     delete the sentence. No cavity-mode behaviour is asserted in the draft.
 %   - Decap type fixed in main study? give capacitance/ESR/ESL/part number used in
 %     the ECADSTAR sims. Settled by: the ECADSTAR component library / PEB project.
 %   - Derivation of configs/target_impedance.npy (0.8 -> 50 ohm). Settled by: the
@@ -1063,14 +1252,16 @@ corresponding chapter for each.}
 %   - Why layout-level (not row-level) holdout matters: leakage argument, one sentence.
 %   - How BOUNDARY_MARGIN = 0.1 was chosen and its size in ohms.
 %   - Port Stage 2 to exp059 (or state it is exp038-only) + fix NORMALIZATION_STATS_PATH.
-%   - ELBO + reparameterization written out (textbook).
-%   - Meaning/choice of free_bits 0.12 and sigma_reg (1.5 -> 0.45).
+%   - Free-bits formulation: exact hinge form and the units of the threshold (nats or
+%     bits; per dimension or per group) from the kingma2016iaf PDF, cross-checked against
+%     the exp059 implementation. NOT written as an equation in this draft on purpose.
+%   - Meaning of the sigma-regularizer (weight 1.5 -> target 0.45) and why free_bits 0.12,
+%     beta_final 0.03 and per_expert_kl_weight 0.02 were chosen at those values.
 %   - Rationale for PoE over MoE for this problem. Settled by: author's design argument.
 %   - FiLM init reconciliation: forward adds 1.0 to gamma AND bias gamma-half = 1.0.
 %   - Resolve exp059 notes.md vs live config.yaml (layout_train_prob, occ_only_encode_prob,
 %     distill weights, lr, epochs, resume). Settled by: the checkpoint's recorded config.
 %   - "Physics-informed" framing paragraph: loss-imposed vs structurally-imposed constraints.
-%   - Why a latent space is an easier search domain (author's framing).
 %   - PEAK_LOSS_WEIGHT value + functional forms of shape/track/posterior/peak/diversity/
 %     occ-confidence terms. Settled by: pipelines/latent/optimize.py lines 330-416.
 %   - Modality-dropout ablation: occupancy-only reconstruction/heatmap error with and
@@ -1098,6 +1289,23 @@ corresponding chapter for each.}
 %   swaminathan2020demystifying, huang2021ml, mirhoseini2021chip, batchal2022batch,
 %   goay2022adaptive, todaes2022worst, ars2023ai, convga2024gcn, traceformer2024graph
 %   Additionally:
+%   - bogatin2018signal (added for the PDN-physics gaps): carries a VERIFY note in
+%     refs.bib. Publisher TOC confirms the ch.13 section numbers cited in prose
+%     (13.12-13.17, 13.22), but two ISBNs appear across retailers for what looks like the
+%     same 3rd edition, and the publication month is unconfirmed. Check the copy used and
+%     fix the refs.bib fields before the first full build.
+%   - novak2007frequency: carries a VERIFY note in refs.bib. Bibliographic data confirmed
+%     via Google Books; the TOC could NOT be fetched (self-signed cert / 403), so the
+%     book's coverage of plane-pair cavity resonance is UNVERIFIED. Cited once, with a
+%     \fillin attached at the use site.
+%   - kingma2016iaf: carries a VERIFY note in refs.bib. Title/authors/year confirmed from
+%     the arXiv abstract page, but the free-bits definition could NOT be extracted from the
+%     paper's full text. Cited for the idea only; no equation is written.
+%   - smith1999target: the abstract is paywalled and was not read directly. Cited for the
+%     target-impedance methodology, which is what it is universally cited for. No specific
+%     numerical claim or derivation is attributed to it. The vault note Smith1999*.md links
+%     a wrong DOI; the DOI in refs.bib (10.1109/6040.784476) is the correct one.
+%   - he2019posterior: verified (ICLR 2019 / arXiv:1901.05534); no VERIFY note needed.
 %   - convga2024gcn: literature block records verification as PARTIAL -- author list,
 %     exact venue and page numbers unconfirmed (IEEE Xplore 10705608 paywalled).
 %     Do not attribute authors in prose until confirmed.
@@ -1152,9 +1360,16 @@ corresponding chapter for each.}
 %      docs/framework-overview.md are untracked in git; the current exp059 architecture
 %      and config are not committed, and the latest commit message still describes exp057
 %      as current. Any line number cited from those files may move.
-%   8. Facts block lists 10 "missing" items, all PDN-physics / board / solver / cost
-%      related. Every one of them is marked with a \fillin above rather than written from
-%      background knowledge.
+%   8. Facts block lists 10 "missing" items covering board / solver / cost / part
+%      parameters; every one is still marked with a \fillin rather than written from
+%      background knowledge. The PDN-physics item is now written from literature only
+%      (bogatin2018signal, smith1999target) and is explicitly NOT sourced from the repo;
+%      the repo's physics_loss.py term remains framed as a training regularizer with a
+%      physical motivation, not as a derived circuit relation.
+%  13. The Bogatin section numbers cited in prose (13.12-13.17, 13.22) come from the
+%      publisher's table of contents, not from the pages themselves. The physics written
+%      around them (series RLC, SRF, parallel resonance, loop inductance) is standard, but
+%      the section-to-claim mapping should be checked once against the book.
 %   9. No experimental outcome is stated anywhere in this chapter, by design.
 %  10. Equation eq:feasibility is a SURROGATE-PREDICTED test. The chapter now states after
 %      it that a candidate flagged feasible has not been simulated and that ground-truth

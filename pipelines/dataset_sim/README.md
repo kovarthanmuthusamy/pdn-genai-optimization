@@ -74,7 +74,7 @@ For **all** layouts in the selected CSV slice (default 10,000):
 
 1. **Impedance** (`CreatePISpectrum`)
    - Build `peb/combinations_impedance.peb`
-   - ECADStar Load Batch → wait → move `PI-1`…`PI-N` → `Impedance/`
+   - ECADStar headless batch (`engineer.exe --batch`) → wait → move `PI-1`…`PI-N` → `Impedance/`
 
 2. **PI-Distribution** (one phase per MHz)
    - Build `peb/combinations_dist_{MHz}MHz.peb` (e.g. `combinations_dist_10MHz.peb`)
@@ -116,7 +116,7 @@ Each `PI-{n}` folder is the **raw ECADStar output** (maps, CSVs, etc.) moved unc
 
 ## How the pipeline knows simulation is finished
 
-After starting Load Batch, the script polls `ECADSTAR_EMC_OUTPUT_DIR` every `ECADSTAR_WAIT_POLL_SEC` seconds until:
+`engineer.exe` runs the batch to completion and self-exits; the script then polls `ECADSTAR_EMC_OUTPUT_DIR` every `ECADSTAR_WAIT_POLL_SEC` seconds to confirm outputs until:
 
 | Phase | Ready when each `PI-{n}` has… |
 |-------|-------------------------------|
@@ -163,13 +163,11 @@ Then it moves folders to `Impedance/` or `heatmaps_{MHz}MHz/`.
 | `PEB_COPY_DEST` | `C:\Users\...\Desktop\design\PEB` |
 | `ECADSTAR_ERF_PATH` | `...\H-shape.erf` |
 | `ECADSTAR_EMC_OUTPUT_DIR` | `...\H-shape.emc` |
-| `ECADSTAR_AHK_EXE` | `None` (AutoHotkey default) |
-| `ECADSTAR_SKIP_OPEN_ERF` | `False` | `False` (default) re-opens `.erf` every phase; `True` = Load Batch only |
+| `ENGINEER_EXE` | `...\eCADSTAR 2023.0\Analysis\bin\engineer.exe` (PI/EMI batch engine) |
+| `ECADSTAR_IMPULSE_PORT` | `None` (let engineer manage the IMPULSE server) |
 | `ECADSTAR_CLEAR_LOCK_FILE` | `True` |
 | `ECADSTAR_WAIT_TIMEOUT_SEC` | `172800` (48 h) |
 | `ECADSTAR_WAIT_POLL_SEC` | `120` |
-| `ECADSTAR_BATCH_START_TIMEOUT_SEC` | `900` | Max wait for PI-1 log to confirm batch started |
-| `ECADSTAR_BATCH_START_POLL_SEC` | `10` | Poll interval during batch-start confirm |
 
 ### Step control
 
@@ -230,7 +228,7 @@ pipelines/dataset_sim/
   run_combinations_sim_pipeline.py   ← main entry
   combinations.py                    ← load CSV
   peb.py                             ← build impedance / distribution .peb
-  ecadstar.py                        ← stage PEB, run AHK, wait for PI outputs
+  ecadstar.py                        ← stage PEB, run engineer.exe --batch (headless), wait for PI outputs
   move_outputs.py                    ← move PI-* folders to destination
 ```
 
@@ -246,7 +244,7 @@ Related:
 
 - WSL Ubuntu project root: `/home/ubuntu/genai_pdn`
 - Python venv: `.venv/bin/python`
-- **Windows** with eCADSTAR PI/EMI, AutoHotkey v2, and paths in CONFIG
+- **Windows** with eCADSTAR PI/EMI (`engineer.exe`) and paths in CONFIG
 - Design `.erf` and PowerBus name matching your layout
 
 ---

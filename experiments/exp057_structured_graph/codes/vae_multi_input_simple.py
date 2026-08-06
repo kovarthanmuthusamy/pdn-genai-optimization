@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Dict, Literal
+from typing import Any, Any, Optional, Dict, Literal
 
 from experiments.exp043.codes.freq_conditioning import FiLM2d, FreqConditioner
 from experiments.exp057_structured_graph.codes.graph_occ import OccGraphDecoder, OccGraphEncoder
@@ -793,6 +793,8 @@ class MultiInputVAE(nn.Module):
           'impedance' — impedance only              (impedance required)
           'occ_imp'   — occupancy + impedance       (occupancy + impedance required)
                         → useful for predicting the heatmap from measurements
+          'occupancy' — occupancy only                (impedance → prior via zero placeholder)
+                        → AL inference when only decap layout is known
 
         Returns z (B, latent_dim).
         """
@@ -827,9 +829,15 @@ class MultiInputVAE(nn.Module):
             imp_mu, imp_lv = self._encode_impedance_expert(impedance, K)
             mu_list.append(imp_mu); lv_list.append(imp_lv)
 
+        elif source == 'occupancy':
+            if occupancy is None:
+                raise ValueError("occupancy must be provided when source='occupancy'")
+            mu, logvar = self.encode_occupancy_latent_full(occupancy, K, PI_freq)
+            return self._reparameterize(mu, logvar)
+
         else:
             raise ValueError(
-                f"Unsupported source: {source!r}. Use 'heatmap', 'impedance', or 'occ_imp'."
+                f"Unsupported source: {source!r}. Use 'heatmap', 'impedance', 'occ_imp', or 'occupancy'."
             )
 
         mu, logvar = self.product_of_experts(mu_list, lv_list)
@@ -876,6 +884,44 @@ class MultiInputVAE(nn.Module):
         agg_std = (s.get("mu_std", 1.0) ** 2 + s.get("sigma_mean", 1.0) ** 2) ** 0.5
         return torch.randn(num_samples, self.latent_dim, device=device) * (agg_std * shared_temp) + mu_val
 
+    @staticmethod
+    def _zero_impedance_batch(occupancy: torch.Tensor) -> torch.Tensor:
+        """Placeholder PI spectrum when only occupancy is known (AL / occ-only encode)."""
+        b = occupancy.shape[0]
+        return torch.zeros(b, 1, 231, device=occupancy.device, dtype=occupancy.dtype)
+
+    def encode_occupancy_latent_full(
+        self,
+        occupancy: torch.Tensor,
+        K: torch.Tensor,
+        PI_freq: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Occupancy-only layout encode: occ expert + PoE prior (impedance missing)."""
+        k_emb = self.k_embedding(K)
+        imp_zero = self._zero_impedance_batch(occupancy)
+        _, _, joint_feat = self._encode_layout_joint(occupancy, imp_zero)
+        occ_c = torch.cat([joint_feat, k_emb], dim=1)
+        occ_mu_s = self.occupancy_mu(occ_c)
+        occ_lv_s = self.occupancy_logvar(occ_c).clamp(-6.0, 1.0)
+        occ_mu, occ_lv = self._pad_shared_to_full(occ_mu_s, occ_lv_s)
+        mu, logvar = self.product_of_experts([occ_mu], [occ_lv])
+        logvar = torch.clamp(logvar, min=-4.0, max=2.0)
+        return mu, logvar
+
+    def encode_occupancy_latent(
+        self,
+        occupancy: torch.Tensor,
+        K: torch.Tensor,
+        PI_freq: torch.Tensor,
+        *,
+        sample: bool = True,
+    ) -> torch.Tensor:
+        """Latent from candidate occupancy only (matches AL inference / occ-only fine-tune)."""
+        mu, logvar = self.encode_occupancy_latent_full(occupancy, K, PI_freq)
+        if sample:
+            return self._reparameterize(mu, logvar)
+        return mu
+
     def encode_layout_latent(
         self,
         occupancy: torch.Tensor,
@@ -887,6 +933,78 @@ class MultiInputVAE(nn.Module):
         return self.encode_cross_modal(
             "occ_imp", K, PI_freq, occupancy=occupancy, impedance=impedance,
         )
+
+    def _heatmap_dropout_module_names(self) -> tuple[str, ...]:
+        """Submodules whose dropout layers are toggled for MC decoder uncertainty."""
+        return (
+            "heatmap_fc",
+            "heatmap_dec_skip8",
+            "heatmap_dec_up1",
+            "heatmap_dec_up2",
+            "heatmap_dec_up3",
+            "heatmap_dec_skip16",
+            "heatmap_dec_skip32",
+            "heatmap_dec_occ_fuse16",
+            "heatmap_dec_occ_fuse32",
+            "heatmap_dec_occ_fuse64",
+            "heatmap_dec_occ_fuse",
+            "heatmap_dec_res",
+            "heatmap_dec_attn",
+            "heatmap_dec_refine64",
+            "heatmap_dec_out",
+        )
+
+    def _set_heatmap_decoder_dropout_train(self, enabled: bool) -> list[tuple[Any, bool]]:
+        """Enable dropout on heatmap decoder path while the rest of the model stays in eval."""
+        from typing import Any
+        saved: list[tuple[Any, bool]] = []
+        for name in self._heatmap_dropout_module_names():
+            mod = getattr(self, name, None)
+            if mod is None:
+                continue
+            saved.append((mod, mod.training))
+            if enabled:
+                mod.train()
+            else:
+                mod.eval()
+        return saved
+
+    def _restore_module_training(self, saved: list[tuple[Any, bool]]) -> None:
+        for mod, was in saved:
+            mod.train(was)
+
+    def decode_with_heatmap_dropout(
+        self,
+        z: torch.Tensor,
+        K: torch.Tensor,
+        PI_freq: torch.Tensor,
+        occupancy: torch.Tensor | None = None,
+        *,
+        enable_dropout: bool = True,
+    ):
+        saved = self._set_heatmap_decoder_dropout_train(enable_dropout)
+        try:
+            return self.decode(z, K, PI_freq, occupancy=occupancy)
+        finally:
+            self._restore_module_training(saved)
+
+    def decode_heatmap_mc_dropout(
+        self,
+        z: torch.Tensor,
+        K: torch.Tensor,
+        PI_freq: torch.Tensor,
+        occupancy: torch.Tensor | None,
+        n_passes: int,
+    ) -> list[torch.Tensor]:
+        """Repeated heatmap decode with decoder dropout active (MC epistemic uncertainty)."""
+        n = max(1, int(n_passes))
+        out: list[torch.Tensor] = []
+        for _ in range(n):
+            hm, _, _ = self.decode_with_heatmap_dropout(
+                z, K, PI_freq, occupancy=occupancy, enable_dropout=True,
+            )
+            out.append(hm)
+        return out
 
     def inference(
         self,
@@ -903,6 +1021,7 @@ class MultiInputVAE(nn.Module):
         occupancy: torch.Tensor | None = None,
         impedance: torch.Tensor | None = None,
         heatmap: torch.Tensor | None = None,
+        sample_latent: bool = True,
     ):
         """
         Generate samples with PI_freq at decode (and optionally in the latent).
@@ -910,11 +1029,13 @@ class MultiInputVAE(nn.Module):
         Args:
             mode:
                 ``marginal`` — z ~ global stats (legacy; PI_freq decode only).
-                ``layout``   — z from occ+imp PoE (marginal occ/imp if not passed).
+                ``layout``   — z from occ-only when only occupancy passed (AL);
+                               occ+imp PoE when both passed; marginal occ/imp if neither.
                 ``anchor_blend`` — same z as layout; heatmap = blend of decodes at bracketing anchors.
                 ``encode``   — full encode(hm, occ, imp, K, PI_freq); requires heatmap.
             pi_ref_mhz: reference MHz for marginal occ/imp before layout encode (layout mode).
             occupancy, impedance: optional (B,52) / (B,1,231) for layout mode.
+            sample_latent: reparameterize z when True (MC passes); use mu only when False.
         """
         was_training = self.training
         self.eval()
@@ -947,7 +1068,12 @@ class MultiInputVAE(nn.Module):
                 pi_ref = pi_freq_norm_for_model(
                     pi_ref_mhz, num_samples, unit="mhz", device=device,
                 )
-                if occupancy is None or impedance is None:
+                if occupancy is not None and impedance is None:
+                    # AL / layout-only: keep candidate occupancy; do not hallucinate from marginal z0.
+                    z = self.encode_occupancy_latent(
+                        occupancy, K_tensor, pi_ref, sample=sample_latent,
+                    )
+                elif occupancy is None and impedance is None:
                     z0 = self._sample_z_marginal(
                         num_samples, device, k_int,
                         latent_stats=latent_stats,
@@ -957,9 +1083,11 @@ class MultiInputVAE(nn.Module):
                     _, occ_logits, imp0 = self.decode(z0, K_tensor, pi_ref, occupancy=None)
                     occupancy = torch.sigmoid(occ_logits)
                     impedance = imp0
-                # Encode layout at pi_ref (matches training: same PI_freq for occ/imp encode + decode).
-                # Do not condition the encoder on the target sweep MHz — only the decoder sees that.
-                z = self.encode_layout_latent(occupancy, impedance, K_tensor, pi_ref)
+                    z = self.encode_layout_latent(occupancy, impedance, K_tensor, pi_ref)
+                elif occupancy is not None and impedance is not None:
+                    z = self.encode_layout_latent(occupancy, impedance, K_tensor, pi_ref)
+                else:
+                    raise ValueError("layout inference requires occupancy when impedance is provided alone")
             else:
                 raise ValueError(f"Unknown inference mode: {mode!r}")
 

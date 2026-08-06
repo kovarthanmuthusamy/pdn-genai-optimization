@@ -50,7 +50,14 @@ def _forward_train_batch(model, hm_enc, occ, imp, K, pi, c, *, train: bool):
     use_layout = train and c.layout_train_prob > 0 and bool(torch.rand((), device=pi.device) < c.layout_train_prob)
     pi_dec = _jitter_pi_freq_norm(pi, c, train=train)
     if use_layout:
-        z = z_lay if z_lay is not None else base.encode_layout_latent(occ, imp, K, pi)
+        use_occ_only = (
+            c.occ_only_encode_prob > 0.0
+            and bool(torch.rand((), device=pi.device) < c.occ_only_encode_prob)
+        )
+        if use_occ_only:
+            z = base.encode_occupancy_latent(occ, K, pi)
+        else:
+            z = z_lay if z_lay is not None else base.encode_layout_latent(occ, imp, K, pi)
         rh, ro, ri = base.decode(z, K, pi_dec, occupancy=occ, heatmap_skips=None)
         if c.output_distill_weight > 0:
             rh_t, _, _ = base.decode(z_post.detach(), K, pi_dec, occupancy=occ, heatmap_skips=encode_skips)
@@ -66,7 +73,10 @@ def _cross_freq_decode(c, base, *, hm_enc, occ, imp, K, pi, z_decode, pi_alt, hm
     mix_p = float(c.cross_freq_layout_mix_prob)
     use_layout_z = mix_p > 0 and bool(torch.rand((), device=pi.device) < mix_p)
     if use_layout_z:
-        z_cf, skips = base.encode_layout_latent(occ, imp, K, pi), None
+        if getattr(c, "occ_only_encode_prob", 0.0) >= 1.0:
+            z_cf, skips = base.encode_occupancy_latent(occ, K, pi), None
+        else:
+            z_cf, skips = base.encode_layout_latent(occ, imp, K, pi), None
     elif c.cross_freq_use_encode_z:
         if z_encode is not None:
             z_cf = z_encode
@@ -77,7 +87,10 @@ def _cross_freq_decode(c, base, *, hm_enc, occ, imp, K, pi, z_decode, pi_alt, hm
         else:
             skips = None
     elif c.cross_freq_layout_z_only:
-        z_cf, skips = base.encode_layout_latent(occ, imp, K, pi), None
+        if getattr(c, "occ_only_encode_prob", 0.0) >= 1.0:
+            z_cf, skips = base.encode_occupancy_latent(occ, K, pi), None
+        else:
+            z_cf, skips = base.encode_layout_latent(occ, imp, K, pi), None
     else:
         z_cf, skips = z_decode, None
     hm_alt_t = hm_alt.to(z_cf.device, non_blocking=c.is_cuda())

@@ -1,0 +1,160 @@
+Loaded config from config.yaml (184 keys)
+exp059  epochs=700  batch=224  amp=off  ckpt_every=5  resume=experiments/exp059_capacity_freq/checkpoints/checkpoint_epoch_600.pt  peak_loc_w=2.5  peak_loc_T=0.035
+Loaded config from config.yaml (184 keys)
+  Loaded 125 existing epochs from loss.csv (ep 1–600)
+================================================================================
+EXP059_CAPACITY_FREQ — MULTI-INPUT VAE
+  device: cuda
+  batch: 224
+  epochs: 700
+  checkpoint_interval: 5
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 64000
+  val_on_checkpoint_only: True
+  amp: off
+  tf32: False
+  compile: False
+  ram_cache: False
+================================================================================
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 24979 layouts, 582997 manifest rows
+Loaded 582997 samples from datasets/data_multifreq_train_norm_unbounded
+  Heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+K-values loaded from cache (582997 samples)
+Data: train=508060 val=74937 layouts=24979 draws=64000/508060 cross_freq=582997
+Model: 10.5M params  latent=128  layout_p=0.0  cf_mix=0.45  occ_bin=True  milestones=[ep20, ep25]
+
+========================================================
+  RESUMING from checkpoint checkpoint_epoch_600.pt
+  completed epoch: 600  →  training epochs 601–700
+  val_loss: 0.4946
+========================================================
+
+  Curriculum restored from checkpoint (not re-scaled to new num_epochs):
+    beta_end_epoch=25, beta_phase2_end_epoch=25, modality_dropout_anneal_epochs=20, physics_critic_warmup_epochs=12, physics_slope_anneal_epochs=25, penalty_warmup_epochs=12, focal_gamma_warmup_epochs=0, cross_freq_start_epoch=20, modality_dropout_protect_heatmap_epoch=25, heatmap_focus_start_epoch=25, impedance_peak_start_epoch=25, impedance_peak_ramp_epochs=25, impedance_peak_focus_epoch=25
+  Careful impedance LR: backbone=2.00e-04  impedance=2.00e-04 (mult=1.0)
+Ep 601/700  total=143.7s  loss=1.8623  hm=0.1296×7.0  cf=0.1596  occ=0.0016  imp=0.1127
+Ep 602/700  total=139.0s  loss=1.8006  hm=0.1289×7.0  cf=0.1495  occ=0.0016  imp=0.1122
+Ep 603/700  total=137.8s  loss=1.7684  hm=0.1205×7.0  cf=0.1459  occ=0.0017  imp=0.1135
+Ep 604/700  total=144.4s  loss=1.7555  hm=0.1185×7.0  cf=0.1459  occ=0.0017  imp=0.1131
+Ep 605/700  total=173.3s  (train=138.0s val=35.3s)  loss=1.7382  val=0.5598  hm=0.1187×7.0  cf=0.1387  occ=0.0018  imp=0.1142  β=0.030
+  checkpoint → checkpoint_epoch_605.pt
+  Off-anchor ep 605 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.93  250MHz:r=0.75  265MHz:r=0.88
+  off-anchor eval: 29.5s
+Ep 606/700  total=136.9s  loss=1.7574  hm=0.1208×7.0  cf=0.1448  occ=0.0019  imp=0.1149
+Ep 607/700  total=137.0s  loss=1.7423  hm=0.1134×7.0  cf=0.1464  occ=0.0018  imp=0.1139
+Ep 608/700  total=137.8s  loss=1.7413  hm=0.1139×7.0  cf=0.1481  occ=0.0018  imp=0.1149
+Ep 609/700  total=136.6s  loss=1.7188  hm=0.1123×7.0  cf=0.1416  occ=0.0020  imp=0.1134
+Ep 610/700  total=171.3s  (train=138.1s val=33.2s)  loss=1.7241  val=0.5783  hm=0.1157×7.0  cf=0.1446  occ=0.0017  imp=0.1143  β=0.030
+  checkpoint → checkpoint_epoch_610.pt
+  Off-anchor ep 610 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.95  250MHz:r=0.87  265MHz:r=0.91
+  off-anchor eval: 29.1s
+Ep 611/700  total=136.4s  loss=1.7511  hm=0.1173×7.0  cf=0.1548  occ=0.0019  imp=0.1133
+Ep 612/700  total=137.8s  loss=1.7150  hm=0.1132×7.0  cf=0.1425  occ=0.0018  imp=0.1151
+Ep 613/700  total=137.4s  loss=1.7330  hm=0.1171×7.0  cf=0.1449  occ=0.0019  imp=0.1150
+Ep 614/700  total=138.8s  loss=1.7391  hm=0.1125×7.0  cf=0.1515  occ=0.0018  imp=0.1157
+Ep 615/700  total=170.3s  (train=137.2s val=33.1s)  loss=1.6836  val=0.5749  hm=0.1109×7.0  cf=0.1336  occ=0.0019  imp=0.1145  β=0.030
+  checkpoint → checkpoint_epoch_615.pt
+  Off-anchor ep 615 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.94  250MHz:r=0.78  265MHz:r=0.89
+  off-anchor eval: 28.8s
+Ep 616/700  total=136.1s  loss=1.7401  hm=0.1170×7.0  cf=0.1528  occ=0.0019  imp=0.1138
+Ep 617/700  total=136.8s  loss=1.7424  hm=0.1145×7.0  cf=0.1504  occ=0.0020  imp=0.1162
+Ep 618/700  total=137.2s  loss=1.7276  hm=0.1153×7.0  cf=0.1477  occ=0.0018  imp=0.1142
+Ep 619/700  total=131.9s  loss=1.7113  hm=0.1125×7.0  cf=0.1421  occ=0.0019  imp=0.1151
+Ep 620/700  total=170.7s  (train=137.5s val=33.3s)  loss=1.7049  val=0.5682  hm=0.1143×7.0  cf=0.1441  occ=0.0019  imp=0.1144  β=0.030
+  checkpoint → checkpoint_epoch_620.pt
+  Off-anchor ep 620 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.94  250MHz:r=0.78  265MHz:r=0.89
+  off-anchor eval: 29.0s
+Ep 621/700  total=137.1s  loss=1.6895  hm=0.1097×7.0  cf=0.1395  occ=0.0019  imp=0.1139
+Ep 622/700  total=137.6s  loss=1.6949  hm=0.1120×7.0  cf=0.1378  occ=0.0020  imp=0.1150
+Ep 623/700  total=140.8s  loss=1.6801  hm=0.1115×7.0  cf=0.1376  occ=0.0018  imp=0.1138
+Ep 624/700  total=136.9s  loss=1.7229  hm=0.1120×7.0  cf=0.1514  occ=0.0019  imp=0.1155
+Ep 625/700  total=169.9s  (train=136.7s val=33.1s)  loss=1.6925  val=0.5602  hm=0.1138×7.0  cf=0.1415  occ=0.0019  imp=0.1136  β=0.030
+  checkpoint → checkpoint_epoch_625.pt
+  Off-anchor ep 625 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.96  250MHz:r=0.75  265MHz:r=0.90
+  off-anchor eval: 28.9s
+Ep 626/700  total=135.8s  loss=1.7150  hm=0.1141×7.0  cf=0.1494  occ=0.0018  imp=0.1139
+Ep 627/700  total=136.9s  loss=1.6836  hm=0.1128×7.0  cf=0.1401  occ=0.0019  imp=0.1137
+Ep 628/700  total=136.4s  loss=1.6825  hm=0.1105×7.0  cf=0.1392  occ=0.0019  imp=0.1148
+Ep 629/700  total=137.1s  loss=1.6713  hm=0.1116×7.0  cf=0.1388  occ=0.0018  imp=0.1129
+Ep 630/700  total=170.3s  (train=137.2s val=33.1s)  loss=1.6818  val=0.5573  hm=0.1103×7.0  cf=0.1410  occ=0.0018  imp=0.1141  β=0.030
+  checkpoint → checkpoint_epoch_630.pt
+  Off-anchor ep 630 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.96  250MHz:r=0.81  265MHz:r=0.92
+  off-anchor eval: 28.7s
+Ep 631/700  total=137.6s  loss=1.7049  hm=0.1076×7.0  cf=0.1511  occ=0.0020  imp=0.1147
+Ep 632/700  total=136.1s  loss=1.6734  hm=0.1110×7.0  cf=0.1386  occ=0.0019  imp=0.1145
+Ep 633/700  total=136.1s  loss=1.6939  hm=0.1106×7.0  cf=0.1460  occ=0.0019  imp=0.1136
+Ep 634/700  total=136.3s  loss=1.6666  hm=0.1108×7.0  cf=0.1383  occ=0.0018  imp=0.1136
+Ep 635/700  total=169.7s  (train=136.6s val=33.2s)  loss=1.6598  val=0.5734  hm=0.1103×7.0  cf=0.1372  occ=0.0019  imp=0.1132  β=0.030
+  checkpoint → checkpoint_epoch_635.pt
+  Off-anchor ep 635 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.96  250MHz:r=0.73  265MHz:r=0.89
+  off-anchor eval: 28.8s
+Ep 636/700  total=136.5s  loss=1.6630  hm=0.1116×7.0  cf=0.1386  occ=0.0018  imp=0.1130
+Ep 637/700  total=136.3s  loss=1.6747  hm=0.1097×7.0  cf=0.1423  occ=0.0019  imp=0.1134
+Ep 638/700  total=137.5s  loss=1.6593  hm=0.1106×7.0  cf=0.1351  occ=0.0018  imp=0.1142
+Ep 639/700  total=136.0s  loss=1.6620  hm=0.1107×7.0  cf=0.1380  occ=0.0018  imp=0.1138
+Ep 640/700  total=170.4s  (train=137.1s val=33.3s)  loss=1.6788  val=0.5765  hm=0.1133×7.0  cf=0.1415  occ=0.0018  imp=0.1134  β=0.030
+  checkpoint → checkpoint_epoch_640.pt
+  Off-anchor ep 640 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.96  250MHz:r=0.73  265MHz:r=0.89
+  off-anchor eval: 29.8s
+Ep 641/700  total=136.6s  loss=1.6885  hm=0.1106×7.0  cf=0.1487  occ=0.0018  imp=0.1133
+Ep 642/700  total=133.3s  loss=1.6603  hm=0.1105×7.0  cf=0.1374  occ=0.0018  imp=0.1144
+Ep 643/700  total=137.2s  loss=1.6473  hm=0.1081×7.0  cf=0.1368  occ=0.0018  imp=0.1133
+Ep 644/700  total=136.5s  loss=1.6689  hm=0.1105×7.0  cf=0.1406  occ=0.0019  imp=0.1130
+Ep 645/700  total=169.9s  (train=136.6s val=33.3s)  loss=1.6729  val=0.5716  hm=0.1078×7.0  cf=0.1432  occ=0.0018  imp=0.1138  β=0.030
+  checkpoint → checkpoint_epoch_645.pt
+  Off-anchor ep 645 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.97  250MHz:r=0.76  265MHz:r=0.90
+  off-anchor eval: 28.8s
+Ep 646/700  total=137.9s  loss=1.6623  hm=0.1092×7.0  cf=0.1425  occ=0.0018  imp=0.1129
+Ep 647/700  total=136.5s  loss=1.6909  hm=0.1117×7.0  cf=0.1481  occ=0.0018  imp=0.1142
+Ep 648/700  total=139.3s  loss=1.6565  hm=0.1101×7.0  cf=0.1377  occ=0.0018  imp=0.1138
+Ep 649/700  total=127.7s  loss=1.6637  hm=0.1104×7.0  cf=0.1414  occ=0.0019  imp=0.1136
+Ep 650/700  total=164.2s  (train=129.7s val=34.5s)  loss=1.6377  val=0.6110  hm=0.1084×7.0  cf=0.1342  occ=0.0018  imp=0.1132  β=0.030
+  checkpoint → checkpoint_epoch_650.pt
+  Off-anchor ep 650 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.97  250MHz:r=0.79  265MHz:r=0.90
+  off-anchor eval: 28.0s
+Ep 651/700  total=131.8s  loss=1.6352  hm=0.1103×7.0  cf=0.1352  occ=0.0018  imp=0.1123
+Ep 652/700  total=132.2s  loss=1.6599  hm=0.1088×7.0  cf=0.1423  occ=0.0018  imp=0.1130
+Ep 653/700  total=133.6s  loss=1.6650  hm=0.1090×7.0  cf=0.1424  occ=0.0018  imp=0.1140
+Ep 654/700  total=137.3s  loss=1.6448  hm=0.1088×7.0  cf=0.1359  occ=0.0019  imp=0.1135
+Ep 655/700  total=167.2s  (train=136.3s val=30.9s)  loss=1.6558  val=0.5806  hm=0.1070×7.0  cf=0.1404  occ=0.0018  imp=0.1136  β=0.030
+  checkpoint → checkpoint_epoch_655.pt
+  Off-anchor ep 655 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.96  250MHz:r=0.78  265MHz:r=0.90
+  off-anchor eval: 28.3s
+Ep 656/700  total=127.3s  loss=1.5875  hm=0.0956×7.0  cf=0.1389  occ=0.0015  imp=0.1102
+Ep 657/700  total=137.3s  loss=1.5656  hm=0.0940×7.0  cf=0.1339  occ=0.0015  imp=0.1098
+Ep 658/700  total=144.4s  loss=1.6105  hm=0.0963×7.0  cf=0.1499  occ=0.0015  imp=0.1094
+Ep 659/700  total=154.0s  loss=1.5759  hm=0.0919×7.0  cf=0.1430  occ=0.0015  imp=0.1093
+Ep 660/700  total=177.4s  (train=144.4s val=33.1s)  loss=1.5731  val=0.5029  hm=0.0919×7.0  cf=0.1407  occ=0.0015  imp=0.1091  β=0.030
+  checkpoint → checkpoint_epoch_660.pt
+  Off-anchor ep 660 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.97  250MHz:r=0.81  265MHz:r=0.90
+  off-anchor eval: 29.1s
+Ep 661/700  total=136.3s  loss=1.5922  hm=0.0937×7.0  cf=0.1475  occ=0.0014  imp=0.1095
+Ep 662/700  total=137.7s  loss=1.5590  hm=0.0943×7.0  cf=0.1353  occ=0.0015  imp=0.1093
+Ep 663/700  total=145.4s  loss=1.5612  hm=0.0915×7.0  cf=0.1376  occ=0.0015  imp=0.1091
+Ep 664/700  total=148.3s  loss=1.5837  hm=0.0951×7.0  cf=0.1446  occ=0.0015  imp=0.1092
+Ep 665/700  total=189.3s  (train=156.1s val=33.2s)  loss=1.5553  val=0.4956  hm=0.0939×7.0  cf=0.1347  occ=0.0014  imp=0.1094  β=0.030
+  checkpoint → checkpoint_epoch_665.pt
+  Off-anchor ep 665 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.97  250MHz:r=0.74  265MHz:r=0.88
+  off-anchor eval: 29.2s
+Ep 666/700  total=136.9s  loss=1.5918  hm=0.0967×7.0  cf=0.1458  occ=0.0015  imp=0.1084
+Ep 667/700  total=137.0s  loss=1.5284  hm=0.0899×7.0  cf=0.1269  occ=0.0014  imp=0.1091
+Ep 668/700  total=192.6s  loss=1.5447  hm=0.0913×7.0  cf=0.1344  occ=0.0014  imp=0.1089
+Ep 669/700  total=206.5s  loss=1.5546  hm=0.0926×7.0  cf=0.1360  occ=0.0015  imp=0.1092
+Ep 670/700  total=219.5s  (train=169.4s val=50.1s)  loss=1.5646  val=0.5016  hm=0.0916×7.0  cf=0.1390  occ=0.0014  imp=0.1095  β=0.030
+  checkpoint → checkpoint_epoch_670.pt
+  Off-anchor ep 670 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.97  250MHz:r=0.74  265MHz:r=0.89
+  off-anchor eval: 76.2s
+Ep 671/700  total=193.4s  loss=1.5389  hm=0.0939×7.0  cf=0.1296  occ=0.0014  imp=0.1088
+Ep 672/700  total=210.6s  loss=1.5591  hm=0.0924×7.0  cf=0.1387  occ=0.0015  imp=0.1091
+Ep 673/700  total=169.0s  loss=1.5581  hm=0.0912×7.0  cf=0.1411  occ=0.0014  imp=0.1089
+Ep 674/700  total=218.2s  loss=1.5373  hm=0.0913×7.0  cf=0.1318  occ=0.0015  imp=0.1089
+Ep 675/700  total=236.4s  (train=176.8s val=59.7s)  loss=1.5433  val=0.4894  hm=0.0908×7.0  cf=0.1334  occ=0.0014  imp=0.1090  β=0.030
+  checkpoint → checkpoint_epoch_675.pt
+  Off-anchor ep 675 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.97  250MHz:r=0.77  265MHz:r=0.90
+  off-anchor eval: 62.4s
+Ep 676/700  total=163.1s  loss=1.5499  hm=0.0916×7.0  cf=0.1378  occ=0.0014  imp=0.1088
+Ep 677/700  total=215.1s  loss=1.5501  hm=0.0901×7.0  cf=0.1404  occ=0.0014  imp=0.1082
+Ep 678/700  total=165.5s  loss=1.5371  hm=0.0909×7.0  cf=0.1336  occ=0.0014  imp=0.1085
+Ep 679/700  total=195.9s  loss=1.5807  hm=0.0929×7.0  cf=0.1481  occ=0.0014  imp=0.1089

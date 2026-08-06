@@ -2,11 +2,24 @@
   "overlay_root": "/home/ubuntu/genai_pdn/datasets/data_multifreq_al_overlay_exp057",
   "iterations": [
     1,
-    2
+    2,
+    3,
+    4,
+    6,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    16,
+    17,
+    19,
+    21
   ],
-  "candidates_seen": 24,
-  "added": 0,
-  "skipped_existing": 24,
+  "candidates_seen": 5548,
+  "added": 640,
+  "skipped_existing": 4908,
   "errors": [],
   "dry_run": false
 }

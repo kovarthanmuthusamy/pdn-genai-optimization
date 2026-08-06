@@ -1,0 +1,1781 @@
+{
+  "available": true,
+  "n": 248,
+  "off_anchor_mhz": [
+    155.0,
+    250.0,
+    265.0
+  ],
+  "score_field": "badness",
+  "error_field": "p99_abs_err",
+  "spearman_badness_vs_p99_err": 0.008706892346714793,
+  "pearson_badness_vs_p99_err": -0.07014541794163717,
+  "spearman_stratified_mhz": 0.11555435513770586,
+  "spearman_mhz_zscored_badness": 0.07090763471805465,
+  "per_mhz": [
+    {
+      "mhz": 155.0,
+      "n": 64,
+      "spearman": 0.7603021978021978
+    },
+    {
+      "mhz": 250.0,
+      "n": 96,
+      "spearman": -0.3104449267498643
+    },
+    {
+      "mhz": 265.0,
+      "n": 88,
+      "spearman": 0.11137332253178825
+    }
+  ],
+  "mean_p99_err_all_labeled": 9.362819583829646,
+  "mean_p99_err_top_half_badness": 7.360871092900007,
+  "mean_p99_err_bottom_half_badness": 11.364768074759285,
+  "top_vs_bottom_half_lift": 0.6476921521388739,
+  "n_selected_labeled": 248,
+  "mean_p99_err_selected": 9.362819583829646,
+  "mean_p99_err_top_k_by_badness": 9.362819583829646,
+  "selected_vs_all_lift": 1.0,
+  "ranking_ok": true,
+  "rows": [
+    {
+      "candidate_id": 38,
+      "mhz": 265.0,
+      "badness": 5.692771911621094,
+      "p99_abs_err": 2.4295941136050345,
+      "selected": true
+    },
+    {
+      "candidate_id": 42,
+      "mhz": 250.0,
+      "badness": 6.928302764892578,
+      "p99_abs_err": 18.615726671344582,
+      "selected": true
+    },
+    {
+      "candidate_id": 132,
+      "mhz": 265.0,
+      "badness": 5.17832088470459,
+      "p99_abs_err": 0.2035682654430282,
+      "selected": true
+    },
+    {
+      "candidate_id": 209,
+      "mhz": 250.0,
+      "badness": 8.026321411132812,
+      "p99_abs_err": 21.163866136582087,
+      "selected": true
+    },
+    {
+      "candidate_id": 211,
+      "mhz": 155.0,
+      "badness": 3.2076385021209717,
+      "p99_abs_err": 0.06919107209578135,
+      "selected": true
+    },
+    {
+      "candidate_id": 230,
+      "mhz": 265.0,
+      "badness": 5.730792999267578,
+      "p99_abs_err": 0.8073552198038829,
+      "selected": true
+    },
+    {
+      "candidate_id": 350,
+      "mhz": 250.0,
+      "badness": 8.751725196838379,
+      "p99_abs_err": 16.09659102023815,
+      "selected": true
+    },
+    {
+      "candidate_id": 399,
+      "mhz": 265.0,
+      "badness": 6.428614616394043,
+      "p99_abs_err": 2.186575178131214,
+      "selected": true
+    },
+    {
+      "candidate_id": 417,
+      "mhz": 250.0,
+      "badness": 8.249351501464844,
+      "p99_abs_err": 13.947911547069975,
+      "selected": true
+    },
+    {
+      "candidate_id": 437,
+      "mhz": 250.0,
+      "badness": 6.916141033172607,
+      "p99_abs_err": 19.290333521311805,
+      "selected": true
+    },
+    {
+      "candidate_id": 449,
+      "mhz": 155.0,
+      "badness": 3.3162238597869873,
+      "p99_abs_err": 0.28976293633158434,
+      "selected": true
+    },
+    {
+      "candidate_id": 687,
+      "mhz": 155.0,
+      "badness": 3.123652219772339,
+      "p99_abs_err": 0.13639611051793343,
+      "selected": true
+    },
+    {
+      "candidate_id": 712,
+      "mhz": 265.0,
+      "badness": 5.60066556930542,
+      "p99_abs_err": 3.012451349709373,
+      "selected": true
+    },
+    {
+      "candidate_id": 816,
+      "mhz": 250.0,
+      "badness": 7.966351509094238,
+      "p99_abs_err": 17.49180626725074,
+      "selected": true
+    },
+    {
+      "candidate_id": 838,
+      "mhz": 265.0,
+      "badness": 4.96475887298584,
+      "p99_abs_err": 1.254550598566416,
+      "selected": true
+    },
+    {
+      "candidate_id": 930,
+      "mhz": 250.0,
+      "badness": 6.985260963439941,
+      "p99_abs_err": 19.686414919062372,
+      "selected": true
+    },
+    {
+      "candidate_id": 967,
+      "mhz": 250.0,
+      "badness": 6.940000534057617,
+      "p99_abs_err": 23.25813714187551,
+      "selected": true
+    },
+    {
+      "candidate_id": 992,
+      "mhz": 265.0,
+      "badness": 5.075923919677734,
+      "p99_abs_err": 1.330373058633704,
+      "selected": true
+    },
+    {
+      "candidate_id": 1072,
+      "mhz": 250.0,
+      "badness": 9.059865951538086,
+      "p99_abs_err": 18.946003641385595,
+      "selected": true
+    },
+    {
+      "candidate_id": 1120,
+      "mhz": 155.0,
+      "badness": 3.1500377655029297,
+      "p99_abs_err": 0.11194537045380404,
+      "selected": true
+    },
+    {
+      "candidate_id": 1144,
+      "mhz": 265.0,
+      "badness": 6.12412166595459,
+      "p99_abs_err": 1.0535475438121296,
+      "selected": true
+    },
+    {
+      "candidate_id": 1167,
+      "mhz": 155.0,
+      "badness": 3.3720295429229736,
+      "p99_abs_err": 0.17856528717631015,
+      "selected": true
+    },
+    {
+      "candidate_id": 1255,
+      "mhz": 250.0,
+      "badness": 6.795634746551514,
+      "p99_abs_err": 14.406612525692267,
+      "selected": true
+    },
+    {
+      "candidate_id": 1397,
+      "mhz": 155.0,
+      "badness": 3.620753049850464,
+      "p99_abs_err": 0.030828740784719866,
+      "selected": true
+    },
+    {
+      "candidate_id": 1413,
+      "mhz": 155.0,
+      "badness": 3.445435047149658,
+      "p99_abs_err": 0.04362323868122919,
+      "selected": true
+    },
+    {
+      "candidate_id": 1437,
+      "mhz": 250.0,
+      "badness": 6.747250556945801,
+      "p99_abs_err": 11.890840728415572,
+      "selected": true
+    },
+    {
+      "candidate_id": 1499,
+      "mhz": 265.0,
+      "badness": 5.264520168304443,
+      "p99_abs_err": 5.083733665919803,
+      "selected": true
+    },
+    {
+      "candidate_id": 1511,
+      "mhz": 265.0,
+      "badness": 5.347160339355469,
+      "p99_abs_err": 6.299276120112729,
+      "selected": true
+    },
+    {
+      "candidate_id": 1525,
+      "mhz": 250.0,
+      "badness": 6.943501949310303,
+      "p99_abs_err": 15.239859553765207,
+      "selected": true
+    },
+    {
+      "candidate_id": 1533,
+      "mhz": 155.0,
+      "badness": 3.0014216899871826,
+      "p99_abs_err": 0.08239019683316018,
+      "selected": true
+    },
+    {
+      "candidate_id": 1565,
+      "mhz": 265.0,
+      "badness": 5.205151557922363,
+      "p99_abs_err": 1.963095861717992,
+      "selected": true
+    },
+    {
+      "candidate_id": 1658,
+      "mhz": 250.0,
+      "badness": 7.805879592895508,
+      "p99_abs_err": 22.96089074112956,
+      "selected": true
+    },
+    {
+      "candidate_id": 1676,
+      "mhz": 250.0,
+      "badness": 7.937592506408691,
+      "p99_abs_err": 15.894298811351984,
+      "selected": true
+    },
+    {
+      "candidate_id": 1683,
+      "mhz": 265.0,
+      "badness": 5.898651123046875,
+      "p99_abs_err": 28.563034103508087,
+      "selected": true
+    },
+    {
+      "candidate_id": 1686,
+      "mhz": 250.0,
+      "badness": 7.321843147277832,
+      "p99_abs_err": 9.705519078751898,
+      "selected": true
+    },
+    {
+      "candidate_id": 1700,
+      "mhz": 250.0,
+      "badness": 7.516310214996338,
+      "p99_abs_err": 14.996523764512027,
+      "selected": true
+    },
+    {
+      "candidate_id": 1753,
+      "mhz": 265.0,
+      "badness": 5.530582904815674,
+      "p99_abs_err": 8.136695661106025,
+      "selected": true
+    },
+    {
+      "candidate_id": 1834,
+      "mhz": 250.0,
+      "badness": 8.352593421936035,
+      "p99_abs_err": 5.165875326822274,
+      "selected": true
+    },
+    {
+      "candidate_id": 1963,
+      "mhz": 265.0,
+      "badness": 5.726091384887695,
+      "p99_abs_err": 2.372687213706971,
+      "selected": true
+    },
+    {
+      "candidate_id": 1989,
+      "mhz": 250.0,
+      "badness": 7.665255069732666,
+      "p99_abs_err": 3.808243138979485,
+      "selected": true
+    },
+    {
+      "candidate_id": 2016,
+      "mhz": 265.0,
+      "badness": 5.637535095214844,
+      "p99_abs_err": 1.245790033868202,
+      "selected": true
+    },
+    {
+      "candidate_id": 2064,
+      "mhz": 250.0,
+      "badness": 9.070626258850098,
+      "p99_abs_err": 5.6848001474846726,
+      "selected": true
+    },
+    {
+      "candidate_id": 2148,
+      "mhz": 250.0,
+      "badness": 7.65737247467041,
+      "p99_abs_err": 24.444187541970273,
+      "selected": true
+    },
+    {
+      "candidate_id": 2170,
+      "mhz": 155.0,
+      "badness": 3.647188186645508,
+      "p99_abs_err": 0.3740167694163383,
+      "selected": true
+    },
+    {
+      "candidate_id": 2232,
+      "mhz": 265.0,
+      "badness": 5.571320533752441,
+      "p99_abs_err": 1.9337726287688266,
+      "selected": true
+    },
+    {
+      "candidate_id": 2239,
+      "mhz": 155.0,
+      "badness": 3.7820591926574707,
+      "p99_abs_err": 0.4348083141130279,
+      "selected": true
+    },
+    {
+      "candidate_id": 2303,
+      "mhz": 155.0,
+      "badness": 4.192082405090332,
+      "p99_abs_err": 0.05971430290313995,
+      "selected": true
+    },
+    {
+      "candidate_id": 2380,
+      "mhz": 155.0,
+      "badness": 3.656611680984497,
+      "p99_abs_err": 0.19418989763683392,
+      "selected": true
+    },
+    {
+      "candidate_id": 2395,
+      "mhz": 250.0,
+      "badness": 8.156736373901367,
+      "p99_abs_err": 17.897314124950118,
+      "selected": true
+    },
+    {
+      "candidate_id": 2422,
+      "mhz": 155.0,
+      "badness": 3.8095412254333496,
+      "p99_abs_err": 1.0220816268453063,
+      "selected": true
+    },
+    {
+      "candidate_id": 2432,
+      "mhz": 155.0,
+      "badness": 4.220203876495361,
+      "p99_abs_err": 0.4519729111703348,
+      "selected": true
+    },
+    {
+      "candidate_id": 2453,
+      "mhz": 155.0,
+      "badness": 4.151988983154297,
+      "p99_abs_err": 0.6511381292998899,
+      "selected": true
+    },
+    {
+      "candidate_id": 2456,
+      "mhz": 155.0,
+      "badness": 3.828972339630127,
+      "p99_abs_err": 0.08172269764289375,
+      "selected": true
+    },
+    {
+      "candidate_id": 2461,
+      "mhz": 265.0,
+      "badness": 5.823550701141357,
+      "p99_abs_err": 9.241795162230606,
+      "selected": true
+    },
+    {
+      "candidate_id": 2507,
+      "mhz": 250.0,
+      "badness": 7.896824836730957,
+      "p99_abs_err": 13.00002960667474,
+      "selected": true
+    },
+    {
+      "candidate_id": 2743,
+      "mhz": 265.0,
+      "badness": 6.787018775939941,
+      "p99_abs_err": 9.335768236955253,
+      "selected": true
+    },
+    {
+      "candidate_id": 2895,
+      "mhz": 265.0,
+      "badness": 5.602835178375244,
+      "p99_abs_err": 2.9956182751194262,
+      "selected": true
+    },
+    {
+      "candidate_id": 2920,
+      "mhz": 265.0,
+      "badness": 5.621030807495117,
+      "p99_abs_err": 2.74455934346304,
+      "selected": true
+    },
+    {
+      "candidate_id": 2925,
+      "mhz": 265.0,
+      "badness": 6.261817932128906,
+      "p99_abs_err": 7.998951963602288,
+      "selected": true
+    },
+    {
+      "candidate_id": 2946,
+      "mhz": 250.0,
+      "badness": 7.685532569885254,
+      "p99_abs_err": 5.288968496463614,
+      "selected": true
+    },
+    {
+      "candidate_id": 2974,
+      "mhz": 250.0,
+      "badness": 7.320309162139893,
+      "p99_abs_err": 9.036928429317967,
+      "selected": true
+    },
+    {
+      "candidate_id": 3133,
+      "mhz": 265.0,
+      "badness": 5.825559616088867,
+      "p99_abs_err": 25.70178689261811,
+      "selected": true
+    },
+    {
+      "candidate_id": 3221,
+      "mhz": 155.0,
+      "badness": 4.8854756355285645,
+      "p99_abs_err": 1.3356484065778846,
+      "selected": true
+    },
+    {
+      "candidate_id": 3237,
+      "mhz": 250.0,
+      "badness": 8.949385643005371,
+      "p99_abs_err": 0.636025778677137,
+      "selected": true
+    },
+    {
+      "candidate_id": 3322,
+      "mhz": 250.0,
+      "badness": 8.43223762512207,
+      "p99_abs_err": 4.646911686479825,
+      "selected": true
+    },
+    {
+      "candidate_id": 3357,
+      "mhz": 265.0,
+      "badness": 5.421905517578125,
+      "p99_abs_err": 2.45296204742165,
+      "selected": true
+    },
+    {
+      "candidate_id": 3385,
+      "mhz": 155.0,
+      "badness": 4.782994747161865,
+      "p99_abs_err": 1.7039945724342216,
+      "selected": true
+    },
+    {
+      "candidate_id": 3417,
+      "mhz": 155.0,
+      "badness": 6.055934429168701,
+      "p99_abs_err": 2.4206188151793158,
+      "selected": true
+    },
+    {
+      "candidate_id": 3478,
+      "mhz": 250.0,
+      "badness": 9.02989673614502,
+      "p99_abs_err": 2.0538073294485457,
+      "selected": true
+    },
+    {
+      "candidate_id": 3484,
+      "mhz": 250.0,
+      "badness": 8.781641960144043,
+      "p99_abs_err": 0.42289703835015935,
+      "selected": true
+    },
+    {
+      "candidate_id": 3585,
+      "mhz": 265.0,
+      "badness": 6.261208534240723,
+      "p99_abs_err": 22.28799716494887,
+      "selected": true
+    },
+    {
+      "candidate_id": 3587,
+      "mhz": 155.0,
+      "badness": 4.806132793426514,
+      "p99_abs_err": 1.0192143622570438,
+      "selected": true
+    },
+    {
+      "candidate_id": 3647,
+      "mhz": 265.0,
+      "badness": 6.38716983795166,
+      "p99_abs_err": 9.70272325820859,
+      "selected": true
+    },
+    {
+      "candidate_id": 3708,
+      "mhz": 250.0,
+      "badness": 8.078079223632812,
+      "p99_abs_err": 0.11004367784812352,
+      "selected": true
+    },
+    {
+      "candidate_id": 3735,
+      "mhz": 265.0,
+      "badness": 6.506507873535156,
+      "p99_abs_err": 9.503985159633629,
+      "selected": true
+    },
+    {
+      "candidate_id": 3748,
+      "mhz": 155.0,
+      "badness": 6.176129341125488,
+      "p99_abs_err": 2.447619981299553,
+      "selected": true
+    },
+    {
+      "candidate_id": 3834,
+      "mhz": 265.0,
+      "badness": 5.766868591308594,
+      "p99_abs_err": 13.85116163201186,
+      "selected": true
+    },
+    {
+      "candidate_id": 3861,
+      "mhz": 265.0,
+      "badness": 5.41812801361084,
+      "p99_abs_err": 9.58130193804552,
+      "selected": true
+    },
+    {
+      "candidate_id": 3865,
+      "mhz": 250.0,
+      "badness": 8.323100090026855,
+      "p99_abs_err": 0.9093191694129175,
+      "selected": true
+    },
+    {
+      "candidate_id": 3897,
+      "mhz": 250.0,
+      "badness": 8.441476821899414,
+      "p99_abs_err": 10.176888238931042,
+      "selected": true
+    },
+    {
+      "candidate_id": 3946,
+      "mhz": 265.0,
+      "badness": 5.711067199707031,
+      "p99_abs_err": 5.210565273014323,
+      "selected": true
+    },
+    {
+      "candidate_id": 3972,
+      "mhz": 265.0,
+      "badness": 5.905348777770996,
+      "p99_abs_err": 2.8985980783935066,
+      "selected": true
+    },
+    {
+      "candidate_id": 4148,
+      "mhz": 265.0,
+      "badness": 6.0227155685424805,
+      "p99_abs_err": 14.908357324010286,
+      "selected": true
+    },
+    {
+      "candidate_id": 4344,
+      "mhz": 250.0,
+      "badness": 9.304559707641602,
+      "p99_abs_err": 2.4287576821674737,
+      "selected": true
+    },
+    {
+      "candidate_id": 4365,
+      "mhz": 155.0,
+      "badness": 4.908430099487305,
+      "p99_abs_err": 0.8506091461835754,
+      "selected": true
+    },
+    {
+      "candidate_id": 4531,
+      "mhz": 265.0,
+      "badness": 6.545557975769043,
+      "p99_abs_err": 13.44792580683007,
+      "selected": true
+    },
+    {
+      "candidate_id": 4545,
+      "mhz": 155.0,
+      "badness": 4.767793655395508,
+      "p99_abs_err": 1.4421037878212881,
+      "selected": true
+    },
+    {
+      "candidate_id": 4553,
+      "mhz": 155.0,
+      "badness": 5.57969856262207,
+      "p99_abs_err": 1.5267322996389079,
+      "selected": true
+    },
+    {
+      "candidate_id": 4632,
+      "mhz": 250.0,
+      "badness": 9.225855827331543,
+      "p99_abs_err": 4.070287780590942,
+      "selected": true
+    },
+    {
+      "candidate_id": 4673,
+      "mhz": 265.0,
+      "badness": 5.518782615661621,
+      "p99_abs_err": 25.975201847208716,
+      "selected": true
+    },
+    {
+      "candidate_id": 4706,
+      "mhz": 250.0,
+      "badness": 8.07474136352539,
+      "p99_abs_err": 9.517104076169964,
+      "selected": true
+    },
+    {
+      "candidate_id": 4712,
+      "mhz": 250.0,
+      "badness": 9.336738586425781,
+      "p99_abs_err": 35.424520605278666,
+      "selected": true
+    },
+    {
+      "candidate_id": 4745,
+      "mhz": 250.0,
+      "badness": 8.472431182861328,
+      "p99_abs_err": 23.33659272542498,
+      "selected": true
+    },
+    {
+      "candidate_id": 4812,
+      "mhz": 265.0,
+      "badness": 5.518468379974365,
+      "p99_abs_err": 24.35413302379977,
+      "selected": true
+    },
+    {
+      "candidate_id": 4820,
+      "mhz": 265.0,
+      "badness": 5.7736992835998535,
+      "p99_abs_err": 39.372017709556076,
+      "selected": true
+    },
+    {
+      "candidate_id": 4829,
+      "mhz": 155.0,
+      "badness": 7.308918476104736,
+      "p99_abs_err": 1.4004158739701236,
+      "selected": true
+    },
+    {
+      "candidate_id": 4856,
+      "mhz": 250.0,
+      "badness": 9.480170249938965,
+      "p99_abs_err": 0.8190679831859295,
+      "selected": true
+    },
+    {
+      "candidate_id": 4872,
+      "mhz": 250.0,
+      "badness": 8.951773643493652,
+      "p99_abs_err": 10.583614309394545,
+      "selected": true
+    },
+    {
+      "candidate_id": 5072,
+      "mhz": 155.0,
+      "badness": 8.4939603805542,
+      "p99_abs_err": 0.9653654262410418,
+      "selected": true
+    },
+    {
+      "candidate_id": 5149,
+      "mhz": 250.0,
+      "badness": 8.78543472290039,
+      "p99_abs_err": 3.434825403273459,
+      "selected": true
+    },
+    {
+      "candidate_id": 5173,
+      "mhz": 155.0,
+      "badness": 8.652326583862305,
+      "p99_abs_err": 0.885164873002172,
+      "selected": true
+    },
+    {
+      "candidate_id": 5175,
+      "mhz": 265.0,
+      "badness": 6.406244277954102,
+      "p99_abs_err": 0.3491498020056252,
+      "selected": true
+    },
+    {
+      "candidate_id": 5178,
+      "mhz": 265.0,
+      "badness": 5.366735935211182,
+      "p99_abs_err": 3.3638550750043787,
+      "selected": true
+    },
+    {
+      "candidate_id": 5180,
+      "mhz": 250.0,
+      "badness": 9.237957000732422,
+      "p99_abs_err": 0.7988150919761967,
+      "selected": true
+    },
+    {
+      "candidate_id": 5356,
+      "mhz": 155.0,
+      "badness": 7.8651628494262695,
+      "p99_abs_err": 0.6114262691720436,
+      "selected": true
+    },
+    {
+      "candidate_id": 5371,
+      "mhz": 155.0,
+      "badness": 7.513369560241699,
+      "p99_abs_err": 2.7291112365751182,
+      "selected": true
+    },
+    {
+      "candidate_id": 5385,
+      "mhz": 265.0,
+      "badness": 5.444676876068115,
+      "p99_abs_err": 8.467698668490339,
+      "selected": true
+    },
+    {
+      "candidate_id": 5393,
+      "mhz": 265.0,
+      "badness": 5.325318336486816,
+      "p99_abs_err": 31.056080074612176,
+      "selected": true
+    },
+    {
+      "candidate_id": 5399,
+      "mhz": 155.0,
+      "badness": 8.831192016601562,
+      "p99_abs_err": 2.229392130565323,
+      "selected": true
+    },
+    {
+      "candidate_id": 5475,
+      "mhz": 250.0,
+      "badness": 8.737152099609375,
+      "p99_abs_err": 1.7309574356756876,
+      "selected": true
+    },
+    {
+      "candidate_id": 5526,
+      "mhz": 250.0,
+      "badness": 9.175655364990234,
+      "p99_abs_err": 4.865237929577965,
+      "selected": true
+    },
+    {
+      "candidate_id": 5543,
+      "mhz": 155.0,
+      "badness": 8.31595516204834,
+      "p99_abs_err": 1.6018470261702893,
+      "selected": true
+    },
+    {
+      "candidate_id": 5568,
+      "mhz": 250.0,
+      "badness": 8.680032730102539,
+      "p99_abs_err": 0.9340673313895618,
+      "selected": true
+    },
+    {
+      "candidate_id": 5588,
+      "mhz": 265.0,
+      "badness": 5.856602668762207,
+      "p99_abs_err": 8.616714706200117,
+      "selected": true
+    },
+    {
+      "candidate_id": 5609,
+      "mhz": 265.0,
+      "badness": 6.582315444946289,
+      "p99_abs_err": 40.04790200552268,
+      "selected": true
+    },
+    {
+      "candidate_id": 5759,
+      "mhz": 250.0,
+      "badness": 8.55698013305664,
+      "p99_abs_err": 1.8869808270346216,
+      "selected": true
+    },
+    {
+      "candidate_id": 5981,
+      "mhz": 250.0,
+      "badness": 9.64494514465332,
+      "p99_abs_err": 8.404784577920196,
+      "selected": true
+    },
+    {
+      "candidate_id": 6009,
+      "mhz": 155.0,
+      "badness": 7.612881660461426,
+      "p99_abs_err": 4.193097495108592,
+      "selected": true
+    },
+    {
+      "candidate_id": 6023,
+      "mhz": 265.0,
+      "badness": 5.298427581787109,
+      "p99_abs_err": 26.310557941102843,
+      "selected": true
+    },
+    {
+      "candidate_id": 6058,
+      "mhz": 265.0,
+      "badness": 5.260321617126465,
+      "p99_abs_err": 20.12872220659792,
+      "selected": true
+    },
+    {
+      "candidate_id": 6068,
+      "mhz": 250.0,
+      "badness": 8.620171546936035,
+      "p99_abs_err": 2.331627918871229,
+      "selected": true
+    },
+    {
+      "candidate_id": 6129,
+      "mhz": 265.0,
+      "badness": 7.194638252258301,
+      "p99_abs_err": 9.567087124592014,
+      "selected": true
+    },
+    {
+      "candidate_id": 6156,
+      "mhz": 250.0,
+      "badness": 10.036666870117188,
+      "p99_abs_err": 1.444453678872863,
+      "selected": true
+    },
+    {
+      "candidate_id": 6325,
+      "mhz": 250.0,
+      "badness": 8.660351753234863,
+      "p99_abs_err": 1.7397360959246093,
+      "selected": true
+    },
+    {
+      "candidate_id": 6480,
+      "mhz": 250.0,
+      "badness": 8.53254222869873,
+      "p99_abs_err": 0.13128080230439032,
+      "selected": true
+    },
+    {
+      "candidate_id": 6484,
+      "mhz": 265.0,
+      "badness": 6.403377532958984,
+      "p99_abs_err": 7.322520295794199,
+      "selected": true
+    },
+    {
+      "candidate_id": 6489,
+      "mhz": 155.0,
+      "badness": 9.311391830444336,
+      "p99_abs_err": 14.811153803648345,
+      "selected": true
+    },
+    {
+      "candidate_id": 6502,
+      "mhz": 265.0,
+      "badness": 5.7947540283203125,
+      "p99_abs_err": 39.98260142362118,
+      "selected": true
+    },
+    {
+      "candidate_id": 6504,
+      "mhz": 250.0,
+      "badness": 9.138816833496094,
+      "p99_abs_err": 1.8697217737680862,
+      "selected": true
+    },
+    {
+      "candidate_id": 6549,
+      "mhz": 250.0,
+      "badness": 8.739095687866211,
+      "p99_abs_err": 0.4157325276157451,
+      "selected": true
+    },
+    {
+      "candidate_id": 6573,
+      "mhz": 250.0,
+      "badness": 8.772778511047363,
+      "p99_abs_err": 0.5000128144564266,
+      "selected": true
+    },
+    {
+      "candidate_id": 6610,
+      "mhz": 250.0,
+      "badness": 8.237587928771973,
+      "p99_abs_err": 1.5941795640985035,
+      "selected": true
+    },
+    {
+      "candidate_id": 6681,
+      "mhz": 250.0,
+      "badness": 8.704413414001465,
+      "p99_abs_err": 3.2055808829935106,
+      "selected": true
+    },
+    {
+      "candidate_id": 6719,
+      "mhz": 265.0,
+      "badness": 5.892630577087402,
+      "p99_abs_err": 22.348214303409424,
+      "selected": true
+    },
+    {
+      "candidate_id": 6763,
+      "mhz": 265.0,
+      "badness": 5.428057670593262,
+      "p99_abs_err": 19.01902742072868,
+      "selected": true
+    },
+    {
+      "candidate_id": 6807,
+      "mhz": 155.0,
+      "badness": 9.467874526977539,
+      "p99_abs_err": 7.73215189336954,
+      "selected": true
+    },
+    {
+      "candidate_id": 6817,
+      "mhz": 265.0,
+      "badness": 6.041737079620361,
+      "p99_abs_err": 11.452102687074603,
+      "selected": true
+    },
+    {
+      "candidate_id": 6818,
+      "mhz": 250.0,
+      "badness": 8.299059867858887,
+      "p99_abs_err": 14.420743798385665,
+      "selected": true
+    },
+    {
+      "candidate_id": 6951,
+      "mhz": 250.0,
+      "badness": 8.2473783493042,
+      "p99_abs_err": 19.26675046058654,
+      "selected": true
+    },
+    {
+      "candidate_id": 6964,
+      "mhz": 155.0,
+      "badness": 9.679739952087402,
+      "p99_abs_err": 1.473512674300685,
+      "selected": true
+    },
+    {
+      "candidate_id": 7034,
+      "mhz": 250.0,
+      "badness": 9.145404815673828,
+      "p99_abs_err": 25.964036136768627,
+      "selected": true
+    },
+    {
+      "candidate_id": 7149,
+      "mhz": 155.0,
+      "badness": 11.4212007522583,
+      "p99_abs_err": 2.5380034009726637,
+      "selected": true
+    },
+    {
+      "candidate_id": 7164,
+      "mhz": 265.0,
+      "badness": 5.53726053237915,
+      "p99_abs_err": 19.654366397387157,
+      "selected": true
+    },
+    {
+      "candidate_id": 7326,
+      "mhz": 250.0,
+      "badness": 9.336685180664062,
+      "p99_abs_err": 1.553384419860084,
+      "selected": true
+    },
+    {
+      "candidate_id": 7354,
+      "mhz": 155.0,
+      "badness": 10.545919418334961,
+      "p99_abs_err": 10.937466966827674,
+      "selected": true
+    },
+    {
+      "candidate_id": 7439,
+      "mhz": 265.0,
+      "badness": 6.313410758972168,
+      "p99_abs_err": 35.843049522885636,
+      "selected": true
+    },
+    {
+      "candidate_id": 7440,
+      "mhz": 265.0,
+      "badness": 5.890125274658203,
+      "p99_abs_err": 12.965405255644693,
+      "selected": true
+    },
+    {
+      "candidate_id": 7460,
+      "mhz": 155.0,
+      "badness": 9.655495643615723,
+      "p99_abs_err": 14.860597342610308,
+      "selected": true
+    },
+    {
+      "candidate_id": 7492,
+      "mhz": 250.0,
+      "badness": 8.974895477294922,
+      "p99_abs_err": 11.109165214685746,
+      "selected": true
+    },
+    {
+      "candidate_id": 7518,
+      "mhz": 155.0,
+      "badness": 11.78095817565918,
+      "p99_abs_err": 2.618415283425807,
+      "selected": true
+    },
+    {
+      "candidate_id": 7527,
+      "mhz": 265.0,
+      "badness": 5.624742031097412,
+      "p99_abs_err": 24.984266745964803,
+      "selected": true
+    },
+    {
+      "candidate_id": 7823,
+      "mhz": 265.0,
+      "badness": 7.3245344161987305,
+      "p99_abs_err": 19.179699552639434,
+      "selected": true
+    },
+    {
+      "candidate_id": 7869,
+      "mhz": 265.0,
+      "badness": 5.679332256317139,
+      "p99_abs_err": 7.583274470407417,
+      "selected": true
+    },
+    {
+      "candidate_id": 7877,
+      "mhz": 155.0,
+      "badness": 9.368786811828613,
+      "p99_abs_err": 16.560696938882533,
+      "selected": true
+    },
+    {
+      "candidate_id": 7977,
+      "mhz": 250.0,
+      "badness": 8.51628589630127,
+      "p99_abs_err": 0.0074338155014306295,
+      "selected": true
+    },
+    {
+      "candidate_id": 8107,
+      "mhz": 265.0,
+      "badness": 5.379321575164795,
+      "p99_abs_err": 19.891135617630006,
+      "selected": true
+    },
+    {
+      "candidate_id": 8125,
+      "mhz": 250.0,
+      "badness": 8.88032054901123,
+      "p99_abs_err": 1.445200964709695,
+      "selected": true
+    },
+    {
+      "candidate_id": 8152,
+      "mhz": 250.0,
+      "badness": 9.65946102142334,
+      "p99_abs_err": 0.7182155681483291,
+      "selected": true
+    },
+    {
+      "candidate_id": 8178,
+      "mhz": 250.0,
+      "badness": 8.785531997680664,
+      "p99_abs_err": 1.8086972471466183,
+      "selected": true
+    },
+    {
+      "candidate_id": 8249,
+      "mhz": 250.0,
+      "badness": 8.588980674743652,
+      "p99_abs_err": 0.32084304499638705,
+      "selected": true
+    },
+    {
+      "candidate_id": 8308,
+      "mhz": 265.0,
+      "badness": 5.662378787994385,
+      "p99_abs_err": 16.034936244714917,
+      "selected": true
+    },
+    {
+      "candidate_id": 8323,
+      "mhz": 265.0,
+      "badness": 5.833173751831055,
+      "p99_abs_err": 16.93624218161642,
+      "selected": true
+    },
+    {
+      "candidate_id": 8330,
+      "mhz": 265.0,
+      "badness": 5.846898078918457,
+      "p99_abs_err": 25.830327812415547,
+      "selected": true
+    },
+    {
+      "candidate_id": 8352,
+      "mhz": 265.0,
+      "badness": 5.6099019050598145,
+      "p99_abs_err": 23.607864251660608,
+      "selected": true
+    },
+    {
+      "candidate_id": 8364,
+      "mhz": 250.0,
+      "badness": 8.565486907958984,
+      "p99_abs_err": 25.423894786090848,
+      "selected": true
+    },
+    {
+      "candidate_id": 8417,
+      "mhz": 250.0,
+      "badness": 8.579638481140137,
+      "p99_abs_err": 18.274985935290406,
+      "selected": true
+    },
+    {
+      "candidate_id": 8534,
+      "mhz": 155.0,
+      "badness": 10.025565147399902,
+      "p99_abs_err": 19.002342499276857,
+      "selected": true
+    },
+    {
+      "candidate_id": 8578,
+      "mhz": 250.0,
+      "badness": 8.666727066040039,
+      "p99_abs_err": 0.6506154569702343,
+      "selected": true
+    },
+    {
+      "candidate_id": 8669,
+      "mhz": 265.0,
+      "badness": 5.3127217292785645,
+      "p99_abs_err": 3.9191222453865446,
+      "selected": true
+    },
+    {
+      "candidate_id": 8722,
+      "mhz": 155.0,
+      "badness": 9.378031730651855,
+      "p99_abs_err": 0.3291588178969729,
+      "selected": true
+    },
+    {
+      "candidate_id": 8752,
+      "mhz": 155.0,
+      "badness": 9.478618621826172,
+      "p99_abs_err": 3.826763000346636,
+      "selected": true
+    },
+    {
+      "candidate_id": 8805,
+      "mhz": 265.0,
+      "badness": 5.5387282371521,
+      "p99_abs_err": 10.961775146255349,
+      "selected": true
+    },
+    {
+      "candidate_id": 8840,
+      "mhz": 250.0,
+      "badness": 8.569868087768555,
+      "p99_abs_err": 1.7316845149533204,
+      "selected": true
+    },
+    {
+      "candidate_id": 8865,
+      "mhz": 265.0,
+      "badness": 5.946446895599365,
+      "p99_abs_err": 9.181303393279755,
+      "selected": true
+    },
+    {
+      "candidate_id": 8938,
+      "mhz": 265.0,
+      "badness": 5.823772430419922,
+      "p99_abs_err": 30.006589606673415,
+      "selected": true
+    },
+    {
+      "candidate_id": 9031,
+      "mhz": 265.0,
+      "badness": 5.502187252044678,
+      "p99_abs_err": 33.61903789845755,
+      "selected": true
+    },
+    {
+      "candidate_id": 9082,
+      "mhz": 250.0,
+      "badness": 8.631454467773438,
+      "p99_abs_err": 2.97021363285533,
+      "selected": true
+    },
+    {
+      "candidate_id": 9113,
+      "mhz": 155.0,
+      "badness": 12.10727596282959,
+      "p99_abs_err": 1.2326888349301215,
+      "selected": true
+    },
+    {
+      "candidate_id": 9175,
+      "mhz": 155.0,
+      "badness": 9.973785400390625,
+      "p99_abs_err": 3.4533606103939496,
+      "selected": true
+    },
+    {
+      "candidate_id": 9180,
+      "mhz": 265.0,
+      "badness": 5.355548858642578,
+      "p99_abs_err": 6.557595914988436,
+      "selected": true
+    },
+    {
+      "candidate_id": 9212,
+      "mhz": 250.0,
+      "badness": 8.892484664916992,
+      "p99_abs_err": 11.112284991823287,
+      "selected": true
+    },
+    {
+      "candidate_id": 9344,
+      "mhz": 155.0,
+      "badness": 10.081856727600098,
+      "p99_abs_err": 6.00322196485315,
+      "selected": true
+    },
+    {
+      "candidate_id": 9368,
+      "mhz": 155.0,
+      "badness": 9.593411445617676,
+      "p99_abs_err": 1.2180674042942483,
+      "selected": true
+    },
+    {
+      "candidate_id": 9374,
+      "mhz": 250.0,
+      "badness": 8.852349281311035,
+      "p99_abs_err": 8.683195773215346,
+      "selected": true
+    },
+    {
+      "candidate_id": 9434,
+      "mhz": 250.0,
+      "badness": 9.007092475891113,
+      "p99_abs_err": 1.9311210754743726,
+      "selected": true
+    },
+    {
+      "candidate_id": 9547,
+      "mhz": 155.0,
+      "badness": 9.72580337524414,
+      "p99_abs_err": 7.141663959423138,
+      "selected": true
+    },
+    {
+      "candidate_id": 9690,
+      "mhz": 155.0,
+      "badness": 10.077125549316406,
+      "p99_abs_err": 5.207972703390217,
+      "selected": true
+    },
+    {
+      "candidate_id": 9808,
+      "mhz": 250.0,
+      "badness": 9.162505149841309,
+      "p99_abs_err": 7.925375098484675,
+      "selected": true
+    },
+    {
+      "candidate_id": 9847,
+      "mhz": 250.0,
+      "badness": 8.101119995117188,
+      "p99_abs_err": 1.3246954706663345,
+      "selected": true
+    },
+    {
+      "candidate_id": 9989,
+      "mhz": 250.0,
+      "badness": 8.796795845031738,
+      "p99_abs_err": 17.370677570400357,
+      "selected": true
+    },
+    {
+      "candidate_id": 9991,
+      "mhz": 155.0,
+      "badness": 9.9185791015625,
+      "p99_abs_err": 10.552456027910573,
+      "selected": true
+    },
+    {
+      "candidate_id": 9993,
+      "mhz": 265.0,
+      "badness": 6.021327972412109,
+      "p99_abs_err": 2.7493868825415344,
+      "selected": true
+    },
+    {
+      "candidate_id": 9999,
+      "mhz": 265.0,
+      "badness": 5.427892208099365,
+      "p99_abs_err": 19.64037406877979,
+      "selected": true
+    },
+    {
+      "candidate_id": 10002,
+      "mhz": 250.0,
+      "badness": 8.263938903808594,
+      "p99_abs_err": 8.771516740425888,
+      "selected": true
+    },
+    {
+      "candidate_id": 10021,
+      "mhz": 265.0,
+      "badness": 6.216947555541992,
+      "p99_abs_err": 32.16515556656935,
+      "selected": true
+    },
+    {
+      "candidate_id": 10104,
+      "mhz": 265.0,
+      "badness": 5.532991409301758,
+      "p99_abs_err": 0.5442976688294916,
+      "selected": true
+    },
+    {
+      "candidate_id": 10193,
+      "mhz": 155.0,
+      "badness": 8.917564392089844,
+      "p99_abs_err": 31.091229502402932,
+      "selected": true
+    },
+    {
+      "candidate_id": 10243,
+      "mhz": 265.0,
+      "badness": 5.433430194854736,
+      "p99_abs_err": 20.371619351105004,
+      "selected": true
+    },
+    {
+      "candidate_id": 10255,
+      "mhz": 250.0,
+      "badness": 8.027244567871094,
+      "p99_abs_err": 6.675293253167801,
+      "selected": true
+    },
+    {
+      "candidate_id": 10428,
+      "mhz": 155.0,
+      "badness": 8.924666404724121,
+      "p99_abs_err": 2.33636212320772,
+      "selected": true
+    },
+    {
+      "candidate_id": 10462,
+      "mhz": 155.0,
+      "badness": 12.642106056213379,
+      "p99_abs_err": 8.69576391852879,
+      "selected": true
+    },
+    {
+      "candidate_id": 10479,
+      "mhz": 250.0,
+      "badness": 8.018634796142578,
+      "p99_abs_err": 6.0928090267908495,
+      "selected": true
+    },
+    {
+      "candidate_id": 10487,
+      "mhz": 250.0,
+      "badness": 8.597233772277832,
+      "p99_abs_err": 2.4868274262502306,
+      "selected": true
+    },
+    {
+      "candidate_id": 10543,
+      "mhz": 250.0,
+      "badness": 8.681635856628418,
+      "p99_abs_err": 0.09313245974401951,
+      "selected": true
+    },
+    {
+      "candidate_id": 10573,
+      "mhz": 265.0,
+      "badness": 6.242473602294922,
+      "p99_abs_err": 10.22160154751581,
+      "selected": true
+    },
+    {
+      "candidate_id": 10702,
+      "mhz": 265.0,
+      "badness": 5.7655110359191895,
+      "p99_abs_err": 5.783464211344858,
+      "selected": true
+    },
+    {
+      "candidate_id": 10715,
+      "mhz": 250.0,
+      "badness": 7.68271541595459,
+      "p99_abs_err": 0.6151785125088498,
+      "selected": true
+    },
+    {
+      "candidate_id": 10752,
+      "mhz": 265.0,
+      "badness": 6.558906555175781,
+      "p99_abs_err": 3.0182056605502403,
+      "selected": true
+    },
+    {
+      "candidate_id": 10774,
+      "mhz": 250.0,
+      "badness": 7.7654523849487305,
+      "p99_abs_err": 29.547260378712416,
+      "selected": true
+    },
+    {
+      "candidate_id": 10776,
+      "mhz": 155.0,
+      "badness": 9.954270362854004,
+      "p99_abs_err": 7.82015765974891,
+      "selected": true
+    },
+    {
+      "candidate_id": 10790,
+      "mhz": 265.0,
+      "badness": 5.589990615844727,
+      "p99_abs_err": 31.007588908034556,
+      "selected": true
+    },
+    {
+      "candidate_id": 10931,
+      "mhz": 250.0,
+      "badness": 8.535717964172363,
+      "p99_abs_err": 4.453298784675424,
+      "selected": true
+    },
+    {
+      "candidate_id": 11007,
+      "mhz": 155.0,
+      "badness": 11.3441162109375,
+      "p99_abs_err": 7.421228575020114,
+      "selected": true
+    },
+    {
+      "candidate_id": 11022,
+      "mhz": 265.0,
+      "badness": 6.472294807434082,
+      "p99_abs_err": 1.3182747822040959,
+      "selected": true
+    },
+    {
+      "candidate_id": 11148,
+      "mhz": 155.0,
+      "badness": 9.882293701171875,
+      "p99_abs_err": 3.804460553098737,
+      "selected": true
+    },
+    {
+      "candidate_id": 11156,
+      "mhz": 265.0,
+      "badness": 6.055768013000488,
+      "p99_abs_err": 30.618847024871535,
+      "selected": true
+    },
+    {
+      "candidate_id": 11170,
+      "mhz": 250.0,
+      "badness": 8.055855751037598,
+      "p99_abs_err": 3.677072447243468,
+      "selected": true
+    },
+    {
+      "candidate_id": 11208,
+      "mhz": 265.0,
+      "badness": 5.583148002624512,
+      "p99_abs_err": 5.131274991006805,
+      "selected": true
+    },
+    {
+      "candidate_id": 11333,
+      "mhz": 265.0,
+      "badness": 5.848965644836426,
+      "p99_abs_err": 18.962724369949086,
+      "selected": true
+    },
+    {
+      "candidate_id": 11337,
+      "mhz": 265.0,
+      "badness": 5.534236431121826,
+      "p99_abs_err": 38.66696896225814,
+      "selected": true
+    },
+    {
+      "candidate_id": 11404,
+      "mhz": 250.0,
+      "badness": 7.58042049407959,
+      "p99_abs_err": 5.032781344439741,
+      "selected": true
+    },
+    {
+      "candidate_id": 11415,
+      "mhz": 155.0,
+      "badness": 10.070768356323242,
+      "p99_abs_err": 22.11515815018199,
+      "selected": true
+    },
+    {
+      "candidate_id": 11452,
+      "mhz": 250.0,
+      "badness": 8.183379173278809,
+      "p99_abs_err": 16.96866093359428,
+      "selected": true
+    },
+    {
+      "candidate_id": 11542,
+      "mhz": 265.0,
+      "badness": 6.005398273468018,
+      "p99_abs_err": 34.23210917429628,
+      "selected": true
+    },
+    {
+      "candidate_id": 11781,
+      "mhz": 250.0,
+      "badness": 7.508507251739502,
+      "p99_abs_err": 0.3892005829956542,
+      "selected": true
+    },
+    {
+      "candidate_id": 11800,
+      "mhz": 265.0,
+      "badness": 6.240175247192383,
+      "p99_abs_err": 39.97493360158078,
+      "selected": true
+    },
+    {
+      "candidate_id": 11801,
+      "mhz": 155.0,
+      "badness": 9.486886978149414,
+      "p99_abs_err": 6.0123748363321035,
+      "selected": true
+    },
+    {
+      "candidate_id": 11829,
+      "mhz": 265.0,
+      "badness": 5.822830677032471,
+      "p99_abs_err": 12.783422980466252,
+      "selected": true
+    },
+    {
+      "candidate_id": 11931,
+      "mhz": 265.0,
+      "badness": 6.5026655197143555,
+      "p99_abs_err": 5.190768999986034,
+      "selected": true
+    },
+    {
+      "candidate_id": 11967,
+      "mhz": 250.0,
+      "badness": 9.679342269897461,
+      "p99_abs_err": 0.9012980730555906,
+      "selected": true
+    },
+    {
+      "candidate_id": 12022,
+      "mhz": 155.0,
+      "badness": 7.289862632751465,
+      "p99_abs_err": 3.2570468307098155,
+      "selected": true
+    },
+    {
+      "candidate_id": 12107,
+      "mhz": 250.0,
+      "badness": 8.818848609924316,
+      "p99_abs_err": 4.348847788212447,
+      "selected": true
+    },
+    {
+      "candidate_id": 12263,
+      "mhz": 265.0,
+      "badness": 6.024070739746094,
+      "p99_abs_err": 7.5848747060513,
+      "selected": true
+    },
+    {
+      "candidate_id": 12278,
+      "mhz": 265.0,
+      "badness": 5.824954032897949,
+      "p99_abs_err": 5.755871921771202,
+      "selected": true
+    },
+    {
+      "candidate_id": 12313,
+      "mhz": 155.0,
+      "badness": 8.536904335021973,
+      "p99_abs_err": 6.790276992412988,
+      "selected": true
+    },
+    {
+      "candidate_id": 12387,
+      "mhz": 155.0,
+      "badness": 8.688469886779785,
+      "p99_abs_err": 1.3597673660547693,
+      "selected": true
+    },
+    {
+      "candidate_id": 12440,
+      "mhz": 250.0,
+      "badness": 7.823500633239746,
+      "p99_abs_err": 6.245549716538881,
+      "selected": true
+    },
+    {
+      "candidate_id": 12450,
+      "mhz": 250.0,
+      "badness": 7.5870161056518555,
+      "p99_abs_err": 3.225636119561261,
+      "selected": true
+    },
+    {
+      "candidate_id": 12452,
+      "mhz": 265.0,
+      "badness": 7.279767036437988,
+      "p99_abs_err": 30.19430003508066,
+      "selected": true
+    },
+    {
+      "candidate_id": 12520,
+      "mhz": 155.0,
+      "badness": 7.570371627807617,
+      "p99_abs_err": 7.846122081872094,
+      "selected": true
+    },
+    {
+      "candidate_id": 12552,
+      "mhz": 250.0,
+      "badness": 8.503691673278809,
+      "p99_abs_err": 0.8143312267726195,
+      "selected": true
+    },
+    {
+      "candidate_id": 12557,
+      "mhz": 250.0,
+      "badness": 7.890009880065918,
+      "p99_abs_err": 3.2897760493541526,
+      "selected": true
+    },
+    {
+      "candidate_id": 12581,
+      "mhz": 155.0,
+      "badness": 7.440248966217041,
+      "p99_abs_err": 4.02055395526922,
+      "selected": true
+    },
+    {
+      "candidate_id": 12590,
+      "mhz": 250.0,
+      "badness": 7.77924919128418,
+      "p99_abs_err": 10.420848612644587,
+      "selected": true
+    },
+    {
+      "candidate_id": 12613,
+      "mhz": 250.0,
+      "badness": 7.973906517028809,
+      "p99_abs_err": 0.7949023999478353,
+      "selected": true
+    },
+    {
+      "candidate_id": 12616,
+      "mhz": 155.0,
+      "badness": 11.677639961242676,
+      "p99_abs_err": 17.779698744118384,
+      "selected": true
+    },
+    {
+      "candidate_id": 12683,
+      "mhz": 250.0,
+      "badness": 7.630734920501709,
+      "p99_abs_err": 0.8917365294051347,
+      "selected": true
+    },
+    {
+      "candidate_id": 12781,
+      "mhz": 265.0,
+      "badness": 6.63338565826416,
+      "p99_abs_err": 2.3181609063290836,
+      "selected": true
+    }
+  ],
+  "scored_path": "/home/ubuntu/genai_pdn/active_learning_pi/runs/al_exp059_gp_error_001/iter_0004/scored_candidates.json",
+  "phase": "acquisition"
+}

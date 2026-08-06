@@ -13,6 +13,8 @@ Agent notes:
     - Config keys:
         - ``EXPERIMENT_DIR`` / ``CHECKPOINT_PATH`` / ``DATA_DIR`` — exp052 + ``data_multifreq_train_norm_unbounded``
         - ``K_VALUE`` — single int (e.g. ``30``) or list (e.g. ``[10, 20, 30]``)
+        - ``OUTPUT_ROOT`` — ``…/multifreq_heatmap_sweep_<K>``; if that folder exists on a
+          new generate run, Windows-style `` (1)``, `` (2)``, … is appended instead of overwriting
         - ``INFERENCE_MODE`` / ``QC_SWEEP`` / ``LAYOUT_SOURCE`` — QC sweep aligned with latent optimize
         - ``LATENT_RUN_DIR`` — for ``latent_z`` / ``layout_hybrid`` post-opt QC
         - ``SKIP_GENERATE`` … ``SKIP_REPORT`` — skip individual pipeline steps
@@ -53,18 +55,18 @@ setup_path()
 RUN_MODE = "heatmap"  # "heatmap" | "impedance"
 
 # --- Model / VAE generate (exp052: Pearson+grad heatmap, unbounded per-MHz z) ---
-EXPERIMENT_DIR = "experiments/exp057_structured_graph"
+EXPERIMENT_DIR = "experiments/exp059_capacity_freq"
 CHECKPOINT_PATH = f"{EXPERIMENT_DIR}/checkpoints/last_model.pt"
 DATA_DIR = "datasets/data_multifreq_train_norm_unbounded"  
 
 # PI sweep: explicit MHz list, or "anchors" | "dense" (heatmap mode only; ignored when RUN_MODE="impedance")
-SWEEP: list[float] | str = [10, 63, 150, 270, 450,500]
+SWEEP: list[float] | str = [10, 80, 150, 270, 450,550]
 DENSE_N_POINTS = 24
 
-K_VALUE: int | list[int] = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]  # min K=2 in unbounded dataset
-OUTPUT_ROOT = f"{EXPERIMENT_DIR}/multifreq_heatmap_sweep"  # overwritten by _sync_output_root() from K_VALUE
+K_VALUE: int | list[int] = [3,4,5,6,7,8,9,10]  # min K=2 in unbounded dataset
+OUTPUT_ROOT = f"{EXPERIMENT_DIR}/multifreq_heatmap_sweep_temp_1.5"  # set by _sync_output_root(); unique (1)/(2)/… if exists
 NUM_SAMPLES = 1
-SHARED_TEMP = 1.0
+SHARED_TEMP = 1.5
 SEED = 42
 
 # PEB (1 PI per sample in ECADStar; both run modes emit a single PI kind)
@@ -97,9 +99,11 @@ REPORT_COPY_DEST: str | None = r"C:\Users\muthusamy\Desktop\reports"
 # --- ECADStar automation (Windows paths) ---
 ECADSTAR_ERF_PATH = r"C:\Users\muthusamy\Desktop\design\H-shape.emc\H-shape.erf"
 ECADSTAR_EMC_OUTPUT_DIR = r"C:\Users\muthusamy\Desktop\design\H-shape.emc"
-ECADSTAR_SKIP_OPEN_ERF = False
-ECADSTAR_AHK_EXE: str | None = None  # None → AutoHotkey v2 default in .ps1
-# Wait for batch sim to finish (AHK only *starts* Load Batch, then exits)
+# --- Native headless CLI (see docs/ecadstar_headless_cli.md) ---
+# engineer.exe <design.erf> --batch <file.peb> --batch-auto-exit : no GUI / no focus / no AHK.
+ENGINEER_EXE = r"C:\Program Files\eCADSTAR\eCADSTAR 2023.0\Analysis\bin\engineer.exe"
+ECADSTAR_IMPULSE_PORT: int | None = None
+# Verify PI outputs after engineer.exe self-exits (headless batch runs to completion)
 ECADSTAR_WAIT_FOR_PI = True
 ECADSTAR_WAIT_TIMEOUT_SEC = 7200
 ECADSTAR_WAIT_POLL_SEC = 40
@@ -176,10 +180,63 @@ def _k_tag() -> str:
     return k_output_tag(K_VALUE)
 
 
-def _sync_output_root() -> None:
-    """Keep OUTPUT_ROOT aligned with K_VALUE."""
-    global OUTPUT_ROOT
-    OUTPUT_ROOT = f"{EXPERIMENT_DIR}/multifreq_heatmap_sweep_{_k_tag()}"
+# Once resolved for this process, keep the same OUTPUT_ROOT for generate → report.
+_OUTPUT_ROOT_LOCKED = False
+
+
+def _windows_unique_dir_name(parent: Path, name: str) -> str:
+    """Pick a free folder name like Windows: ``name``, ``name (1)``, ``name (2)``, …"""
+    if not (parent / name).exists():
+        return name
+    for i in range(1, 10_000):
+        alt = f"{name} ({i})"
+        if not (parent / alt).exists():
+            return alt
+    raise RuntimeError(f"Could not find free output folder name for {name!r} under {parent}")
+
+
+def _resolve_existing_output_dir(parent: Path, base: str) -> str:
+    """When skipping generate, reuse the newest matching sweep folder if present."""
+    candidates: list[Path] = []
+    exact = parent / base
+    if exact.is_dir():
+        candidates.append(exact)
+    pat = re.compile(re.escape(base) + r" \((\d+)\)$")
+    if parent.is_dir():
+        for child in parent.iterdir():
+            if child.is_dir() and pat.match(child.name):
+                candidates.append(child)
+    if not candidates:
+        return base
+    return max(candidates, key=lambda p: p.stat().st_mtime).name
+
+
+def _sync_output_root(*, allocate_new: bool | None = None) -> None:
+    """Keep OUTPUT_ROOT aligned with K_VALUE.
+
+    New generate runs never overwrite an existing sweep folder: if
+    ``…/multifreq_heatmap_sweep_<K>`` already exists, the next free Windows-style
+    name is used (``… (1)``, ``… (2)``, …). The chosen path is locked for the
+    rest of this process so simulate/move/compare/report hit the same folder.
+    """
+    global OUTPUT_ROOT, _OUTPUT_ROOT_LOCKED
+    if _OUTPUT_ROOT_LOCKED:
+        return
+
+    base_name = f"multifreq_heatmap_sweep_{_k_tag()}"
+    parent = _PROJECT_ROOT / EXPERIMENT_DIR
+    if allocate_new is None:
+        allocate_new = (not SKIP_GENERATE) and (not METRICS_ONLY)
+
+    if allocate_new:
+        folder_name = _windows_unique_dir_name(parent, base_name)
+    else:
+        folder_name = _resolve_existing_output_dir(parent, base_name)
+
+    OUTPUT_ROOT = f"{EXPERIMENT_DIR}/{folder_name}"
+    _OUTPUT_ROOT_LOCKED = True
+    if folder_name != base_name:
+        print(f"  OUTPUT_ROOT → {OUTPUT_ROOT}  (avoided overwrite of existing sweep folder)")
 
 
 def _peb_out_file() -> str:
@@ -205,8 +262,8 @@ def _peb_md5(path: Path) -> str:
 def verify_and_stage_peb_for_ecadstar() -> Path:
     """Ensure ECADStar loads the same PEB that generate wrote (name + content).
 
-    AHK pastes the **full Windows path** in Load Batch (see tools/ecadstar/ecadstar_piemi_batch.ahk).
-    We still copy the generated PEB to PEB_COPY_DEST and beside the .erf for convenience.
+    engineer.exe receives the **full Windows path** via ``--batch``. We still copy the
+    generated PEB to PEB_COPY_DEST and beside the .erf for convenience.
     """
     expected_name = _expected_peb_name()
     repo_peb = (_PROJECT_ROOT / _peb_out_file()).resolve()
@@ -257,8 +314,7 @@ def verify_and_stage_peb_for_ecadstar() -> Path:
 
     simulate_peb = staged[0] if PEB_COPY_DEST else repo_peb
     peb_win_path = _windows_path_str(simulate_peb)
-    print(f"    AHK pastes: {peb_win_path!r}  (full path in Load Batch dialog)")
-    print(f"    -PebPath  : {peb_win_path}")
+    print(f"    engineer --batch: {peb_win_path!r}")
     return simulate_peb
 
 
@@ -531,7 +587,7 @@ def _resolve_windows_path(path_str: str) -> Path:
 # ---------------------------------------------------------------------------
 
 def run_ecadstar_batch(peb_path: Path, groot: Path) -> int:
-    """Invoke Windows PowerShell + AutoHotkey to Load Batch in PI/EMI."""
+    """Load Batch in PI/EMI via the native headless CLI (engineer.exe --batch)."""
     erf = Path(ECADSTAR_ERF_PATH)
     if not erf.is_file():
         wsl_erf = _resolve_windows_path(ECADSTAR_ERF_PATH)
@@ -550,33 +606,16 @@ def run_ecadstar_batch(peb_path: Path, groot: Path) -> int:
             f"expected generated {expected_name!r} (K={_k_tag()})"
         )
 
-    ps_script = groot / "tools" / "ecadstar" / "run_ecadstar_piemi_batch.ps1"
-    if not ps_script.is_file():
-        raise FileNotFoundError(f"AHK runner not found: {ps_script}")
-
-    cmd = [
-        "powershell.exe",
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        _windows_path_str(ps_script),
-        "-ErfPath",
-        _windows_path_str(erf),
-        "-PebPath",
-        _windows_path_str(peb_path),
-    ]
-    if ECADSTAR_AHK_EXE:
-        cmd.extend(["-AhkExe", str(ECADSTAR_AHK_EXE)])
-    if ECADSTAR_SKIP_OPEN_ERF:
-        cmd.append("-SkipOpenErf")
-
-    log_hint = Path(os.environ.get("TEMP", "/tmp")) / "ecadstar_piemi_batch.log"
-    print(f"Running ECADSTAR automation: {' '.join(cmd)}")
-    print(f"  Load Batch will paste: {peb_win_path!r} (full path to generated PEB)")
-    print(f"  Log (Windows): {log_hint}")
-    proc = subprocess.run(cmd, cwd=str(groot), env=os.environ.copy())
-    return int(proc.returncode)
+    from pipelines.dataset_sim.ecadstar import run_ecadstar_batch_headless
+    print("Running ECADSTAR headless (engineer.exe --batch --batch-auto-exit)")
+    print(f"  Batch PEB: {peb_win_path!r}")
+    return run_ecadstar_batch_headless(
+        peb_path,
+        erf_path=ECADSTAR_ERF_PATH,
+        engineer_exe=ENGINEER_EXE,
+        impulse_port=ECADSTAR_IMPULSE_PORT,
+        timeout_sec=ECADSTAR_WAIT_TIMEOUT_SEC,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -608,8 +647,8 @@ def step_simulate() -> None:
     rc = run_ecadstar_batch(peb, _PROJECT_ROOT)
     if rc != 0:
         raise SystemExit(
-            f"ECADStar automation failed (exit code {rc}). "
-            "Check %TEMP%\\ecadstar_piemi_batch.log on Windows."
+            f"ECADStar headless batch failed (rc={rc}). "
+            f"Check {ECADSTAR_EMC_OUTPUT_DIR}\\PI-1\\log.txt on Windows."
         )
 
     if isinstance(SWEEP, list) and not RUN_IMPEDANCE_COMPARE:

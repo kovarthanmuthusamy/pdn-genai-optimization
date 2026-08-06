@@ -55,6 +55,7 @@ def run_off_anchor_eval(
     fixed = Path(out_csv).parent / OFF_ANCHOR_CSV_NAME if out_csv is not None else None
     use_encode_skips = bool(getattr(c, "cross_freq_use_encode_skips", False)) if c else False
     use_binary_occ = bool(getattr(c, "occupancy_binary_decode", True)) if c else True
+    use_occ_only = bool(getattr(c, "eval_use_occ_only_layout", False)) if c else False
     return run_off_anchor_eval_spatial(
         model,
         val_loader,
@@ -66,4 +67,26 @@ def run_off_anchor_eval(
         epoch=epoch,
         use_encode_skips=use_encode_skips,
         use_binary_occupancy=use_binary_occ,
+        use_occ_only_layout=use_occ_only,
     )
+
+
+def off_anchor_aggregate_score(
+    rows: list[dict],
+    *,
+    kind: str = "layout_cross",
+    weights: dict | None = None,
+) -> float:
+    """Weighted mean FG MSE across off-anchor MHz (lower = better heatmap fit)."""
+    scored = [r for r in rows if r.get("kind") == kind and r.get("hm_fg_mse_mean") is not None]
+    if not scored:
+        return float("inf")
+    wmap = {float(k): float(v) for k, v in (weights or {}).items()}
+    total = 0.0
+    total_w = 0.0
+    for r in scored:
+        mhz = float(r["mhz"])
+        w = wmap.get(mhz, 1.0)
+        total += w * float(r["hm_fg_mse_mean"])
+        total_w += w
+    return total / total_w if total_w else float("inf")

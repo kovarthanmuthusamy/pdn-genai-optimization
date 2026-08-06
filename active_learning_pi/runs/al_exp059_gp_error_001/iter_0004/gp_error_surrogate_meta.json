@@ -1,0 +1,23 @@
+{
+  "path": "pred",
+  "target": "p99_ae",
+  "kappa": 0.5,
+  "gp_kind": "svgp",
+  "n_fit": 4000,
+  "novelty_weight": 0.0,
+  "novelty_k": 10,
+  "score_mode": "mu",
+  "meta": {
+    "mhz_min": 10.000000695761434,
+    "mhz_max": 500.000080431562,
+    "k_min": 2,
+    "k_max": 30,
+    "y_mean": 3.7080672549903393,
+    "y_std": 10.635936738300177,
+    "joint_alpha_hm": 1.0,
+    "joint_alpha_imp": 1.0,
+    "novelty_weight": 0.0,
+    "novelty_k": 10,
+    "score_mode": "mu"
+  }
+}

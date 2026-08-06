@@ -1,0 +1,606 @@
+{
+  "iteration": 4,
+  "off_anchor_mhz": [
+    80.0,
+    250.0,
+    500.0
+  ],
+  "pre_finetune": {
+    "n": 36,
+    "p99_mae": 6.905579100071976,
+    "p99_median_ae": 5.290723614486214,
+    "rows": [
+      {
+        "candidate_id": 324,
+        "mhz": 250.0,
+        "real_p99": 17.05128081976436,
+        "pred_p99_mean": 14.758156100908915,
+        "p99_abs_err": 2.293124718855447
+      },
+      {
+        "candidate_id": 96,
+        "mhz": 250.0,
+        "real_p99": 4.9906086856965155,
+        "pred_p99_mean": 9.156741042931875,
+        "p99_abs_err": 4.16613235723536
+      },
+      {
+        "candidate_id": 81,
+        "mhz": 250.0,
+        "real_p99": 20.83924489859134,
+        "pred_p99_mean": 8.13155742486318,
+        "p99_abs_err": 12.707687473728159
+      },
+      {
+        "candidate_id": 343,
+        "mhz": 250.0,
+        "real_p99": 5.266832304372004,
+        "pred_p99_mean": 9.283755580584208,
+        "p99_abs_err": 4.016923276212204
+      },
+      {
+        "candidate_id": 296,
+        "mhz": 250.0,
+        "real_p99": 12.536449506065555,
+        "pred_p99_mean": 10.80325186252594,
+        "p99_abs_err": 1.733197643539615
+      },
+      {
+        "candidate_id": 18,
+        "mhz": 250.0,
+        "real_p99": 6.163516845412886,
+        "pred_p99_mean": 11.141622066497803,
+        "p99_abs_err": 4.978105221084917
+      },
+      {
+        "candidate_id": 9,
+        "mhz": 250.0,
+        "real_p99": 22.66726810739522,
+        "pred_p99_mean": 6.584182381629944,
+        "p99_abs_err": 16.083085725765276
+      },
+      {
+        "candidate_id": 156,
+        "mhz": 250.0,
+        "real_p99": 6.878647734677507,
+        "pred_p99_mean": 12.732906738917032,
+        "p99_abs_err": 5.854259004239525
+      },
+      {
+        "candidate_id": 124,
+        "mhz": 250.0,
+        "real_p99": 24.07565523124874,
+        "pred_p99_mean": 7.9779733419418335,
+        "p99_abs_err": 16.097681889306905
+      },
+      {
+        "candidate_id": 55,
+        "mhz": 250.0,
+        "real_p99": 19.505146964684066,
+        "pred_p99_mean": 9.339969754219055,
+        "p99_abs_err": 10.16517721046501
+      },
+      {
+        "candidate_id": 330,
+        "mhz": 250.0,
+        "real_p99": 18.61398947441434,
+        "pred_p99_mean": 9.741035064061483,
+        "p99_abs_err": 8.872954410352856
+      },
+      {
+        "candidate_id": 2,
+        "mhz": 250.0,
+        "real_p99": 20.54303248464681,
+        "pred_p99_mean": 9.7236039241155,
+        "p99_abs_err": 10.819428560531312
+      },
+      {
+        "candidate_id": 155,
+        "mhz": 250.0,
+        "real_p99": 22.57257350279012,
+        "pred_p99_mean": 6.9211061000823975,
+        "p99_abs_err": 15.651467402707723
+      },
+      {
+        "candidate_id": 30,
+        "mhz": 250.0,
+        "real_p99": 7.429526318577714,
+        "pred_p99_mean": 11.000601490338644,
+        "p99_abs_err": 3.5710751717609304
+      },
+      {
+        "candidate_id": 359,
+        "mhz": 250.0,
+        "real_p99": 6.634663845226521,
+        "pred_p99_mean": 6.874254822731018,
+        "p99_abs_err": 0.23959097750449665
+      },
+      {
+        "candidate_id": 365,
+        "mhz": 250.0,
+        "real_p99": 7.7644260809395,
+        "pred_p99_mean": 8.828267256418863,
+        "p99_abs_err": 1.0638411754793635
+      },
+      {
+        "candidate_id": 283,
+        "mhz": 250.0,
+        "real_p99": 7.783790273070584,
+        "pred_p99_mean": 9.41355554262797,
+        "p99_abs_err": 1.629765269557386
+      },
+      {
+        "candidate_id": 35,
+        "mhz": 250.0,
+        "real_p99": 8.979045761041931,
+        "pred_p99_mean": 8.416796922683716,
+        "p99_abs_err": 0.5622488383582152
+      },
+      {
+        "candidate_id": 314,
+        "mhz": 250.0,
+        "real_p99": 24.73923848581262,
+        "pred_p99_mean": 10.61636749903361,
+        "p99_abs_err": 14.122870986779011
+      },
+      {
+        "candidate_id": 23,
+        "mhz": 250.0,
+        "real_p99": 24.645205362014686,
+        "pred_p99_mean": 7.606576204299927,
+        "p99_abs_err": 17.03862915771476
+      },
+      {
+        "candidate_id": 206,
+        "mhz": 250.0,
+        "real_p99": 11.29520048396129,
+        "pred_p99_mean": 9.2676629225413,
+        "p99_abs_err": 2.02753756141999
+      },
+      {
+        "candidate_id": 261,
+        "mhz": 250.0,
+        "real_p99": 9.148499694851088,
+        "pred_p99_mean": 7.512599190076192,
+        "p99_abs_err": 1.635900504774896
+      },
+      {
+        "candidate_id": 149,
+        "mhz": 250.0,
+        "real_p99": 11.64342424895883,
+        "pred_p99_mean": 9.63642132282257,
+        "p99_abs_err": 2.007002926136259
+      },
+      {
+        "candidate_id": 53,
+        "mhz": 250.0,
+        "real_p99": 16.0094163272601,
+        "pred_p99_mean": 6.8533962170283,
+        "p99_abs_err": 9.1560201102318
+      },
+      {
+        "candidate_id": 144,
+        "mhz": 250.0,
+        "real_p99": 15.32111081636056,
+        "pred_p99_mean": 5.988974948724111,
+        "p99_abs_err": 9.332135867636449
+      },
+      {
+        "candidate_id": 299,
+        "mhz": 250.0,
+        "real_p99": 14.880542846586218,
+        "pred_p99_mean": 8.165032267570496,
+        "p99_abs_err": 6.715510579015723
+      },
+      {
+        "candidate_id": 162,
+        "mhz": 250.0,
+        "real_p99": 10.75644518075478,
+        "pred_p99_mean": 9.482015450795492,
+        "p99_abs_err": 1.2744297299592873
+      },
+      {
+        "candidate_id": 120,
+        "mhz": 250.0,
+        "real_p99": 5.26826202363855,
+        "pred_p99_mean": 7.251047293345134,
+        "p99_abs_err": 1.982785269706584
+      },
+      {
+        "candidate_id": 106,
+        "mhz": 250.0,
+        "real_p99": 22.791503564833878,
+        "pred_p99_mean": 7.251649618148804,
+        "p99_abs_err": 15.539853946685074
+      },
+      {
+        "candidate_id": 95,
+        "mhz": 80.0,
+        "real_p99": 2.617982707075426,
+        "pred_p99_mean": 9.587779760360718,
+        "p99_abs_err": 6.969797053285292
+      },
+      {
+        "candidate_id": 136,
+        "mhz": 250.0,
+        "real_p99": 14.432726652713765,
+        "pred_p99_mean": 8.829384644826254,
+        "p99_abs_err": 5.603342007887511
+      },
+      {
+        "candidate_id": 362,
+        "mhz": 250.0,
+        "real_p99": 15.171513759766581,
+        "pred_p99_mean": 6.437863866488139,
+        "p99_abs_err": 8.733649893278443
+      },
+      {
+        "candidate_id": 129,
+        "mhz": 250.0,
+        "real_p99": 10.236475462555926,
+        "pred_p99_mean": 5.922989805539449,
+        "p99_abs_err": 4.313485657016478
+      },
+      {
+        "candidate_id": 33,
+        "mhz": 250.0,
+        "real_p99": 5.549188383506153,
+        "pred_p99_mean": 7.957775394121806,
+        "p99_abs_err": 2.408587010615653
+      },
+      {
+        "candidate_id": 377,
+        "mhz": 250.0,
+        "real_p99": 5.597791852149948,
+        "pred_p99_mean": 9.106685400009155,
+        "p99_abs_err": 3.5088935478592074
+      },
+      {
+        "candidate_id": 246,
+        "mhz": 250.0,
+        "real_p99": 23.515525429928875,
+        "pred_p99_mean": 7.790855964024861,
+        "p99_abs_err": 15.724669465904014
+      }
+    ],
+    "checkpoint_path": "experiments/exp057_structured_graph/checkpoints/last_model.pt",
+    "checkpoint_epoch": 1100,
+    "checkpoint_val_loss": 1.6459377268527418,
+    "phase": "pre_finetune"
+  },
+  "post_finetune": {
+    "n": 36,
+    "p99_mae": 5.950977592721239,
+    "p99_median_ae": 3.9411537070018943,
+    "rows": [
+      {
+        "candidate_id": 324,
+        "mhz": 250.0,
+        "real_p99": 17.05128081976436,
+        "pred_p99_mean": 8.183753252029419,
+        "p99_abs_err": 8.867527567734943
+      },
+      {
+        "candidate_id": 96,
+        "mhz": 250.0,
+        "real_p99": 4.9906086856965155,
+        "pred_p99_mean": 5.248053391774495,
+        "p99_abs_err": 0.25744470607797965
+      },
+      {
+        "candidate_id": 81,
+        "mhz": 250.0,
+        "real_p99": 20.83924489859134,
+        "pred_p99_mean": 13.16174054145813,
+        "p99_abs_err": 7.677504357133209
+      },
+      {
+        "candidate_id": 343,
+        "mhz": 250.0,
+        "real_p99": 5.266832304372004,
+        "pred_p99_mean": 7.292234381039937,
+        "p99_abs_err": 2.025402076667933
+      },
+      {
+        "candidate_id": 296,
+        "mhz": 250.0,
+        "real_p99": 12.536449506065555,
+        "pred_p99_mean": 11.48088268438975,
+        "p99_abs_err": 1.0555668216758054
+      },
+      {
+        "candidate_id": 18,
+        "mhz": 250.0,
+        "real_p99": 6.163516845412886,
+        "pred_p99_mean": 8.151065548261007,
+        "p99_abs_err": 1.9875487028481214
+      },
+      {
+        "candidate_id": 9,
+        "mhz": 250.0,
+        "real_p99": 22.66726810739522,
+        "pred_p99_mean": 7.337603410085042,
+        "p99_abs_err": 15.329664697310179
+      },
+      {
+        "candidate_id": 156,
+        "mhz": 250.0,
+        "real_p99": 6.878647734677507,
+        "pred_p99_mean": 8.693355003992716,
+        "p99_abs_err": 1.8147072693152086
+      },
+      {
+        "candidate_id": 124,
+        "mhz": 250.0,
+        "real_p99": 24.07565523124874,
+        "pred_p99_mean": 9.176998734474182,
+        "p99_abs_err": 14.898656496774557
+      },
+      {
+        "candidate_id": 55,
+        "mhz": 250.0,
+        "real_p99": 19.505146964684066,
+        "pred_p99_mean": 4.566956996917725,
+        "p99_abs_err": 14.938189967766341
+      },
+      {
+        "candidate_id": 330,
+        "mhz": 250.0,
+        "real_p99": 18.61398947441434,
+        "pred_p99_mean": 13.411250789960226,
+        "p99_abs_err": 5.202738684454113
+      },
+      {
+        "candidate_id": 2,
+        "mhz": 250.0,
+        "real_p99": 20.54303248464681,
+        "pred_p99_mean": 9.8877960840861,
+        "p99_abs_err": 10.655236400560712
+      },
+      {
+        "candidate_id": 155,
+        "mhz": 250.0,
+        "real_p99": 22.57257350279012,
+        "pred_p99_mean": 8.815376480420431,
+        "p99_abs_err": 13.75719702236969
+      },
+      {
+        "candidate_id": 30,
+        "mhz": 250.0,
+        "real_p99": 7.429526318577714,
+        "pred_p99_mean": 6.037608067194621,
+        "p99_abs_err": 1.3919182513830926
+      },
+      {
+        "candidate_id": 359,
+        "mhz": 250.0,
+        "real_p99": 6.634663845226521,
+        "pred_p99_mean": 8.433980584144592,
+        "p99_abs_err": 1.7993167389180709
+      },
+      {
+        "candidate_id": 365,
+        "mhz": 250.0,
+        "real_p99": 7.7644260809395,
+        "pred_p99_mean": 8.831257065137228,
+        "p99_abs_err": 1.0668309841977281
+      },
+      {
+        "candidate_id": 283,
+        "mhz": 250.0,
+        "real_p99": 7.783790273070584,
+        "pred_p99_mean": 12.491535107294718,
+        "p99_abs_err": 4.707744834224134
+      },
+      {
+        "candidate_id": 35,
+        "mhz": 250.0,
+        "real_p99": 8.979045761041931,
+        "pred_p99_mean": 8.432960152626038,
+        "p99_abs_err": 0.5460856084158934
+      },
+      {
+        "candidate_id": 314,
+        "mhz": 250.0,
+        "real_p99": 24.73923848581262,
+        "pred_p99_mean": 7.980473597844441,
+        "p99_abs_err": 16.75876488796818
+      },
+      {
+        "candidate_id": 23,
+        "mhz": 250.0,
+        "real_p99": 24.645205362014686,
+        "pred_p99_mean": 10.16560141245524,
+        "p99_abs_err": 14.479603949559445
+      },
+      {
+        "candidate_id": 206,
+        "mhz": 250.0,
+        "real_p99": 11.29520048396129,
+        "pred_p99_mean": 12.947263161341349,
+        "p99_abs_err": 1.6520626773800586
+      },
+      {
+        "candidate_id": 261,
+        "mhz": 250.0,
+        "real_p99": 9.148499694851088,
+        "pred_p99_mean": 9.753081719080607,
+        "p99_abs_err": 0.6045820242295186
+      },
+      {
+        "candidate_id": 149,
+        "mhz": 250.0,
+        "real_p99": 11.64342424895883,
+        "pred_p99_mean": 13.354644060134888,
+        "p99_abs_err": 1.7112198111760577
+      },
+      {
+        "candidate_id": 53,
+        "mhz": 250.0,
+        "real_p99": 16.0094163272601,
+        "pred_p99_mean": 11.616643985112509,
+        "p99_abs_err": 4.392772342147593
+      },
+      {
+        "candidate_id": 144,
+        "mhz": 250.0,
+        "real_p99": 15.32111081636056,
+        "pred_p99_mean": 10.10622795422872,
+        "p99_abs_err": 5.214882862131841
+      },
+      {
+        "candidate_id": 299,
+        "mhz": 250.0,
+        "real_p99": 14.880542846586218,
+        "pred_p99_mean": 6.961598833401998,
+        "p99_abs_err": 7.918944013184221
+      },
+      {
+        "candidate_id": 162,
+        "mhz": 250.0,
+        "real_p99": 10.75644518075478,
+        "pred_p99_mean": 11.046724359194437,
+        "p99_abs_err": 0.29027917843965767
+      },
+      {
+        "candidate_id": 120,
+        "mhz": 250.0,
+        "real_p99": 5.26826202363855,
+        "pred_p99_mean": 5.954548041025798,
+        "p99_abs_err": 0.686286017387248
+      },
+      {
+        "candidate_id": 106,
+        "mhz": 250.0,
+        "real_p99": 22.791503564833878,
+        "pred_p99_mean": 8.154430071512857,
+        "p99_abs_err": 14.63707349332102
+      },
+      {
+        "candidate_id": 95,
+        "mhz": 80.0,
+        "real_p99": 2.617982707075426,
+        "pred_p99_mean": 9.038613637288412,
+        "p99_abs_err": 6.420630930212987
+      },
+      {
+        "candidate_id": 136,
+        "mhz": 250.0,
+        "real_p99": 14.432726652713765,
+        "pred_p99_mean": 12.898798863093058,
+        "p99_abs_err": 1.5339277896207069
+      },
+      {
+        "candidate_id": 362,
+        "mhz": 250.0,
+        "real_p99": 15.171513759766581,
+        "pred_p99_mean": 8.674657503763834,
+        "p99_abs_err": 6.496856256002747
+      },
+      {
+        "candidate_id": 129,
+        "mhz": 250.0,
+        "real_p99": 10.236475462555926,
+        "pred_p99_mean": 13.012995958328247,
+        "p99_abs_err": 2.7765204957723206
+      },
+      {
+        "candidate_id": 33,
+        "mhz": 250.0,
+        "real_p99": 5.549188383506153,
+        "pred_p99_mean": 8.166524489720663,
+        "p99_abs_err": 2.61733610621451
+      },
+      {
+        "candidate_id": 377,
+        "mhz": 250.0,
+        "real_p99": 5.597791852149948,
+        "pred_p99_mean": 9.087326924006144,
+        "p99_abs_err": 3.4895350718561957
+      },
+      {
+        "candidate_id": 246,
+        "mhz": 250.0,
+        "real_p99": 23.515525429928875,
+        "pred_p99_mean": 8.94089118639628,
+        "p99_abs_err": 14.574634243532595
+      }
+    ],
+    "checkpoint_path": "experiments/exp057_structured_graph/checkpoints/last_model.pt",
+    "checkpoint_epoch": 1150,
+    "checkpoint_val_loss": 1.5755769009285785,
+    "phase": "post_finetune"
+  },
+  "training_off_anchor": {
+    "available": true,
+    "path": "/home/ubuntu/genai_pdn/experiments/exp057_structured_graph/metrics/off_anchor_eval.csv",
+    "epoch": 1150,
+    "rows": [
+      {
+        "epoch": 1150,
+        "mhz": 100.0,
+        "kind": "layout_cross",
+        "n": 3840,
+        "hm_fg_mse_mean": 1.4002850665446507,
+        "pearson_fg_mean": 0.46977826471804746,
+        "peak_loc_err_mean": 0.03370423846038572
+      },
+      {
+        "epoch": 1150,
+        "mhz": 270.0,
+        "kind": "layout_cross",
+        "n": 3840,
+        "hm_fg_mse_mean": 0.6635490220202579,
+        "pearson_fg_mean": 0.7485740350897686,
+        "peak_loc_err_mean": 0.023641760582355193
+      },
+      {
+        "epoch": 1150,
+        "mhz": 400.0,
+        "kind": "layout_cross",
+        "n": 3840,
+        "hm_fg_mse_mean": 0.7346782672488795,
+        "pearson_fg_mean": 0.6940160511459984,
+        "peak_loc_err_mean": 0.023216445312815873
+      }
+    ]
+  },
+  "improvement": {
+    "p99_mae_delta": -0.9546015073507368,
+    "p99_median_ae_delta": -1.3495699074843195,
+    "n_pre": 36,
+    "n_post": 36,
+    "p99_mae_pct": 13.823627150122531
+  },
+  "finetune": {
+    "enabled": true,
+    "extra_epochs": 50,
+    "start_epoch": 1100,
+    "end_epoch": 1150,
+    "checkpoint_path": "experiments/exp057_structured_graph/checkpoints/last_model.pt",
+    "overlay_data_dir": "datasets/data_multifreq_al_overlay_exp057",
+    "overlay_sample_weight": 40.0,
+    "end_val_loss": 1.5755769009285785,
+    "end_train_loss": 4.41200590133667,
+    "start_val_loss": 1.6459377268527418,
+    "start_train_total_loss": 4.691307067871094,
+    "end_val_loss_csv": 1.5755769009285785,
+    "end_train_total_loss": 4.41200590133667,
+    "end_train_heatmap_loss": 0.17178235948085785,
+    "end_val_heatmap_loss": 0.004327893786211597,
+    "val_loss_delta": -0.07036082592416326
+  },
+  "cycle_context": {
+    "iteration": 4,
+    "iteration_dir": "/home/ubuntu/genai_pdn/active_learning_pi/runs/al_exp057_001/iter_0004",
+    "num_candidates": 384,
+    "num_selected": 48,
+    "badness_min": 21.066977145857123,
+    "badness_max": 83.28329755359321,
+    "num_ingest_total": 48,
+    "num_ingest_ok": 48,
+    "overlay_total": 88,
+    "overlay_added_last": 48,
+    "overlay_root": "/home/ubuntu/genai_pdn/datasets/data_multifreq_al_overlay_exp057"
+  }
+}

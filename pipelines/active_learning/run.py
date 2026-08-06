@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Active-learning PI pipeline for exp057.
+"""Active-learning PI pipeline (exp059 capacity/freq by default).
 
 Run:
     python pipelines/active_learning/run.py
 
 Edit CONFIG below, then run the command above.
 
-``full`` = all 7 steps: generate → infer → select → ECAD → ingest → overlay → fine-tune.
+``full`` = all 8 steps: generate → infer → select → ECAD → ingest → overlay → fine-tune → post-finetune eval.
+Use ``active_learning_pi/config/exp057.json`` / ``exp058.json`` only for legacy runs.
 """
 from __future__ import annotations
 
@@ -34,10 +35,15 @@ from active_learning_pi.al.pipeline import (  # noqa: E402
 # =============================================================================
 
 COMMAND = "full"
-# full | cycle | generate | infer | select-bad | build-peb | simulate | ingest |
-# normalize | evaluate | build-overlay | finetune | finetune-hint
+# full | cycle | occ-warmup | generate | infer | select-bad | build-peb | simulate | ingest |
+# normalize | evaluate | evaluate-pre-finetune | evaluate-post-finetune | evaluate-full |
+# evaluate-report | evaluate-decision | build-overlay | finetune | finetune-hint
 
-CONFIG_PATH = "active_learning_pi/config/exp057.json"  # None → default.json
+# Primary: exp059 + residual-GP acquisition. Alternatives:
+#   exp059.json            — MC acquisition on exp059
+#   exp059_random.json     — random control (equal ECAD budget)
+#   exp057_gp_error.json   — legacy
+CONFIG_PATH = "active_learning_pi/config/exp059_gp_error.json"
 
 ITERATION = None  # force iteration index; None = latest from disk
 
@@ -57,6 +63,10 @@ def main() -> int:
         cmd_generate(cfg, groot, it)
         cmd_infer(cfg, groot, it)
         return 0
+
+    if COMMAND == "occ-warmup":
+        from active_learning_pi.al.pipeline import cmd_occ_only_warmup
+        return cmd_occ_only_warmup(cfg, groot)
 
     return main_from_config(
         command=COMMAND,

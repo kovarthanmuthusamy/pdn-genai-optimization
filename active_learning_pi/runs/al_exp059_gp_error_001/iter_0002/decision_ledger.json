@@ -1,0 +1,1631 @@
+{
+  "generated_utc": "2026-07-21 10:19:17 UTC",
+  "run_name": "al_exp059_gp_error_001",
+  "experiment_dir": "experiments/exp059_capacity_freq",
+  "iteration": 2,
+  "acquisition_mode": "gp_error",
+  "acquisition_ab_path": "/home/ubuntu/genai_pdn/active_learning_pi/runs/acquisition_ab_validation_exp059/LATEST_acquisition_ab.json",
+  "claims": [
+    {
+      "id": "acq_direction",
+      "statement": "Acquisition / uncertainty scores rank true ECAD error (Spearman > 0).",
+      "status": "FAIL",
+      "evidence": {
+        "n": 247,
+        "spearman_badness_vs_p99_err": -0.07160035293705425,
+        "pearson_badness_vs_p99_err": -0.04452893933218536,
+        "top_vs_bottom_half_lift": 0.8027854311355177,
+        "selected_vs_all_lift": 1.0,
+        "ranking_ok": false
+      },
+      "note": "Scoring does NOT beat chance on labeled off-anchor \u2014 do not trust AL selection."
+    },
+    {
+      "id": "acq_ab_gp_vs_random",
+      "statement": "Equal-budget GP(mu) beats random on holdout (top-k true residual + Spearman>0).",
+      "status": "PASS",
+      "evidence": {
+        "verdict": "PASS \u2014 GP(mu) top-k true residual > random and Spearman>0",
+        "gp_top_k_mean_true_y": 1.4449784431142758,
+        "gp_spearman": 0.6761049567993337,
+        "gp_lift_vs_random": 2.713373248859672,
+        "random_top_k_mean_true_y": 0.5325395036313363,
+        "budget_k": 80,
+        "n_test": 896,
+        "experiment": "experiments/exp059_capacity_freq"
+      },
+      "note": "PASS \u2014 GP(mu) top-k true residual > random and Spearman>0"
+    },
+    {
+      "id": "acq_ab_gp_vs_mc",
+      "statement": "Equal-budget GP beats MC auto_bad on the same holdout subset.",
+      "status": "UNCERTAIN",
+      "evidence": {},
+      "note": "MC not included (INCLUDE_MC=False) \u2014 optional when GPU free"
+    },
+    {
+      "id": "ft_physical_improve",
+      "statement": "Fine-tune reduced off-anchor physical p99 MAE vs pre-finetune.",
+      "status": "PASS",
+      "evidence": {
+        "n_pre": 247,
+        "n_post": 247,
+        "p99_mae_pre": 10.472763567885131,
+        "p99_mae_post": 10.035623311204157,
+        "p99_mae_delta": -0.43714025668097456,
+        "p99_mae_pct": 4.1740678460599545,
+        "p99_median_ae_delta": -0.06798914128275868
+      },
+      "note": "Physical accuracy improved on labeled AL layouts."
+    },
+    {
+      "id": "eval_budget_trust",
+      "statement": "ECAD ingest covered \u226590% of selected budget (evaluation not starved).",
+      "status": "PASS",
+      "evidence": {
+        "num_selected": 640,
+        "num_ingest_ok": 640,
+        "num_candidates": 12800,
+        "off_anchor_mhz": [
+          155.0,
+          250.0,
+          265.0
+        ]
+      },
+      "note": "Ingest coverage OK."
+    },
+    {
+      "id": "train_off_anchor_logged",
+      "statement": "Training off-anchor (layout_cross) metrics were logged for this checkpoint epoch.",
+      "status": "PASS",
+      "evidence": {
+        "epoch": 460,
+        "n_mhz_rows": 3,
+        "path": "/home/ubuntu/genai_pdn/experiments/exp059_capacity_freq/metrics/off_anchor_eval.csv"
+      },
+      "note": "Use FG MSE / Pearson trends across cycles as secondary evidence."
+    }
+  ],
+  "rollup": {
+    "overall": "FAIL",
+    "summary": "Do not claim improvement / correct uncertainty until FAIL claims are resolved: acq_direction",
+    "pass_ids": [
+      "acq_ab_gp_vs_random",
+      "ft_physical_improve",
+      "eval_budget_trust",
+      "train_off_anchor_logged"
+    ],
+    "fail_ids": [
+      "acq_direction"
+    ],
+    "uncertain_ids": [
+      "acq_ab_gp_vs_mc"
+    ]
+  },
+  "key_numbers": {
+    "acquisition_rank": {
+      "available": true,
+      "n": 247,
+      "off_anchor_mhz": [
+        155.0,
+        250.0,
+        265.0
+      ],
+      "score_field": "badness",
+      "error_field": "p99_abs_err",
+      "spearman_badness_vs_p99_err": -0.07160035293705425,
+      "pearson_badness_vs_p99_err": -0.04452893933218536,
+      "mean_p99_err_all_labeled": 10.47276356788513,
+      "mean_p99_err_top_half_badness": 9.289862052105727,
+      "mean_p99_err_bottom_half_badness": 11.572036177793455,
+      "top_vs_bottom_half_lift": 0.8027854311355177,
+      "n_selected_labeled": 247,
+      "mean_p99_err_selected": 10.47276356788513,
+      "mean_p99_err_top_k_by_badness": 10.472763567885131,
+      "selected_vs_all_lift": 1.0,
+      "ranking_ok": false,
+      "rows": [
+        {
+          "candidate_id": 185,
+          "badness": 0.5912160873413086,
+          "p99_abs_err": 8.72932385206408,
+          "selected": true
+        },
+        {
+          "candidate_id": 208,
+          "badness": 0.6444833278656006,
+          "p99_abs_err": 1.491773492601388,
+          "selected": true
+        },
+        {
+          "candidate_id": 326,
+          "badness": 0.47000885009765625,
+          "p99_abs_err": 11.473342510248472,
+          "selected": true
+        },
+        {
+          "candidate_id": 337,
+          "badness": 0.6449075937271118,
+          "p99_abs_err": 1.887359988218971,
+          "selected": true
+        },
+        {
+          "candidate_id": 355,
+          "badness": 0.6862626075744629,
+          "p99_abs_err": 1.610715963980574,
+          "selected": true
+        },
+        {
+          "candidate_id": 388,
+          "badness": 0.6468510627746582,
+          "p99_abs_err": 15.926461122810746,
+          "selected": true
+        },
+        {
+          "candidate_id": 422,
+          "badness": 0.5957865118980408,
+          "p99_abs_err": 3.249243771559014,
+          "selected": true
+        },
+        {
+          "candidate_id": 484,
+          "badness": 0.5891961455345154,
+          "p99_abs_err": 3.1451339621612124,
+          "selected": true
+        },
+        {
+          "candidate_id": 567,
+          "badness": 0.5003964304924011,
+          "p99_abs_err": 15.213817823278418,
+          "selected": true
+        },
+        {
+          "candidate_id": 719,
+          "badness": 0.6746731996536255,
+          "p99_abs_err": 20.7591189900284,
+          "selected": true
+        },
+        {
+          "candidate_id": 804,
+          "badness": 0.6274576187133789,
+          "p99_abs_err": 3.878599931984457,
+          "selected": true
+        },
+        {
+          "candidate_id": 813,
+          "badness": 0.4964412748813629,
+          "p99_abs_err": 11.823515482210965,
+          "selected": true
+        },
+        {
+          "candidate_id": 867,
+          "badness": 0.6162172555923462,
+          "p99_abs_err": 19.10036475192231,
+          "selected": true
+        },
+        {
+          "candidate_id": 914,
+          "badness": 0.6368067860603333,
+          "p99_abs_err": 23.592800305474647,
+          "selected": true
+        },
+        {
+          "candidate_id": 966,
+          "badness": 0.4931712746620178,
+          "p99_abs_err": 10.650025311661437,
+          "selected": true
+        },
+        {
+          "candidate_id": 991,
+          "badness": 0.6733222007751465,
+          "p99_abs_err": 22.145436431009436,
+          "selected": true
+        },
+        {
+          "candidate_id": 1025,
+          "badness": 0.4633815586566925,
+          "p99_abs_err": 26.971663201231422,
+          "selected": true
+        },
+        {
+          "candidate_id": 1106,
+          "badness": 0.8484973311424255,
+          "p99_abs_err": 1.049007800893651,
+          "selected": true
+        },
+        {
+          "candidate_id": 1212,
+          "badness": 0.6381134986877441,
+          "p99_abs_err": 1.149656705243212,
+          "selected": true
+        },
+        {
+          "candidate_id": 1220,
+          "badness": 0.49621689319610596,
+          "p99_abs_err": 14.410655516878279,
+          "selected": true
+        },
+        {
+          "candidate_id": 1247,
+          "badness": 0.4514259696006775,
+          "p99_abs_err": 7.059101459700948,
+          "selected": true
+        },
+        {
+          "candidate_id": 1275,
+          "badness": 0.4580419361591339,
+          "p99_abs_err": 43.02124524514773,
+          "selected": true
+        },
+        {
+          "candidate_id": 1290,
+          "badness": 0.6836587190628052,
+          "p99_abs_err": 1.2686101431260615,
+          "selected": true
+        },
+        {
+          "candidate_id": 1331,
+          "badness": 0.45393818616867065,
+          "p99_abs_err": 12.52571533245166,
+          "selected": true
+        },
+        {
+          "candidate_id": 1341,
+          "badness": 0.7282074689865112,
+          "p99_abs_err": 0.9406714226821027,
+          "selected": true
+        },
+        {
+          "candidate_id": 1347,
+          "badness": 0.696224570274353,
+          "p99_abs_err": 1.6780607657071593,
+          "selected": true
+        },
+        {
+          "candidate_id": 1365,
+          "badness": 0.4719000458717346,
+          "p99_abs_err": 7.644346078260279,
+          "selected": true
+        },
+        {
+          "candidate_id": 1536,
+          "badness": 0.5953191518783569,
+          "p99_abs_err": 31.878327063575348,
+          "selected": true
+        },
+        {
+          "candidate_id": 1578,
+          "badness": 0.59679114818573,
+          "p99_abs_err": 22.800750096015367,
+          "selected": true
+        },
+        {
+          "candidate_id": 1598,
+          "badness": 0.6068888902664185,
+          "p99_abs_err": 8.232708725002988,
+          "selected": true
+        },
+        {
+          "candidate_id": 1643,
+          "badness": 0.6568130850791931,
+          "p99_abs_err": 1.5423882088669099,
+          "selected": true
+        },
+        {
+          "candidate_id": 1654,
+          "badness": 0.4772065579891205,
+          "p99_abs_err": 12.022082168136528,
+          "selected": true
+        },
+        {
+          "candidate_id": 1660,
+          "badness": 0.6236023306846619,
+          "p99_abs_err": 8.771279724965728,
+          "selected": true
+        },
+        {
+          "candidate_id": 1676,
+          "badness": 0.44794005155563354,
+          "p99_abs_err": 8.75111233389558,
+          "selected": true
+        },
+        {
+          "candidate_id": 1694,
+          "badness": 0.6423329710960388,
+          "p99_abs_err": 22.73346983449301,
+          "selected": true
+        },
+        {
+          "candidate_id": 1840,
+          "badness": 0.7260550260543823,
+          "p99_abs_err": 1.5933979009164196,
+          "selected": true
+        },
+        {
+          "candidate_id": 1913,
+          "badness": 0.4684149920940399,
+          "p99_abs_err": 4.891685595193033,
+          "selected": true
+        },
+        {
+          "candidate_id": 1924,
+          "badness": 0.6419886946678162,
+          "p99_abs_err": 12.867090652508864,
+          "selected": true
+        },
+        {
+          "candidate_id": 2018,
+          "badness": 0.5016406774520874,
+          "p99_abs_err": 2.088389042494237,
+          "selected": true
+        },
+        {
+          "candidate_id": 2132,
+          "badness": 0.6184738874435425,
+          "p99_abs_err": 0.23891974612743105,
+          "selected": true
+        },
+        {
+          "candidate_id": 2179,
+          "badness": 0.6022299528121948,
+          "p99_abs_err": 7.122866338655017,
+          "selected": true
+        },
+        {
+          "candidate_id": 2183,
+          "badness": 0.48845231533050537,
+          "p99_abs_err": 32.09037072761002,
+          "selected": true
+        },
+        {
+          "candidate_id": 2231,
+          "badness": 0.4442673325538635,
+          "p99_abs_err": 10.223261561422387,
+          "selected": true
+        },
+        {
+          "candidate_id": 2260,
+          "badness": 0.6273272633552551,
+          "p99_abs_err": 12.909024673431066,
+          "selected": true
+        },
+        {
+          "candidate_id": 2273,
+          "badness": 0.4403577148914337,
+          "p99_abs_err": 2.6159248338952734,
+          "selected": true
+        },
+        {
+          "candidate_id": 2365,
+          "badness": 0.73256516456604,
+          "p99_abs_err": 21.777183839501895,
+          "selected": true
+        },
+        {
+          "candidate_id": 2473,
+          "badness": 0.6537231802940369,
+          "p99_abs_err": 1.2244781039706738,
+          "selected": true
+        },
+        {
+          "candidate_id": 2513,
+          "badness": 0.65932297706604,
+          "p99_abs_err": 1.320762888995977,
+          "selected": true
+        },
+        {
+          "candidate_id": 2519,
+          "badness": 0.7607091069221497,
+          "p99_abs_err": 17.965653489161923,
+          "selected": true
+        },
+        {
+          "candidate_id": 2543,
+          "badness": 0.44845715165138245,
+          "p99_abs_err": 17.18632642748171,
+          "selected": true
+        },
+        {
+          "candidate_id": 2682,
+          "badness": 0.637556254863739,
+          "p99_abs_err": 1.6519000578987937,
+          "selected": true
+        },
+        {
+          "candidate_id": 2820,
+          "badness": 0.44836676120758057,
+          "p99_abs_err": 8.995912325591874,
+          "selected": true
+        },
+        {
+          "candidate_id": 2887,
+          "badness": 0.7018171548843384,
+          "p99_abs_err": 1.2989489355036445,
+          "selected": true
+        },
+        {
+          "candidate_id": 2912,
+          "badness": 0.4529596269130707,
+          "p99_abs_err": 1.2673415044194005,
+          "selected": true
+        },
+        {
+          "candidate_id": 2944,
+          "badness": 0.6777701377868652,
+          "p99_abs_err": 22.053089353102692,
+          "selected": true
+        },
+        {
+          "candidate_id": 2952,
+          "badness": 0.6804656386375427,
+          "p99_abs_err": 1.7990063268477976,
+          "selected": true
+        },
+        {
+          "candidate_id": 3005,
+          "badness": 0.6283828020095825,
+          "p99_abs_err": 9.964760092399812,
+          "selected": true
+        },
+        {
+          "candidate_id": 3029,
+          "badness": 0.47630053758621216,
+          "p99_abs_err": 11.772251427461015,
+          "selected": true
+        },
+        {
+          "candidate_id": 3078,
+          "badness": 0.6464200019836426,
+          "p99_abs_err": 6.948859901625182,
+          "selected": true
+        },
+        {
+          "candidate_id": 3082,
+          "badness": 0.6638327836990356,
+          "p99_abs_err": 1.7167110888925605,
+          "selected": true
+        },
+        {
+          "candidate_id": 3120,
+          "badness": 0.6215038299560547,
+          "p99_abs_err": 3.347423912463423,
+          "selected": true
+        },
+        {
+          "candidate_id": 3253,
+          "badness": 0.6676275134086609,
+          "p99_abs_err": 3.9848415376154307,
+          "selected": true
+        },
+        {
+          "candidate_id": 3289,
+          "badness": 0.6564314365386963,
+          "p99_abs_err": 0.9127010622834026,
+          "selected": true
+        },
+        {
+          "candidate_id": 3299,
+          "badness": 0.6578750014305115,
+          "p99_abs_err": 3.901112237516423,
+          "selected": true
+        },
+        {
+          "candidate_id": 3309,
+          "badness": 0.5426173210144043,
+          "p99_abs_err": 44.04212161958344,
+          "selected": true
+        },
+        {
+          "candidate_id": 3311,
+          "badness": 0.6653900146484375,
+          "p99_abs_err": 4.351376333415093,
+          "selected": true
+        },
+        {
+          "candidate_id": 3333,
+          "badness": 0.4438896179199219,
+          "p99_abs_err": 8.003263576521853,
+          "selected": true
+        },
+        {
+          "candidate_id": 3384,
+          "badness": 0.5209183692932129,
+          "p99_abs_err": 9.863846478488671,
+          "selected": true
+        },
+        {
+          "candidate_id": 3449,
+          "badness": 0.6599209308624268,
+          "p99_abs_err": 2.3015911722620843,
+          "selected": true
+        },
+        {
+          "candidate_id": 3464,
+          "badness": 0.740684986114502,
+          "p99_abs_err": 2.5477821170154633,
+          "selected": true
+        },
+        {
+          "candidate_id": 3574,
+          "badness": 0.44902002811431885,
+          "p99_abs_err": 30.257287563686354,
+          "selected": true
+        },
+        {
+          "candidate_id": 3689,
+          "badness": 0.7092868089675903,
+          "p99_abs_err": 2.9687640670701345,
+          "selected": true
+        },
+        {
+          "candidate_id": 3747,
+          "badness": 0.7942687273025513,
+          "p99_abs_err": 36.213985185696046,
+          "selected": true
+        },
+        {
+          "candidate_id": 3774,
+          "badness": 0.6890391707420349,
+          "p99_abs_err": 3.361485934449142,
+          "selected": true
+        },
+        {
+          "candidate_id": 3781,
+          "badness": 0.5151185989379883,
+          "p99_abs_err": 2.9017780682288485,
+          "selected": true
+        },
+        {
+          "candidate_id": 3917,
+          "badness": 0.6853014230728149,
+          "p99_abs_err": 1.480141378781977,
+          "selected": true
+        },
+        {
+          "candidate_id": 3983,
+          "badness": 0.45563727617263794,
+          "p99_abs_err": 6.375518327422597,
+          "selected": true
+        },
+        {
+          "candidate_id": 4066,
+          "badness": 0.5395496487617493,
+          "p99_abs_err": 10.396623875056687,
+          "selected": true
+        },
+        {
+          "candidate_id": 4071,
+          "badness": 0.46001866459846497,
+          "p99_abs_err": 13.272684378052361,
+          "selected": true
+        },
+        {
+          "candidate_id": 4089,
+          "badness": 0.7099126577377319,
+          "p99_abs_err": 2.2771662193394238,
+          "selected": true
+        },
+        {
+          "candidate_id": 4192,
+          "badness": 0.4527052342891693,
+          "p99_abs_err": 14.880646939516872,
+          "selected": true
+        },
+        {
+          "candidate_id": 4224,
+          "badness": 0.6702170372009277,
+          "p99_abs_err": 14.254707363258582,
+          "selected": true
+        },
+        {
+          "candidate_id": 4269,
+          "badness": 0.6441411972045898,
+          "p99_abs_err": 2.161467475838073,
+          "selected": true
+        },
+        {
+          "candidate_id": 4407,
+          "badness": 0.6803104281425476,
+          "p99_abs_err": 9.371975272576378,
+          "selected": true
+        },
+        {
+          "candidate_id": 4409,
+          "badness": 0.6654989719390869,
+          "p99_abs_err": 0.5160058576186755,
+          "selected": true
+        },
+        {
+          "candidate_id": 4445,
+          "badness": 0.7055747509002686,
+          "p99_abs_err": 2.046614819469348,
+          "selected": true
+        },
+        {
+          "candidate_id": 4539,
+          "badness": 0.4820196032524109,
+          "p99_abs_err": 45.99858888573183,
+          "selected": true
+        },
+        {
+          "candidate_id": 4601,
+          "badness": 0.6822474002838135,
+          "p99_abs_err": 11.092696610158036,
+          "selected": true
+        },
+        {
+          "candidate_id": 4723,
+          "badness": 0.7335364818572998,
+          "p99_abs_err": 1.2058416293139427,
+          "selected": true
+        },
+        {
+          "candidate_id": 4724,
+          "badness": 0.6835596561431885,
+          "p99_abs_err": 11.303533301978424,
+          "selected": true
+        },
+        {
+          "candidate_id": 4732,
+          "badness": 0.44013193249702454,
+          "p99_abs_err": 15.53321155859781,
+          "selected": true
+        },
+        {
+          "candidate_id": 4770,
+          "badness": 0.7438198924064636,
+          "p99_abs_err": 12.913743945994742,
+          "selected": true
+        },
+        {
+          "candidate_id": 4818,
+          "badness": 0.8348398804664612,
+          "p99_abs_err": 1.2306283725926868,
+          "selected": true
+        },
+        {
+          "candidate_id": 4823,
+          "badness": 0.8972536325454712,
+          "p99_abs_err": 20.685834807854263,
+          "selected": true
+        },
+        {
+          "candidate_id": 4903,
+          "badness": 0.5381410717964172,
+          "p99_abs_err": 7.565714879277298,
+          "selected": true
+        },
+        {
+          "candidate_id": 5015,
+          "badness": 0.8887144923210144,
+          "p99_abs_err": 20.004214784134767,
+          "selected": true
+        },
+        {
+          "candidate_id": 5121,
+          "badness": 0.49993276596069336,
+          "p99_abs_err": 1.7748513592503894,
+          "selected": true
+        },
+        {
+          "candidate_id": 5272,
+          "badness": 0.8210078477859497,
+          "p99_abs_err": 11.732650764006411,
+          "selected": true
+        },
+        {
+          "candidate_id": 5342,
+          "badness": 0.8241307735443115,
+          "p99_abs_err": 8.453304877440987,
+          "selected": true
+        },
+        {
+          "candidate_id": 5402,
+          "badness": 0.8019798994064331,
+          "p99_abs_err": 9.994543328962934,
+          "selected": true
+        },
+        {
+          "candidate_id": 5430,
+          "badness": 0.525381326675415,
+          "p99_abs_err": 22.58177874566203,
+          "selected": true
+        },
+        {
+          "candidate_id": 5474,
+          "badness": 1.137054681777954,
+          "p99_abs_err": 19.14384745363299,
+          "selected": true
+        },
+        {
+          "candidate_id": 5482,
+          "badness": 0.5047211647033691,
+          "p99_abs_err": 9.608691061864306,
+          "selected": true
+        },
+        {
+          "candidate_id": 5511,
+          "badness": 0.7987542748451233,
+          "p99_abs_err": 4.978824277904478,
+          "selected": true
+        },
+        {
+          "candidate_id": 5532,
+          "badness": 0.8796284198760986,
+          "p99_abs_err": 27.71338461602987,
+          "selected": true
+        },
+        {
+          "candidate_id": 5546,
+          "badness": 0.5164280533790588,
+          "p99_abs_err": 25.690457550900867,
+          "selected": true
+        },
+        {
+          "candidate_id": 5591,
+          "badness": 0.8044532537460327,
+          "p99_abs_err": 1.8607782459336053,
+          "selected": true
+        },
+        {
+          "candidate_id": 5694,
+          "badness": 0.929328203201294,
+          "p99_abs_err": 15.599468949212497,
+          "selected": true
+        },
+        {
+          "candidate_id": 5831,
+          "badness": 0.9457386136054993,
+          "p99_abs_err": 15.302208955608815,
+          "selected": true
+        },
+        {
+          "candidate_id": 5862,
+          "badness": 0.8584564924240112,
+          "p99_abs_err": 17.35898211980166,
+          "selected": true
+        },
+        {
+          "candidate_id": 6039,
+          "badness": 0.4819096028804779,
+          "p99_abs_err": 1.7822816541988251,
+          "selected": true
+        },
+        {
+          "candidate_id": 6055,
+          "badness": 0.8277323842048645,
+          "p99_abs_err": 11.525050231258305,
+          "selected": true
+        },
+        {
+          "candidate_id": 6068,
+          "badness": 0.7913635969161987,
+          "p99_abs_err": 6.814091732291683,
+          "selected": true
+        },
+        {
+          "candidate_id": 6078,
+          "badness": 0.8446248769760132,
+          "p99_abs_err": 22.676305678163423,
+          "selected": true
+        },
+        {
+          "candidate_id": 6109,
+          "badness": 0.531243085861206,
+          "p99_abs_err": 1.827278007393689,
+          "selected": true
+        },
+        {
+          "candidate_id": 6141,
+          "badness": 0.48198166489601135,
+          "p99_abs_err": 14.248765388650767,
+          "selected": true
+        },
+        {
+          "candidate_id": 6148,
+          "badness": 0.5183788537979126,
+          "p99_abs_err": 19.902696316841592,
+          "selected": true
+        },
+        {
+          "candidate_id": 6156,
+          "badness": 0.7879989743232727,
+          "p99_abs_err": 1.4896697482968193,
+          "selected": true
+        },
+        {
+          "candidate_id": 6230,
+          "badness": 0.7743438482284546,
+          "p99_abs_err": 1.8450654167985556,
+          "selected": true
+        },
+        {
+          "candidate_id": 6251,
+          "badness": 0.7630703449249268,
+          "p99_abs_err": 1.1873998271542114,
+          "selected": true
+        },
+        {
+          "candidate_id": 6308,
+          "badness": 0.5246061682701111,
+          "p99_abs_err": 9.376593252111661,
+          "selected": true
+        },
+        {
+          "candidate_id": 6376,
+          "badness": 0.784923791885376,
+          "p99_abs_err": 15.421678863973906,
+          "selected": true
+        },
+        {
+          "candidate_id": 6390,
+          "badness": 0.5096083283424377,
+          "p99_abs_err": 10.124746277220344,
+          "selected": true
+        },
+        {
+          "candidate_id": 6417,
+          "badness": 1.2733585834503174,
+          "p99_abs_err": 12.632882569463847,
+          "selected": true
+        },
+        {
+          "candidate_id": 6420,
+          "badness": 0.509809672832489,
+          "p99_abs_err": 24.02155720152361,
+          "selected": true
+        },
+        {
+          "candidate_id": 6441,
+          "badness": 1.076690435409546,
+          "p99_abs_err": 10.356507643257066,
+          "selected": true
+        },
+        {
+          "candidate_id": 6508,
+          "badness": 0.7297294735908508,
+          "p99_abs_err": 1.0309255183543495,
+          "selected": true
+        },
+        {
+          "candidate_id": 6677,
+          "badness": 1.3888211250305176,
+          "p99_abs_err": 17.339595526846384,
+          "selected": true
+        },
+        {
+          "candidate_id": 6702,
+          "badness": 1.1616061925888062,
+          "p99_abs_err": 7.598240038189704,
+          "selected": true
+        },
+        {
+          "candidate_id": 6740,
+          "badness": 0.4683043658733368,
+          "p99_abs_err": 7.385953072165686,
+          "selected": true
+        },
+        {
+          "candidate_id": 6791,
+          "badness": 1.1193432807922363,
+          "p99_abs_err": 5.078623873950347,
+          "selected": true
+        },
+        {
+          "candidate_id": 6842,
+          "badness": 0.737383246421814,
+          "p99_abs_err": 2.493929943900202,
+          "selected": true
+        },
+        {
+          "candidate_id": 6874,
+          "badness": 0.8014236092567444,
+          "p99_abs_err": 14.57788741514197,
+          "selected": true
+        },
+        {
+          "candidate_id": 6908,
+          "badness": 1.2295427322387695,
+          "p99_abs_err": 2.5055673850509277,
+          "selected": true
+        },
+        {
+          "candidate_id": 6995,
+          "badness": 1.0873346328735352,
+          "p99_abs_err": 11.533904227602958,
+          "selected": true
+        },
+        {
+          "candidate_id": 7036,
+          "badness": 0.7129566073417664,
+          "p99_abs_err": 8.00125591673328,
+          "selected": true
+        },
+        {
+          "candidate_id": 7140,
+          "badness": 0.719565212726593,
+          "p99_abs_err": 1.5355614827459334,
+          "selected": true
+        },
+        {
+          "candidate_id": 7327,
+          "badness": 0.5149438977241516,
+          "p99_abs_err": 11.642175852714814,
+          "selected": true
+        },
+        {
+          "candidate_id": 7431,
+          "badness": 1.0404187440872192,
+          "p99_abs_err": 24.691656784434382,
+          "selected": true
+        },
+        {
+          "candidate_id": 7479,
+          "badness": 0.5423668622970581,
+          "p99_abs_err": 7.386331395099749,
+          "selected": true
+        },
+        {
+          "candidate_id": 7482,
+          "badness": 0.4618818163871765,
+          "p99_abs_err": 44.31264442824551,
+          "selected": true
+        },
+        {
+          "candidate_id": 7513,
+          "badness": 0.5828731060028076,
+          "p99_abs_err": 11.449833088489436,
+          "selected": true
+        },
+        {
+          "candidate_id": 7518,
+          "badness": 0.5227605700492859,
+          "p99_abs_err": 6.010240453931839,
+          "selected": true
+        },
+        {
+          "candidate_id": 7534,
+          "badness": 1.0667213201522827,
+          "p99_abs_err": 23.883413183874254,
+          "selected": true
+        },
+        {
+          "candidate_id": 7577,
+          "badness": 1.1501753330230713,
+          "p99_abs_err": 29.056623080064462,
+          "selected": true
+        },
+        {
+          "candidate_id": 7640,
+          "badness": 1.1610462665557861,
+          "p99_abs_err": 5.463430470117324,
+          "selected": true
+        },
+        {
+          "candidate_id": 7656,
+          "badness": 0.4936694800853729,
+          "p99_abs_err": 1.6688272073727424,
+          "selected": true
+        },
+        {
+          "candidate_id": 7713,
+          "badness": 0.7024263143539429,
+          "p99_abs_err": 20.31850012987523,
+          "selected": true
+        },
+        {
+          "candidate_id": 7807,
+          "badness": 0.4590948820114136,
+          "p99_abs_err": 19.166600334633742,
+          "selected": true
+        },
+        {
+          "candidate_id": 7840,
+          "badness": 0.6989489793777466,
+          "p99_abs_err": 5.083455647053526,
+          "selected": true
+        },
+        {
+          "candidate_id": 7914,
+          "badness": 0.4656757116317749,
+          "p99_abs_err": 11.361992892499913,
+          "selected": true
+        },
+        {
+          "candidate_id": 7933,
+          "badness": 1.0505878925323486,
+          "p99_abs_err": 11.508265185328082,
+          "selected": true
+        },
+        {
+          "candidate_id": 7960,
+          "badness": 0.6957793235778809,
+          "p99_abs_err": 1.0378508515355662,
+          "selected": true
+        },
+        {
+          "candidate_id": 7993,
+          "badness": 0.4974501430988312,
+          "p99_abs_err": 11.002689757360203,
+          "selected": true
+        },
+        {
+          "candidate_id": 8036,
+          "badness": 0.5221046805381775,
+          "p99_abs_err": 2.1877354330359022,
+          "selected": true
+        },
+        {
+          "candidate_id": 8040,
+          "badness": 1.2667803764343262,
+          "p99_abs_err": 9.085615230691074,
+          "selected": true
+        },
+        {
+          "candidate_id": 8059,
+          "badness": 0.6138486862182617,
+          "p99_abs_err": 10.814974450944945,
+          "selected": true
+        },
+        {
+          "candidate_id": 8123,
+          "badness": 0.7832105159759521,
+          "p99_abs_err": 6.398505390904967,
+          "selected": true
+        },
+        {
+          "candidate_id": 8127,
+          "badness": 0.533115804195404,
+          "p99_abs_err": 9.111101157711378,
+          "selected": true
+        },
+        {
+          "candidate_id": 8238,
+          "badness": 0.5299949645996094,
+          "p99_abs_err": 7.903990611924538,
+          "selected": true
+        },
+        {
+          "candidate_id": 8246,
+          "badness": 1.269106388092041,
+          "p99_abs_err": 2.926277956763631,
+          "selected": true
+        },
+        {
+          "candidate_id": 8283,
+          "badness": 1.165095567703247,
+          "p99_abs_err": 6.595978645830819,
+          "selected": true
+        },
+        {
+          "candidate_id": 8422,
+          "badness": 0.5152435898780823,
+          "p99_abs_err": 6.82332166977603,
+          "selected": true
+        },
+        {
+          "candidate_id": 8437,
+          "badness": 1.1953339576721191,
+          "p99_abs_err": 8.973918586262625,
+          "selected": true
+        },
+        {
+          "candidate_id": 8495,
+          "badness": 1.2032830715179443,
+          "p99_abs_err": 22.763565257954312,
+          "selected": true
+        },
+        {
+          "candidate_id": 8497,
+          "badness": 0.7593936920166016,
+          "p99_abs_err": 7.448466173262686,
+          "selected": true
+        },
+        {
+          "candidate_id": 8552,
+          "badness": 0.8598827123641968,
+          "p99_abs_err": 0.4064964169695573,
+          "selected": true
+        },
+        {
+          "candidate_id": 8556,
+          "badness": 1.2889553308486938,
+          "p99_abs_err": 11.155661877101885,
+          "selected": true
+        },
+        {
+          "candidate_id": 8590,
+          "badness": 0.5166191458702087,
+          "p99_abs_err": 19.453350102730127,
+          "selected": true
+        },
+        {
+          "candidate_id": 8782,
+          "badness": 0.5342891812324524,
+          "p99_abs_err": 18.323210151874616,
+          "selected": true
+        },
+        {
+          "candidate_id": 8787,
+          "badness": 0.5834280252456665,
+          "p99_abs_err": 8.604164731111098,
+          "selected": true
+        },
+        {
+          "candidate_id": 8832,
+          "badness": 0.7723375558853149,
+          "p99_abs_err": 4.5156790873882215,
+          "selected": true
+        },
+        {
+          "candidate_id": 8835,
+          "badness": 0.5682644248008728,
+          "p99_abs_err": 10.813896298630867,
+          "selected": true
+        },
+        {
+          "candidate_id": 8855,
+          "badness": 0.5728195905685425,
+          "p99_abs_err": 7.904708341719852,
+          "selected": true
+        },
+        {
+          "candidate_id": 8950,
+          "badness": 0.7844659686088562,
+          "p99_abs_err": 17.849122096904065,
+          "selected": true
+        },
+        {
+          "candidate_id": 8972,
+          "badness": 1.2590694427490234,
+          "p99_abs_err": 17.733684923025272,
+          "selected": true
+        },
+        {
+          "candidate_id": 9133,
+          "badness": 0.7498962879180908,
+          "p99_abs_err": 3.6850307328385634,
+          "selected": true
+        },
+        {
+          "candidate_id": 9163,
+          "badness": 1.2349238395690918,
+          "p99_abs_err": 4.60998709189785,
+          "selected": true
+        },
+        {
+          "candidate_id": 9172,
+          "badness": 1.1516079902648926,
+          "p99_abs_err": 13.278864590929999,
+          "selected": true
+        },
+        {
+          "candidate_id": 9176,
+          "badness": 1.2333238124847412,
+          "p99_abs_err": 3.881432414967599,
+          "selected": true
+        },
+        {
+          "candidate_id": 9284,
+          "badness": 0.832490086555481,
+          "p99_abs_err": 6.251278329150766,
+          "selected": true
+        },
+        {
+          "candidate_id": 9324,
+          "badness": 0.5368689894676208,
+          "p99_abs_err": 9.9996555064671,
+          "selected": true
+        },
+        {
+          "candidate_id": 9442,
+          "badness": 1.1792948246002197,
+          "p99_abs_err": 13.49472310031171,
+          "selected": true
+        },
+        {
+          "candidate_id": 9465,
+          "badness": 1.4084434509277344,
+          "p99_abs_err": 12.634702527586642,
+          "selected": true
+        },
+        {
+          "candidate_id": 9468,
+          "badness": 0.7815274000167847,
+          "p99_abs_err": 13.110362614293628,
+          "selected": true
+        },
+        {
+          "candidate_id": 9626,
+          "badness": 0.4986896514892578,
+          "p99_abs_err": 1.6975530788379105,
+          "selected": true
+        },
+        {
+          "candidate_id": 9708,
+          "badness": 1.1407110691070557,
+          "p99_abs_err": 3.6794747900352744,
+          "selected": true
+        },
+        {
+          "candidate_id": 9860,
+          "badness": 0.5264900326728821,
+          "p99_abs_err": 2.0125503888879877,
+          "selected": true
+        },
+        {
+          "candidate_id": 9909,
+          "badness": 1.0212585926055908,
+          "p99_abs_err": 13.952543512723988,
+          "selected": true
+        },
+        {
+          "candidate_id": 10058,
+          "badness": 1.0540449619293213,
+          "p99_abs_err": 1.9022640331262313,
+          "selected": true
+        },
+        {
+          "candidate_id": 10066,
+          "badness": 1.1080036163330078,
+          "p99_abs_err": 13.211385095424657,
+          "selected": true
+        },
+        {
+          "candidate_id": 10068,
+          "badness": 0.517583429813385,
+          "p99_abs_err": 15.800938737881943,
+          "selected": true
+        },
+        {
+          "candidate_id": 10078,
+          "badness": 0.8768653869628906,
+          "p99_abs_err": 4.609838777029747,
+          "selected": true
+        },
+        {
+          "candidate_id": 10095,
+          "badness": 1.2054824829101562,
+          "p99_abs_err": 9.09729747478953,
+          "selected": true
+        },
+        {
+          "candidate_id": 10216,
+          "badness": 0.5890891551971436,
+          "p99_abs_err": 1.469919821823603,
+          "selected": true
+        },
+        {
+          "candidate_id": 10267,
+          "badness": 1.2938898801803589,
+          "p99_abs_err": 25.000114602684157,
+          "selected": true
+        },
+        {
+          "candidate_id": 10280,
+          "badness": 0.5900111198425293,
+          "p99_abs_err": 8.267028672719068,
+          "selected": true
+        },
+        {
+          "candidate_id": 10325,
+          "badness": 1.119986891746521,
+          "p99_abs_err": 1.8744870292719664,
+          "selected": true
+        },
+        {
+          "candidate_id": 10374,
+          "badness": 1.1514909267425537,
+          "p99_abs_err": 6.5379583990367784,
+          "selected": true
+        },
+        {
+          "candidate_id": 10409,
+          "badness": 0.545987069606781,
+          "p99_abs_err": 29.124936817820604,
+          "selected": true
+        },
+        {
+          "candidate_id": 10415,
+          "badness": 0.8473306894302368,
+          "p99_abs_err": 1.7324191470769899,
+          "selected": true
+        },
+        {
+          "candidate_id": 10454,
+          "badness": 0.8233320713043213,
+          "p99_abs_err": 1.0878100604155732,
+          "selected": true
+        },
+        {
+          "candidate_id": 10479,
+          "badness": 0.9804353713989258,
+          "p99_abs_err": 5.70982693280795,
+          "selected": true
+        },
+        {
+          "candidate_id": 10540,
+          "badness": 0.8534888029098511,
+          "p99_abs_err": 1.3505434299461898,
+          "selected": true
+        },
+        {
+          "candidate_id": 10614,
+          "badness": 1.0164484977722168,
+          "p99_abs_err": 25.428262843153767,
+          "selected": true
+        },
+        {
+          "candidate_id": 10622,
+          "badness": 0.5405246019363403,
+          "p99_abs_err": 35.586166351576495,
+          "selected": true
+        },
+        {
+          "candidate_id": 10666,
+          "badness": 0.5213422179222107,
+          "p99_abs_err": 4.797004754701447,
+          "selected": true
+        },
+        {
+          "candidate_id": 10676,
+          "badness": 1.1372509002685547,
+          "p99_abs_err": 20.557678766464182,
+          "selected": true
+        },
+        {
+          "candidate_id": 10725,
+          "badness": 0.5767379999160767,
+          "p99_abs_err": 28.333270703818705,
+          "selected": true
+        },
+        {
+          "candidate_id": 10732,
+          "badness": 1.0667474269866943,
+          "p99_abs_err": 21.276794277147825,
+          "selected": true
+        },
+        {
+          "candidate_id": 10802,
+          "badness": 0.8234876394271851,
+          "p99_abs_err": 4.198554244787177,
+          "selected": true
+        },
+        {
+          "candidate_id": 10830,
+          "badness": 0.8335738182067871,
+          "p99_abs_err": 8.06124004139776,
+          "selected": true
+        },
+        {
+          "candidate_id": 10967,
+          "badness": 1.1683781147003174,
+          "p99_abs_err": 3.819622407600119,
+          "selected": true
+        },
+        {
+          "candidate_id": 11106,
+          "badness": 0.8479034900665283,
+          "p99_abs_err": 4.904794226235074,
+          "selected": true
+        },
+        {
+          "candidate_id": 11138,
+          "badness": 0.4812896251678467,
+          "p99_abs_err": 8.12166760145061,
+          "selected": true
+        },
+        {
+          "candidate_id": 11178,
+          "badness": 0.501055121421814,
+          "p99_abs_err": 12.761215372915395,
+          "selected": true
+        },
+        {
+          "candidate_id": 11229,
+          "badness": 0.8674317598342896,
+          "p99_abs_err": 0.13256683649358347,
+          "selected": true
+        },
+        {
+          "candidate_id": 11334,
+          "badness": 0.922187328338623,
+          "p99_abs_err": 15.55833350218564,
+          "selected": true
+        },
+        {
+          "candidate_id": 11366,
+          "badness": 0.8929363489151001,
+          "p99_abs_err": 15.092944521830766,
+          "selected": true
+        },
+        {
+          "candidate_id": 11367,
+          "badness": 0.5408790111541748,
+          "p99_abs_err": 37.61775908434996,
+          "selected": true
+        },
+        {
+          "candidate_id": 11426,
+          "badness": 0.7971493601799011,
+          "p99_abs_err": 6.0996545400124855,
+          "selected": true
+        },
+        {
+          "candidate_id": 11427,
+          "badness": 0.9889074563980103,
+          "p99_abs_err": 5.147597849810991,
+          "selected": true
+        },
+        {
+          "candidate_id": 11452,
+          "badness": 0.885783314704895,
+          "p99_abs_err": 0.9636038539148002,
+          "selected": true
+        },
+        {
+          "candidate_id": 11508,
+          "badness": 0.5061866044998169,
+          "p99_abs_err": 8.888026313153935,
+          "selected": true
+        },
+        {
+          "candidate_id": 11521,
+          "badness": 1.0208429098129272,
+          "p99_abs_err": 4.356590490707088,
+          "selected": true
+        },
+        {
+          "candidate_id": 11540,
+          "badness": 0.5073448419570923,
+          "p99_abs_err": 1.9547993608068754,
+          "selected": true
+        },
+        {
+          "candidate_id": 11577,
+          "badness": 0.4980732500553131,
+          "p99_abs_err": 20.053817968496237,
+          "selected": true
+        },
+        {
+          "candidate_id": 11670,
+          "badness": 0.5544059872627258,
+          "p99_abs_err": 13.343381023987746,
+          "selected": true
+        },
+        {
+          "candidate_id": 11778,
+          "badness": 0.8791173696517944,
+          "p99_abs_err": 2.379198797554528,
+          "selected": true
+        },
+        {
+          "candidate_id": 11969,
+          "badness": 1.0149917602539062,
+          "p99_abs_err": 0.24170527424242305,
+          "selected": true
+        },
+        {
+          "candidate_id": 12026,
+          "badness": 0.5217576026916504,
+          "p99_abs_err": 8.463455847437661,
+          "selected": true
+        },
+        {
+          "candidate_id": 12110,
+          "badness": 0.8336432576179504,
+          "p99_abs_err": 18.29242445034348,
+          "selected": true
+        },
+        {
+          "candidate_id": 12122,
+          "badness": 1.0243494510650635,
+          "p99_abs_err": 30.26252452072289,
+          "selected": true
+        },
+        {
+          "candidate_id": 12125,
+          "badness": 0.48960399627685547,
+          "p99_abs_err": 0.7986291065800994,
+          "selected": true
+        },
+        {
+          "candidate_id": 12173,
+          "badness": 0.4972124397754669,
+          "p99_abs_err": 9.34071173104607,
+          "selected": true
+        },
+        {
+          "candidate_id": 12175,
+          "badness": 0.5000531673431396,
+          "p99_abs_err": 5.42853373276713,
+          "selected": true
+        },
+        {
+          "candidate_id": 12193,
+          "badness": 0.8794910907745361,
+          "p99_abs_err": 7.320578085388506,
+          "selected": true
+        },
+        {
+          "candidate_id": 12237,
+          "badness": 0.8427736163139343,
+          "p99_abs_err": 15.24010029240155,
+          "selected": true
+        },
+        {
+          "candidate_id": 12281,
+          "badness": 0.9149870872497559,
+          "p99_abs_err": 3.325618496038878,
+          "selected": true
+        },
+        {
+          "candidate_id": 12396,
+          "badness": 0.48650455474853516,
+          "p99_abs_err": 8.752132991225228,
+          "selected": true
+        },
+        {
+          "candidate_id": 12405,
+          "badness": 0.8449308276176453,
+          "p99_abs_err": 3.9918443767260383,
+          "selected": true
+        },
+        {
+          "candidate_id": 12450,
+          "badness": 0.8692992925643921,
+          "p99_abs_err": 17.629475621663968,
+          "selected": true
+        },
+        {
+          "candidate_id": 12499,
+          "badness": 0.8468846082687378,
+          "p99_abs_err": 3.3610000536280857,
+          "selected": true
+        },
+        {
+          "candidate_id": 12576,
+          "badness": 0.8289440274238586,
+          "p99_abs_err": 4.147794974941087,
+          "selected": true
+        },
+        {
+          "candidate_id": 12579,
+          "badness": 0.8226495981216431,
+          "p99_abs_err": 0.8160661905138551,
+          "selected": true
+        },
+        {
+          "candidate_id": 12698,
+          "badness": 0.9097485542297363,
+          "p99_abs_err": 2.9370601958533635,
+          "selected": true
+        },
+        {
+          "candidate_id": 12742,
+          "badness": 0.5043456554412842,
+          "p99_abs_err": 2.7388061286713707,
+          "selected": true
+        }
+      ],
+      "scored_path": "/home/ubuntu/genai_pdn/active_learning_pi/runs/al_exp059_gp_error_001/iter_0002/scored_candidates.json",
+      "phase": "acquisition"
+    },
+    "improvement": {
+      "p99_mae_delta": -0.43714025668097456,
+      "p99_median_ae_delta": -0.06798914128275868,
+      "n_pre": 247,
+      "n_post": 247,
+      "p99_mae_pct": 4.1740678460599545
+    },
+    "pre_p99_mae": 10.472763567885131,
+    "post_p99_mae": 10.035623311204157,
+    "cycle_context": {
+      "num_candidates": 12800,
+      "num_selected": 640,
+      "num_ingest_ok": 640,
+      "num_ingest_total": 640,
+      "overlay_total": 720
+    }
+  }
+}

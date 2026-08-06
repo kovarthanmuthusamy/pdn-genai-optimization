@@ -1,0 +1,165 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+\usepackage{longtable}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+% A fairly standard thesis page layout (A4)
+\usepackage{geometry}
+\geometry{
+  left=3cm,
+  right=2.5cm,
+  top=2cm,
+  bottom=3cm,
+  includehead,
+  headheight=1pt,
+  headsep=14pt
+}
+
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+
+% Standard thesis formatting packages
+\usepackage{amsmath,amssymb,amsfonts} % For mathematical formulations and notations
+\usepackage{booktabs}                  % For publication-quality tables
+\usepackage{microtype}                 % For typographic spacing improvements
+\usepackage{setspace}                  % For line spacing control
+\onehalfspacing                        % Standard 1.5 line spacing for thesis
+
+% Hyperlink configuration for interactive links (TOC, citations, figures, URLs)
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
+
+% Bibliography: IEEE style via biblatex/biber.
+% Build with:  pdflatex thesis_v3 && biber thesis_v3 && pdflatex thesis_v3 && pdflatex thesis_v3
+\usepackage[backend=biber, style=ieee, sorting=none]{biblatex}
+\addbibresource{refs.bib}
+
+% Placeholder macro for evidence Kovarthanam must supply or confirm.
+% Renders in red in the PDF and greps cleanly:  grep -rn 'fillin' chapters/
+\usepackage{xcolor}
+\newcommand{\fillin}[1]{\textcolor{red}{\textbf{[FILL IN: #1]}}}
+% Short marker for a figure to be inserted later, e.g. \figplace{PoE encoder block diagram}
+\newcommand{\figplace}[1]{\textcolor{red}{\textbf{[FIGURE: #1]}}}
+
+% Standard thesis-style running header/footer (for normal pages)
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\nouppercase{\leftmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+\begin{document}
+
+%-------------------------------------------------
+% Title Page
+%-------------------------------------------------
+\begin{titlepage}
+    \begin{minipage}{0.45\textwidth}
+    \hspace{-1cm}
+    \includegraphics[height=1.2cm]{images/tud.png}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.45\textwidth}
+    \hspace{4cm}
+    %\raggedleft
+    \includegraphics[height=1.8cm]{images/DT_IPL.png}
+    \end{minipage}
+    
+    \centering
+
+    \vspace*{2.5cm}
+
+    {\Large \textbf{Master's Thesis}\par}
+
+    \vspace{1.8cm}
+
+    {\Huge\bfseries
+    A Generative AI Framework for the Design Optimization and Performance Analysis of PCB Power Delivery Networks
+    \par}
+
+    \vspace{4cm}
+
+    {\Large M. Sc. Kovarthanam Muthusamy\par}
+
+    \vspace{3cm}
+
+    \renewcommand{\arraystretch}{1.8}
+    \begin{tabular}{ll}
+    Examiner: & Prof.\ Dr.-Ing.\ Jürgen Götze \\
+    Supervisor: & M.\ Sc.\ Nima Ghafarian Shoaee \\
+    External supervisor: & \\
+    Submission Date: & \\
+    \end{tabular}
+    \renewcommand{\arraystretch}{1}
+
+
+\end{titlepage}
+
+%-------------------------------------------------
+% Table of Contents and Front Matter
+%-------------------------------------------------
+\clearpage
+\pagenumbering{roman}
+
+\tableofcontents
+\clearpage
+
+\listoffigures
+\addcontentsline{toc}{chapter}{\listfigurename}
+\clearpage
+
+\listoftables
+\addcontentsline{toc}{chapter}{\listtablename}
+\clearpage
+
+\chapter*{Mathematical Notation}
+\label{ch:math_notation}
+\addcontentsline{toc}{chapter}{Mathematical Notation}
+\clearpage
+
+\chapter*{Acronyms}
+\label{ch:acronyms}
+\addcontentsline{toc}{chapter}{Acronyms}
+\clearpage
+
+% Switch to Arabic page numbering for the main thesis body
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+%=============================================================================
+% Chapter 1: Introduction
+%=============================================================================
+\input{chapters/ch1-introduction}
+
+\input{chapters/ch2-background}
+
+\input{chapters/ch3-design}
+
+\input{chapters/ch4-results}
+
+\input{chapters/ch5-conclusion}
+
+
+%=============================================================================
+% References
+%=============================================================================
+\clearpage
+\printbibliography[heading=bibintoc, title={References}]
+\label{ch:references}
+
+
+%=============================================================================
+% Appendices
+%=============================================================================
+\appendix
+
+\input{chapters/appendix-a-simulation-dataset}
+
+\input{chapters/appendix-b-hyperparameters}
+
+% Appendix C stays inline until phase 2 -- it depends on experiments not yet run.
+\chapter{Supplementary Experimental Results}
+\label{ch:appendix_supp_results}
+
+\end{document}

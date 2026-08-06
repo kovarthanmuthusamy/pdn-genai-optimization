@@ -63,6 +63,7 @@ def run_off_anchor_eval_spatial(
     epoch: int = 0,
     use_encode_skips: bool = False,
     use_binary_occupancy: bool = True,
+    use_occ_only_layout: bool = False,
 ) -> list[dict]:
     model.eval()
     base = getattr(model, "_orig_mod", model)
@@ -88,7 +89,10 @@ def run_off_anchor_eval_spatial(
         from experiments.exp057_structured_graph.codes.occupancy_binary import occupancy_for_heatmap_decode
 
         occ_dec = occupancy_for_heatmap_decode(occ, K, force_binary=use_binary_occupancy) if use_binary_occupancy else occ
-        z_layout = base.encode_layout_latent(occ_dec, imp, K, pi_native)
+        if use_occ_only_layout:
+            z_layout = base.encode_occupancy_latent(occ_dec, K, pi_native, sample=False)
+        else:
+            z_layout = base.encode_layout_latent(occ_dec, imp, K, pi_native)
         z_enc_native, _, _, _ = base.encode(hm_enc, occ_dec, imp, K, pi_native)
         skips_native = base._last_heatmap_skips
 

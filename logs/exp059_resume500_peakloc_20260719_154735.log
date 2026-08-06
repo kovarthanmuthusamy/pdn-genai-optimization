@@ -1,0 +1,251 @@
+Loaded config from config.yaml (185 keys)
+exp059  epochs=600  batch=224  amp=off  ckpt_every=5  resume=experiments/exp059_capacity_freq/checkpoints/checkpoint_epoch_500.pt  peak_loc_w=0.8  peak_loc_T=0.03
+Loaded config from config.yaml (185 keys)
+  Loaded 101 existing epochs from loss.csv (ep 1–500)
+================================================================================
+EXP059_CAPACITY_FREQ — MULTI-INPUT VAE
+  device: cuda
+  batch: 224
+  epochs: 600
+  checkpoint_interval: 5
+  split_by_design: True
+  balance_freq: False
+  train_samples_per_epoch: 64000
+  val_on_checkpoint_only: True
+  amp: off
+  tf32: False
+  compile: False
+  ram_cache: False
+================================================================================
+PI_freq found — multifreq mode (layout store for imp/occ).
+Layout store: 24979 layouts, 582997 manifest rows
+Loaded 582997 samples from datasets/data_multifreq_train_norm_unbounded
+  Heatmap norm: robust_log1p_per_mhz_unbounded unbounded  bins=[10.0, 100.0, 120.0, 150.0, 170.0, 180.0…]  n=24
+K-values loaded from cache (582997 samples)
+Data: train=508060 val=74937 layouts=24979 draws=64000/508060 cross_freq=582997
+Model: 10.5M params  latent=128  layout_p=0.0  cf_mix=0.45  occ_bin=True  milestones=[ep20, ep25]
+
+========================================================
+  RESUMING from checkpoint checkpoint_epoch_500.pt
+  completed epoch: 500  →  training epochs 501–600
+  val_loss: 0.5310
+========================================================
+
+  Curriculum restored from checkpoint (not re-scaled to new num_epochs):
+    beta_end_epoch=25, beta_phase2_end_epoch=25, modality_dropout_anneal_epochs=20, physics_critic_warmup_epochs=12, physics_slope_anneal_epochs=25, penalty_warmup_epochs=12, focal_gamma_warmup_epochs=0, cross_freq_start_epoch=20, modality_dropout_protect_heatmap_epoch=25, heatmap_focus_start_epoch=25, impedance_peak_start_epoch=25, impedance_peak_ramp_epochs=25, impedance_peak_focus_epoch=25
+  Careful impedance LR: backbone=2.00e-04  impedance=2.00e-04 (mult=1.0)
+  optimizer state skipped (param groups changed)
+Ep 501/600  total=191.0s  loss=1.3788  hm=0.0830×7.0  cf=0.1572  occ=0.0022  imp=0.1200
+Ep 502/600  total=233.2s  loss=1.3486  hm=0.0757×7.0  cf=0.1543  occ=0.0023  imp=0.1197
+Ep 503/600  total=187.3s  loss=1.3233  hm=0.0721×7.0  cf=0.1386  occ=0.0022  imp=0.1194
+Ep 504/600  total=215.7s  loss=1.3250  hm=0.0700×7.0  cf=0.1439  occ=0.0022  imp=0.1193
+Ep 505/600  total=247.2s  (train=192.4s val=54.8s)  loss=1.3281  val=0.5310  hm=0.0700×7.0  cf=0.1481  occ=0.0023  imp=0.1191  β=0.030
+  checkpoint → checkpoint_epoch_505.pt
+  Off-anchor ep 505 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.91  250MHz:r=0.83  265MHz:r=0.90
+  off-anchor eval: 34.0s
+Ep 506/600  total=190.5s  loss=1.3222  hm=0.0710×7.0  cf=0.1449  occ=0.0022  imp=0.1183
+Ep 507/600  total=169.6s  loss=1.3246  hm=0.0688×7.0  cf=0.1492  occ=0.0022  imp=0.1185
+Ep 508/600  total=203.0s  loss=1.3384  hm=0.0692×7.0  cf=0.1584  occ=0.0023  imp=0.1193
+Ep 509/600  total=167.2s  loss=1.3220  hm=0.0679×7.0  cf=0.1464  occ=0.0022  imp=0.1191
+Ep 510/600  total=171.7s  (train=138.5s val=33.2s)  loss=1.3100  val=0.5354  hm=0.0678×7.0  cf=0.1432  occ=0.0021  imp=0.1177  β=0.030
+  checkpoint → checkpoint_epoch_510.pt
+  Off-anchor ep 510 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.93  250MHz:r=0.86  265MHz:r=0.90
+  off-anchor eval: 33.5s
+Ep 511/600  total=143.1s  loss=1.3257  hm=0.0675×7.0  cf=0.1531  occ=0.0022  imp=0.1186
+Ep 512/600  total=137.0s  loss=1.3234  hm=0.0682×7.0  cf=0.1504  occ=0.0023  imp=0.1181
+Ep 513/600  total=131.3s  loss=1.3309  hm=0.0693×7.0  cf=0.1535  occ=0.0022  imp=0.1185
+Ep 514/600  total=130.8s  loss=1.3180  hm=0.0659×7.0  cf=0.1511  occ=0.0021  imp=0.1174
+Ep 515/600  total=162.8s  (train=131.1s val=31.6s)  loss=1.3116  val=0.5275  hm=0.0664×7.0  cf=0.1421  occ=0.0023  imp=0.1180  β=0.030
+  checkpoint → checkpoint_epoch_515.pt
+  Off-anchor ep 515 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.90  250MHz:r=0.85  265MHz:r=0.91
+  off-anchor eval: 30.1s
+Ep 516/600  total=131.7s  loss=1.3166  hm=0.0667×7.0  cf=0.1474  occ=0.0022  imp=0.1182
+Ep 517/600  total=128.8s  loss=1.3202  hm=0.0655×7.0  cf=0.1543  occ=0.0022  imp=0.1177
+Ep 518/600  total=130.8s  loss=1.3142  hm=0.0646×7.0  cf=0.1459  occ=0.0023  imp=0.1184
+Ep 519/600  total=129.8s  loss=1.3231  hm=0.0664×7.0  cf=0.1528  occ=0.0022  imp=0.1179
+Ep 520/600  total=164.2s  (train=130.1s val=34.1s)  loss=1.3073  val=0.5251  hm=0.0658×7.0  cf=0.1439  occ=0.0020  imp=0.1177  β=0.030
+  checkpoint → checkpoint_epoch_520.pt
+  Off-anchor ep 520 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.93  250MHz:r=0.83  265MHz:r=0.90
+  off-anchor eval: 29.2s
+Ep 521/600  total=130.0s  loss=1.3198  hm=0.0652×7.0  cf=0.1567  occ=0.0022  imp=0.1177
+Ep 522/600  total=131.9s  loss=1.3070  hm=0.0644×7.0  cf=0.1470  occ=0.0021  imp=0.1173
+Ep 523/600  total=130.5s  loss=1.3327  hm=0.0661×7.0  cf=0.1623  occ=0.0021  imp=0.1181
+Ep 524/600  total=132.0s  loss=1.3093  hm=0.0649×7.0  cf=0.1466  occ=0.0021  imp=0.1173
+Ep 525/600  total=164.2s  (train=131.7s val=32.5s)  loss=1.3082  val=0.5008  hm=0.0638×7.0  cf=0.1534  occ=0.0021  imp=0.1161  β=0.030
+  checkpoint → checkpoint_epoch_525.pt
+  Off-anchor ep 525 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.95  250MHz:r=0.87  265MHz:r=0.90
+  off-anchor eval: 30.0s
+Ep 526/600  total=130.7s  loss=1.3156  hm=0.0647×7.0  cf=0.1490  occ=0.0022  imp=0.1176
+Ep 527/600  total=131.7s  loss=1.3190  hm=0.0643×7.0  cf=0.1540  occ=0.0022  imp=0.1176
+Ep 528/600  total=131.8s  loss=1.3103  hm=0.0653×7.0  cf=0.1483  occ=0.0020  imp=0.1178
+Ep 529/600  total=133.7s  loss=1.3145  hm=0.0646×7.0  cf=0.1510  occ=0.0022  imp=0.1177
+Ep 530/600  total=164.7s  (train=131.4s val=33.4s)  loss=1.3006  val=0.5146  hm=0.0642×7.0  cf=0.1466  occ=0.0022  imp=0.1167  β=0.030
+  checkpoint → checkpoint_epoch_530.pt
+  Off-anchor ep 530 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.92  250MHz:r=0.84  265MHz:r=0.90
+  off-anchor eval: 29.8s
+Ep 531/600  total=133.4s  loss=1.3045  hm=0.0641×7.0  cf=0.1463  occ=0.0022  imp=0.1173
+Ep 532/600  total=132.3s  loss=1.2953  hm=0.0623×7.0  cf=0.1390  occ=0.0021  imp=0.1183
+Ep 533/600  total=132.4s  loss=1.2994  hm=0.0629×7.0  cf=0.1462  occ=0.0021  imp=0.1168
+Ep 534/600  total=132.1s  loss=1.2935  hm=0.0632×7.0  cf=0.1464  occ=0.0020  imp=0.1165
+Ep 535/600  total=164.3s  (train=131.9s val=32.3s)  loss=1.2956  val=0.5277  hm=0.0643×7.0  cf=0.1407  occ=0.0022  imp=0.1171  β=0.030
+  checkpoint → checkpoint_epoch_535.pt
+  Off-anchor ep 535 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.92  250MHz:r=0.85  265MHz:r=0.91
+  off-anchor eval: 29.8s
+Ep 536/600  total=132.6s  loss=1.2974  hm=0.0627×7.0  cf=0.1513  occ=0.0020  imp=0.1162
+Ep 537/600  total=134.4s  loss=1.3066  hm=0.0632×7.0  cf=0.1509  occ=0.0022  imp=0.1171
+Ep 538/600  total=138.1s  loss=1.3173  hm=0.0627×7.0  cf=0.1655  occ=0.0021  imp=0.1171
+Ep 539/600  total=134.9s  loss=1.3034  hm=0.0636×7.0  cf=0.1502  occ=0.0021  imp=0.1167
+Ep 540/600  total=170.3s  (train=132.3s val=38.0s)  loss=1.2985  val=0.5207  hm=0.0621×7.0  cf=0.1484  occ=0.0021  imp=0.1163  β=0.030
+  checkpoint → checkpoint_epoch_540.pt
+  Off-anchor ep 540 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.92  250MHz:r=0.89  265MHz:r=0.90
+  off-anchor eval: 32.9s
+Ep 541/600  total=130.3s  loss=1.3038  hm=0.0616×7.0  cf=0.1497  occ=0.0021  imp=0.1178
+Ep 542/600  total=129.6s  loss=1.3012  hm=0.0623×7.0  cf=0.1488  occ=0.0022  imp=0.1169
+Ep 543/600  total=129.8s  loss=1.2932  hm=0.0619×7.0  cf=0.1467  occ=0.0020  imp=0.1172
+Ep 544/600  total=128.6s  loss=1.2914  hm=0.0623×7.0  cf=0.1452  occ=0.0021  imp=0.1163
+Ep 545/600  total=160.9s  (train=129.5s val=31.4s)  loss=1.2941  val=0.5070  hm=0.0620×7.0  cf=0.1461  occ=0.0021  imp=0.1163  β=0.030
+  checkpoint → checkpoint_epoch_545.pt
+  Off-anchor ep 545 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.92  250MHz:r=0.84  265MHz:r=0.90
+  off-anchor eval: 29.2s
+Ep 546/600  total=128.3s  loss=1.2912  hm=0.0626×7.0  cf=0.1467  occ=0.0021  imp=0.1162
+Ep 547/600  total=131.5s  loss=1.2882  hm=0.0614×7.0  cf=0.1419  occ=0.0020  imp=0.1162
+Ep 548/600  total=129.0s  loss=1.2904  hm=0.0613×7.0  cf=0.1465  occ=0.0020  imp=0.1163
+Ep 549/600  total=129.6s  loss=1.2890  hm=0.0616×7.0  cf=0.1480  occ=0.0020  imp=0.1162
+Ep 550/600  total=161.0s  (train=128.7s val=32.4s)  loss=1.2959  val=0.5189  hm=0.0621×7.0  cf=0.1479  occ=0.0021  imp=0.1166  β=0.030
+  checkpoint → checkpoint_epoch_550.pt
+  Off-anchor ep 550 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.94  250MHz:r=0.85  265MHz:r=0.90
+  off-anchor eval: 29.6s
+Ep 551/600  total=131.6s  loss=1.3047  hm=0.0626×7.0  cf=0.1556  occ=0.0021  imp=0.1166
+Ep 552/600  total=132.9s  loss=1.2736  hm=0.0612×7.0  cf=0.1328  occ=0.0020  imp=0.1159
+Ep 553/600  total=133.6s  loss=1.3031  hm=0.0625×7.0  cf=0.1570  occ=0.0021  imp=0.1163
+Ep 554/600  total=131.3s  loss=1.3009  hm=0.0615×7.0  cf=0.1575  occ=0.0021  imp=0.1159
+Ep 555/600  total=163.3s  (train=131.0s val=32.3s)  loss=1.2972  val=0.5157  hm=0.0610×7.0  cf=0.1593  occ=0.0020  imp=0.1155  β=0.030
+  checkpoint → checkpoint_epoch_555.pt
+  Off-anchor ep 555 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.93  250MHz:r=0.82  265MHz:r=0.89
+  off-anchor eval: 29.8s
+Ep 556/600  total=131.3s  loss=1.2909  hm=0.0615×7.0  cf=0.1497  occ=0.0020  imp=0.1163
+Ep 557/600  total=132.0s  loss=1.2907  hm=0.0607×7.0  cf=0.1533  occ=0.0020  imp=0.1156
+Ep 558/600  total=132.2s  loss=1.2972  hm=0.0609×7.0  cf=0.1530  occ=0.0020  imp=0.1162
+Ep 559/600  total=133.4s  loss=1.3041  hm=0.0616×7.0  cf=0.1586  occ=0.0021  imp=0.1160
+Ep 560/600  total=166.3s  (train=133.9s val=32.4s)  loss=1.2733  val=0.5233  hm=0.0609×7.0  cf=0.1344  occ=0.0021  imp=0.1161  β=0.030
+  checkpoint → checkpoint_epoch_560.pt
+  Off-anchor ep 560 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.94  250MHz:r=0.84  265MHz:r=0.90
+  off-anchor eval: 30.0s
+Ep 561/600  total=134.1s  loss=1.2836  hm=0.0602×7.0  cf=0.1451  occ=0.0021  imp=0.1163
+Ep 562/600  total=134.1s  loss=1.2914  hm=0.0603×7.0  cf=0.1486  occ=0.0020  imp=0.1170
+Ep 563/600  total=133.3s  loss=1.2950  hm=0.0606×7.0  cf=0.1535  occ=0.0021  imp=0.1156
+Ep 564/600  total=132.9s  loss=1.2962  hm=0.0609×7.0  cf=0.1540  occ=0.0022  imp=0.1160
+Ep 565/600  total=166.1s  (train=133.8s val=32.3s)  loss=1.2843  val=0.5146  hm=0.0603×7.0  cf=0.1507  occ=0.0020  imp=0.1148  β=0.030
+  checkpoint → checkpoint_epoch_565.pt
+  Off-anchor ep 565 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.94  250MHz:r=0.85  265MHz:r=0.90
+  off-anchor eval: 30.6s
+Ep 566/600  total=134.1s  loss=1.2798  hm=0.0620×7.0  cf=0.1399  occ=0.0021  imp=0.1157
+Ep 567/600  total=133.0s  loss=1.2860  hm=0.0594×7.0  cf=0.1518  occ=0.0020  imp=0.1155
+Ep 568/600  total=133.5s  loss=1.2732  hm=0.0595×7.0  cf=0.1428  occ=0.0020  imp=0.1151
+Ep 569/600  total=134.6s  loss=1.2879  hm=0.0606×7.0  cf=0.1514  occ=0.0021  imp=0.1154
+Ep 570/600  total=166.5s  (train=133.9s val=32.5s)  loss=1.2961  val=0.4971  hm=0.0613×7.0  cf=0.1585  occ=0.0020  imp=0.1148  β=0.030
+  checkpoint → checkpoint_epoch_570.pt
+  Off-anchor ep 570 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.95  250MHz:r=0.78  265MHz:r=0.89
+  off-anchor eval: 30.1s
+Ep 571/600  total=132.8s  loss=1.2926  hm=0.0604×7.0  cf=0.1565  occ=0.0020  imp=0.1153
+Ep 572/600  total=132.4s  loss=1.2904  hm=0.0598×7.0  cf=0.1513  occ=0.0020  imp=0.1164
+Ep 573/600  total=132.4s  loss=1.2838  hm=0.0597×7.0  cf=0.1500  occ=0.0022  imp=0.1151
+Ep 574/600  total=133.4s  loss=1.2765  hm=0.0585×7.0  cf=0.1491  occ=0.0019  imp=0.1150
+Ep 575/600  total=172.4s  (train=139.5s val=32.9s)  loss=1.2803  val=0.5067  hm=0.0595×7.0  cf=0.1527  occ=0.0020  imp=0.1143  β=0.030
+  checkpoint → checkpoint_epoch_575.pt
+  Off-anchor ep 575 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.94  250MHz:r=0.79  265MHz:r=0.89
+  off-anchor eval: 31.2s
+Ep 576/600  total=133.4s  loss=1.2769  hm=0.0582×7.0  cf=0.1500  occ=0.0020  imp=0.1147
+Ep 577/600  total=134.1s  loss=1.2726  hm=0.0595×7.0  cf=0.1433  occ=0.0020  imp=0.1153
+Ep 578/600  total=132.7s  loss=1.2701  hm=0.0593×7.0  cf=0.1415  occ=0.0020  imp=0.1154
+Ep 579/600  total=133.1s  loss=1.2798  hm=0.0590×7.0  cf=0.1482  occ=0.0020  imp=0.1151
+Ep 580/600  total=167.0s  (train=134.5s val=32.5s)  loss=1.2759  val=0.4761  hm=0.0601×7.0  cf=0.1464  occ=0.0019  imp=0.1151  β=0.030
+  checkpoint → checkpoint_epoch_580.pt
+  Off-anchor ep 580 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.93  250MHz:r=0.78  265MHz:r=0.89
+  off-anchor eval: 31.3s
+Ep 581/600  total=134.2s  loss=1.2707  hm=0.0587×7.0  cf=0.1471  occ=0.0019  imp=0.1143
+Ep 582/600  total=132.8s  loss=1.2725  hm=0.0600×7.0  cf=0.1454  occ=0.0020  imp=0.1152
+Ep 583/600  total=132.4s  loss=1.2612  hm=0.0591×7.0  cf=0.1377  occ=0.0020  imp=0.1144
+Ep 584/600  total=132.3s  loss=1.2745  hm=0.0583×7.0  cf=0.1517  occ=0.0019  imp=0.1144
+Ep 585/600  total=165.5s  (train=133.0s val=32.5s)  loss=1.2707  val=0.5011  hm=0.0592×7.0  cf=0.1452  occ=0.0020  imp=0.1142  β=0.030
+  checkpoint → checkpoint_epoch_585.pt
+  Off-anchor ep 585 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.95  250MHz:r=0.84  265MHz:r=0.90
+  off-anchor eval: 31.1s
+Ep 586/600  total=134.2s  loss=1.2634  hm=0.0582×7.0  cf=0.1404  occ=0.0020  imp=0.1143
+Ep 587/600  total=134.3s  loss=1.2767  hm=0.0594×7.0  cf=0.1538  occ=0.0018  imp=0.1142
+Ep 588/600  total=134.1s  loss=1.2730  hm=0.0589×7.0  cf=0.1454  occ=0.0020  imp=0.1153
+Ep 589/600  total=133.2s  loss=1.2701  hm=0.0592×7.0  cf=0.1446  occ=0.0020  imp=0.1141
+Ep 590/600  total=168.6s  (train=134.8s val=33.8s)  loss=1.2734  val=0.5029  hm=0.0599×7.0  cf=0.1471  occ=0.0019  imp=0.1143  β=0.030
+  checkpoint → checkpoint_epoch_590.pt
+  Off-anchor ep 590 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.96  250MHz:r=0.80  265MHz:r=0.90
+  off-anchor eval: 36.7s
+Ep 591/600  total=134.4s  loss=1.2601  hm=0.0580×7.0  cf=0.1432  occ=0.0018  imp=0.1139
+Ep 592/600  total=136.1s  loss=1.2756  hm=0.0590×7.0  cf=0.1494  occ=0.0019  imp=0.1146
+Ep 593/600  total=133.9s  loss=1.2794  hm=0.0589×7.0  cf=0.1502  occ=0.0019  imp=0.1150
+Ep 594/600  total=136.9s  loss=1.2869  hm=0.0596×7.0  cf=0.1554  occ=0.0020  imp=0.1153
+Ep 595/600  total=162.6s  (train=130.1s val=32.5s)  loss=1.2739  val=0.5008  hm=0.0578×7.0  cf=0.1529  occ=0.0019  imp=0.1145  β=0.030
+  checkpoint → checkpoint_epoch_595.pt
+  Off-anchor ep 595 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.95  250MHz:r=0.85  265MHz:r=0.91
+  off-anchor eval: 31.0s
+Ep 596/600  total=131.9s  loss=1.2598  hm=0.0581×7.0  cf=0.1467  occ=0.0019  imp=0.1135
+Ep 597/600  total=135.4s  loss=1.2655  hm=0.0572×7.0  cf=0.1448  occ=0.0020  imp=0.1149
+Ep 598/600  total=132.2s  loss=1.2758  hm=0.0581×7.0  cf=0.1557  occ=0.0019  imp=0.1141
+Ep 599/600  total=129.6s  loss=1.2662  hm=0.0581×7.0  cf=0.1507  occ=0.0019  imp=0.1135
+Ep 600/600  total=165.1s  (train=132.4s val=32.7s)  loss=1.2570  val=0.4980  hm=0.0577×7.0  cf=0.1404  occ=0.0019  imp=0.1138  β=0.030
+  checkpoint → checkpoint_epoch_600.pt
+  Off-anchor ep 600 → off_anchor_eval.csv  encode_cross: 155MHz:r=0.96  250MHz:r=0.85  265MHz:r=0.91
+  off-anchor eval: 30.5s
+
+Timing: 1525m total  |  avg train 138.3s/ep  |  avg val 34.0s (when run)  |  est ~145.1s/ep  |  → ~1451m for 600 epochs
+  Per-epoch log → experiments/exp059_capacity_freq/metrics/epoch_timing.csv
+
+================================================================================
+TRAINING COMPLETE  (1525m)
+Best val: 0.4980  |  Checkpoints: experiments/exp059_capacity_freq/checkpoints
+================================================================================
+Plot saved: experiments/exp059_capacity_freq/metrics/plots/convergence_final.png
+Loss components plot saved: experiments/exp059_capacity_freq/metrics/plots/loss_components_final.png
+Overfitting plot saved: experiments/exp059_capacity_freq/metrics/plots/overfitting_final.png
+Physics plot saved: experiments/exp059_capacity_freq/metrics/plots/physics_losses_final.png
+
+================================================================================
+TRAINING STATISTICS SUMMARY
+================================================================================
+
+total_loss:
+  Min:   1.257015
+  Max:   13.319992
+  Mean:  2.086764
+  Final: 1.257015
+
+recon_loss:
+  Min:   0.743377
+  Max:   12.440226
+  Mean:  1.432533
+  Final: 0.743538
+
+kl_loss:
+  Min:   0.586263
+  Max:   2.298145
+  Mean:  1.952700
+  Final: 1.780830
+
+heatmap_loss:
+  Min:   0.057704
+  Max:   1.393342
+  Mean:  0.102655
+  Final: 0.057704
+
+occupancy_loss:
+  Min:   0.001917
+  Max:   0.618738
+  Mean:  0.032001
+  Final: 0.001947
+
+impedance_loss:
+  Min:   0.113839
+  Max:   0.414286
+  Mean:  0.165671
+  Final: 0.113839
+
+================================================================================

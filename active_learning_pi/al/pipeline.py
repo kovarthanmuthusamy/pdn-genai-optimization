@@ -13,8 +13,23 @@ from active_learning_pi.al.candidates import generate_candidates
 from active_learning_pi.al.config import load_config, load_json, save_json
 from active_learning_pi.al.ecadstar import run_ecadstar_batch
 from active_learning_pi.al.evaluate_off_anchor import evaluate_labels_vs_predictions
+from active_learning_pi.al.evaluate_cycle import (
+    cmd_evaluate_pre_finetune,
+    cmd_post_finetune_eval,
+)
+from active_learning_pi.al.decision_report import cmd_write_decision_report
+from active_learning_pi.al.evaluate_report import cmd_write_cycle_report
 from active_learning_pi.al.ingest_labels import ingest_simulation_outputs
 from active_learning_pi.al.inference_pool import predict_candidates
+from active_learning_pi.al.k_config import (
+    candidates_per_k,
+    resolve_k_values,
+    stratify_ecad_by_k,
+    total_ecad_batch_size,
+    use_per_k_pools,
+    worst_per_k,
+)
+from active_learning_pi.al.per_k_acquire import run_per_k_acquire
 from active_learning_pi.al.paths import iteration_dir, repo_root, run_dir
 from active_learning_pi.al.build_overlay import build_overlay_from_iterations
 from active_learning_pi.al.normalize_labels import normalize_iteration_labels
@@ -47,12 +62,18 @@ def _peb_path(it_dir: Path) -> Path:
 
 
 def cmd_generate(cfg: dict, groot: Path, iteration: int) -> list[dict]:
+    if use_per_k_pools(cfg):
+        summary = run_per_k_acquire(cfg, groot, iteration)
+        it_dir = iteration_dir(cfg, iteration, groot)
+        return load_json(it_dir / "candidates.json")
+
     it_dir = iteration_dir(cfg, iteration, groot)
+    k_values = resolve_k_values(cfg)
     print(f"\n=== Generate candidates (iter {iteration}) ===")
     cands = generate_candidates(
-        num_candidates=int(cfg["num_candidates"]),
+        num_candidates=int(cfg.get("num_candidates", 400)),
         mhz_grid=[float(x) for x in cfg["mhz_grid"]],
-        fixed_k=int(cfg["fixed_k"]),
+        k_values=k_values,
         seed=int(cfg["candidate_seed"]) + iteration,
         mhz_priority=[float(x) for x in cfg.get("mhz_priority", [])],
     )
@@ -63,6 +84,13 @@ def cmd_generate(cfg: dict, groot: Path, iteration: int) -> list[dict]:
 
 
 def cmd_infer(cfg: dict, groot: Path, iteration: int) -> list[dict[str, Any]]:
+    if use_per_k_pools(cfg):
+        it_dir = iteration_dir(cfg, iteration, groot)
+        path = it_dir / "scored_candidates.json"
+        if not path.is_file():
+            run_per_k_acquire(cfg, groot, iteration)
+        return load_json(path)
+
     it_dir = iteration_dir(cfg, iteration, groot)
     cand_path = it_dir / "candidates.json"
     if not cand_path.is_file():
@@ -82,6 +110,13 @@ def cmd_infer(cfg: dict, groot: Path, iteration: int) -> list[dict[str, Any]]:
 
 
 def cmd_select_bad(cfg: dict, groot: Path, iteration: int) -> list[dict[str, Any]]:
+    if use_per_k_pools(cfg):
+        it_dir = iteration_dir(cfg, iteration, groot)
+        path = it_dir / SELECTED_JSON
+        if not path.is_file():
+            run_per_k_acquire(cfg, groot, iteration)
+        return load_json(path)
+
     it_dir = iteration_dir(cfg, iteration, groot)
     scored_path = it_dir / "scored_candidates.json"
     if not scored_path.is_file():
@@ -95,6 +130,7 @@ def cmd_select_bad(cfg: dict, groot: Path, iteration: int) -> list[dict[str, Any
         simulate_batch_size=sim_size,
         min_uncertainty=cfg.get("min_uncertainty"),
         min_uncertainty_percentile=float(cfg.get("min_uncertainty_percentile", 0.0)),
+        stratify_by_k=stratify_ecad_by_k(cfg),
     )
     save_json(it_dir / SELECTED_JSON, selected)
 
@@ -115,6 +151,9 @@ def cmd_select_bad(cfg: dict, groot: Path, iteration: int) -> list[dict[str, Any
     print(f"  Skipped (good)   : {skipped}")
     if selected:
         print(f"  Badness range    : {selected[-1]['badness']:.6f} … {selected[0]['badness']:.6f}")
+        from collections import Counter
+        k_sel = Counter(int(s["k"]) for s in selected)
+        print(f"  Selected K dist  : {dict(sorted(k_sel.items()))}", flush=True)
     return selected
 
 
@@ -172,18 +211,7 @@ def cmd_normalize(cfg: dict, groot: Path, iteration: int) -> dict[str, Any]:
 
 
 def cmd_evaluate(cfg: dict, groot: Path, iteration: int) -> dict[str, Any]:
-    it_dir = iteration_dir(cfg, iteration, groot)
-    manifest = load_json(it_dir / "ingest_manifest.json")
-    scored = load_json(it_dir / "scored_candidates.json")
-    report = evaluate_labels_vs_predictions(
-        manifest,
-        scored,
-        off_anchor_mhz=[float(x) for x in cfg.get("eval_off_anchor_mhz", [80, 250])],
-    )
-    save_json(it_dir / "eval_off_anchor.json", report)
-    print(f"\n=== Evaluate off-anchor (iter {iteration}) ===")
-    print(f"  n={report['n']}  p99_mae={report.get('p99_mae', 'n/a')}")
-    return report
+    return cmd_evaluate_pre_finetune(cfg, groot, iteration)
 
 
 def cmd_build_overlay(cfg: dict, groot: Path) -> dict[str, Any]:
@@ -200,15 +228,17 @@ def cmd_build_overlay(cfg: dict, groot: Path) -> dict[str, Any]:
 
 
 def cmd_finetune(cfg: dict, groot: Path) -> int:
+    from active_learning_pi.al.finetune_run import finetune_env, prepare_line_buffered_logging, resolve_checkpoint_path
+
+    prepare_line_buffered_logging()
     ft = cfg.get("finetune", {})
     if not ft.get("enabled"):
         print("\n=== Fine-tune ===")
         print("  finetune.enabled is false — enable in AL config or run:")
-        print("    python pipelines/active_learning/finetune_exp057.py")
+        print("    python pipelines/active_learning/finetune_exp058.py")
         return 1
 
     from active_learning_pi.al.build_overlay import build_overlay_from_iterations
-    from active_learning_pi.al.finetune_run import finetune_env, resolve_checkpoint_path
     from src_vae.others.multifreq_layout_store import load_manifest_rows
 
     overlay_rel = ft.get("overlay_data_dir") or cfg.get("overlay_data_dir")
@@ -233,27 +263,68 @@ def cmd_finetune(cfg: dict, groot: Path) -> int:
     import sys
 
     ckpt = resolve_checkpoint_path(cfg, groot)
-    print(f"\n=== Fine-tune exp057 (Option B) ===")
-    print(f"  checkpoint: {ckpt}")
-    print(f"  overlay samples: {n_overlay}")
+    print(f"\n=== Fine-tune {Path(exp_rel).name} (Option B / asymmetric) ===", flush=True)
+    print(f"  checkpoint: {ckpt}", flush=True)
+    print(f"  overlay samples: {n_overlay}", flush=True)
+    print(
+        f"  layout_p={ft.get('layout_train_prob', '?')}  "
+        f"occ_only={ft.get('occ_only_encode_prob', '?')}",
+        flush=True,
+    )
 
     env = finetune_env(cfg, groot, use_overlay=True)
     return int(subprocess.call([sys.executable, str(train_script)], cwd=str(groot), env=env))
 
 
+def _resolve_occ_warmup_script(cfg: dict, groot: Path) -> Path:
+    """Prefer exp-specific warmup script; fall back to exp058 then exp057."""
+    exp = str(cfg.get("experiment_dir", ""))
+    candidates = []
+    if "exp058" in exp:
+        candidates.append(groot / "pipelines/active_learning/finetune_occ_only_exp058.py")
+    if "exp057" in exp:
+        candidates.append(groot / "pipelines/active_learning/finetune_occ_only_exp057.py")
+    candidates.extend(
+        [
+            groot / "pipelines/active_learning/finetune_occ_only_exp058.py",
+            groot / "pipelines/active_learning/finetune_occ_only_exp057.py",
+        ]
+    )
+    for script in candidates:
+        if script.is_file():
+            return script
+    return candidates[0]
+
+
+def cmd_occ_only_warmup(cfg: dict, groot: Path) -> int:
+    """Pre-AL occupancy-only fine-tune (no overlay) — run before candidate scoring."""
+    import subprocess
+    import sys
+
+    script = _resolve_occ_warmup_script(cfg, groot)
+    if not script.is_file():
+        print(f"Missing: {script}")
+        return 1
+    print(f"\n=== Pre-AL occupancy-only warm-up ===\n  script: {script}", flush=True)
+    return int(subprocess.call([sys.executable, str(script)], cwd=str(groot)))
+
+
 def cmd_finetune_hint(cfg: dict, groot: Path) -> None:
     ft = cfg.get("finetune", {})
+    exp_name = Path(str(ft.get("experiment_dir") or cfg.get("experiment_dir") or "exp058")).name
+    ft_script = (
+        "finetune_exp058.py" if "exp058" in exp_name else "finetune_exp057.py"
+    )
     if not ft.get("enabled"):
         print("\n=== Fine-tune ===")
         print("  finetune.enabled is false.")
         print("  After AL ingest, run:")
-        print(f"    python pipelines/active_learning/finetune_exp057.py")
+        print(f"    python pipelines/active_learning/{ft_script}")
         print("  Or set COMMAND=build-overlay then COMMAND=finetune in pipelines/active_learning/run.py")
         return
-    exp = groot / ft["experiment_dir"]
     print(f"\n=== Fine-tune (Option B) ===")
     print(f"  1) python pipelines/active_learning/run.py   # COMMAND=build-overlay")
-    print(f"  2) python pipelines/active_learning/finetune_exp057.py")
+    print(f"  2) python pipelines/active_learning/{ft_script}")
     print(f"     or COMMAND=finetune in pipelines/active_learning/run.py")
     print(f"  config: {ft.get('config_path')}")
     print(f"  overlay: {ft.get('overlay_data_dir', cfg.get('overlay_data_dir'))}")
@@ -266,6 +337,7 @@ def run_cycle(
     do_simulate: bool,
     do_ingest: bool,
     run_finetune: bool = False,
+    run_post_eval: bool | None = None,
 ) -> int:
     """
     Active-learning cycle:
@@ -273,48 +345,68 @@ def run_cycle(
       2) infer + score (MC uncertainty)
       3) select worst → PEB
       4) ECADStar batch
-      5) ingest + normalize + evaluate
-      6) [optional] build overlay + fine-tune exp057
+      5) ingest + normalize + pre-finetune evaluate (numericals → decision ledger)
+      6) [optional] build overlay + fine-tune
+      7) [optional] post-finetune full evaluation + DECISION_REPORT
     """
+    ft = cfg.get("finetune", {})
+    eval_opts = cfg.get("evaluation") or {}
+    # Numerical evaluation is always required after ingest; only post-FT can be toggled.
+    if run_post_eval is None:
+        run_post_eval = bool(eval_opts.get("post_finetune", True))
+    n_steps = 8 if run_finetune and ft.get("enabled") and run_post_eval else (
+        7 if run_finetune and ft.get("enabled") else 6
+    )
+
     it = bump_iteration(cfg, groot)
     print(f"\n{'='*60}\n  AL iteration {it}\n{'='*60}")
 
-    print("\n[1/7] Generate candidates")
-    cmd_generate(cfg, groot, it)
-    print("\n[2/7] Infer + score (uncertainty)")
-    cmd_infer(cfg, groot, it)
-    print("\n[3/7] Select worst for ECAD")
-    cmd_select_bad(cfg, groot, it)
-    print("\n[4/7] Build PEB")
+    print(f"\n[1/{n_steps}] Per-K acquire (generate + infer + select)")
+    if use_per_k_pools(cfg):
+        run_per_k_acquire(cfg, groot, it)
+    else:
+        cmd_generate(cfg, groot, it)
+        print(f"\n[2/{n_steps}] Infer + score (uncertainty)")
+        cmd_infer(cfg, groot, it)
+        print(f"\n[3/{n_steps}] Select worst for ECAD")
+        cmd_select_bad(cfg, groot, it)
+    print(f"\n[4/{n_steps}] Build PEB")
     cmd_build_peb(cfg, groot, it)
 
     rc = 0
     if do_simulate:
-        print("\n[5/7] ECADStar simulate")
+        print(f"\n[5/{n_steps}] ECADStar simulate")
         rc = cmd_simulate(cfg, groot, it)
         if rc != 0:
             return rc
     else:
-        print("\n[5/7] ECADStar simulate — SKIPPED")
+        print(f"\n[5/{n_steps}] ECADStar simulate — SKIPPED")
 
+    step = 6
     if do_ingest and rc == 0:
-        print("\n[6/7] Ingest + normalize + evaluate")
+        print(f"\n[{step}/{n_steps}] Ingest + normalize + pre-finetune evaluate")
         cmd_ingest(cfg, groot, it)
         cmd_normalize(cfg, groot, it)
-        cmd_evaluate(cfg, groot, it)
+        cmd_evaluate_pre_finetune(cfg, groot, it)
+        step += 1
     elif not do_ingest:
-        print("\n[6/7] Ingest — SKIPPED")
+        print(f"\n[{step}/{n_steps}] Ingest — SKIPPED")
+        step += 1
 
-    ft = cfg.get("finetune", {})
     if run_finetune and do_ingest and rc == 0 and ft.get("enabled"):
-        print("\n[7/7] Build overlay + fine-tune exp057")
+        print(f"\n[{step}/{n_steps}] Build overlay + fine-tune")
         cmd_build_overlay(cfg, groot)
-        return cmd_finetune(cfg, groot)
+        rc = cmd_finetune(cfg, groot)
+        step += 1
+        if rc == 0 and run_post_eval:
+            print(f"\n[{step}/{n_steps}] Post-finetune eval + decision report")
+            cmd_post_finetune_eval(cfg, groot, it)
+        return rc
 
     if run_finetune and ft.get("enabled"):
         cmd_finetune_hint(cfg, groot)
     else:
-        print("\n[7/7] Fine-tune — skipped (use COMMAND=full or finetune.run_after_cycle=true)")
+        print(f"\n[{step}/{n_steps}] Fine-tune — skipped (use COMMAND=full or finetune.run_after_cycle=true)")
     return rc
 
 
@@ -374,11 +466,28 @@ def main_from_config(
     if command == "evaluate":
         cmd_evaluate(cfg, groot, _it())
         return 0
+    if command == "evaluate-pre-finetune":
+        cmd_evaluate_pre_finetune(cfg, groot, _it())
+        return 0
+    if command == "evaluate-post-finetune":
+        cmd_post_finetune_eval(cfg, groot, _it())
+        return 0
+    if command == "evaluate-full":
+        cmd_post_finetune_eval(cfg, groot, _it())
+        return 0
+    if command == "evaluate-report":
+        cmd_write_cycle_report(cfg, groot, _it())
+        return 0
+    if command == "evaluate-decision":
+        cmd_write_decision_report(cfg, groot, _it())
+        return 0
     if command == "build-overlay":
         cmd_build_overlay(cfg, groot)
         return 0
     if command == "finetune":
         return cmd_finetune(cfg, groot)
+    if command == "occ-warmup":
+        return cmd_occ_only_warmup(cfg, groot)
     if command == "finetune-hint":
         cmd_finetune_hint(cfg, groot)
         return 0

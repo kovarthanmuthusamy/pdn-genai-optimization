@@ -139,7 +139,7 @@ spatial head) the inspection **frequency**.
 
 Earlier experiments (`exp043` PoE baseline → `exp054` self-contained training → `exp055` binary
 occupancy decode → `exp056` occupancy GNN → `exp057` structured latent + spectrum GNN) are kept under
-`experiments/` for comparison. See `docs/EXP057_STRUCTURED_GRAPH_VAE.md` for architecture details.
+`experiments/` for comparison. See [`docs/model-architecture.md`](docs/model-architecture.md) for architecture details.
 
 ### 4.1 Modalities
 
@@ -290,8 +290,8 @@ concentrates spatially.
 ## 7. Repository Structure
 
 Scripts are grouped under **`pipelines/`** and **`libs/`**. Path helpers live in
-`[repo_paths.py](repo_paths.py)`; see `[docs/FOLDER_RENAME_AND_PATHS.md](docs/FOLDER_RENAME_AND_PATHS.md)`
-for the folder rename and migration notes.
+`[repo_paths.py](repo_paths.py)`; see path helpers and migration notes are summarized in
+`[docs/data-pipeline.md](docs/data-pipeline.md)` (archive: `docs/_archive/FOLDER_RENAME_AND_PATHS.md`).
 
 ```text
 .
@@ -366,7 +366,7 @@ for the folder rename and migration notes.
 | Multifreq sweep               | `python scrap/orchestration/run_multifreq_sweep_pipeline.py` |
 | ECAD append pipeline          | `python pipelines/dataset_sim/run_combinations_sim_pipeline.py` |
 
-All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script's docstring includes **Agent notes** (What, Usage, Config keys). See `[pipelines/README.md](pipelines/README.md)` and `[docs/CONFIG_ONLY_SCRIPTS.md](docs/CONFIG_ONLY_SCRIPTS.md)`.
+All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script's docstring includes **Agent notes** (What, Usage, Config keys). See `[pipelines/README.md](pipelines/README.md)`.
 
 ---
 
@@ -413,7 +413,7 @@ Tested with **PyTorch 2.7 (CUDA 11.8)**; a GPU is recommended for training.
 
 ### Running scripts
 
-Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `# CONFIGURATION` block, then run `python path/to/script.py`. Module docstrings explain **What** each script does, **Usage**, and **Config keys** — see `[docs/CONFIG_ONLY_SCRIPTS.md](docs/CONFIG_ONLY_SCRIPTS.md)`.
+Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `# CONFIGURATION` block, then run `python path/to/script.py`. Module docstrings explain **What** each script does, **Usage**, and **Config keys**.
 
 ### Stage 1 — train the surrogate
 
@@ -480,7 +480,7 @@ python pipelines/active_learning/run.py
 
 The default `COMMAND = "full"` runs seven steps: generate candidates → MC uncertainty scoring →
 select worst layouts → ECADSTAR simulation → ingest labels → build overlay dataset → fine-tune exp057
-(+50 epochs from `last_model.pt`). See `[docs/AL_OPTION_B_FINETUNE_EXP057.md](docs/AL_OPTION_B_FINETUNE_EXP057.md)`.
+(+50 epochs from `last_model.pt`). See [`docs/active-learning.md`](docs/active-learning.md).
 
 ---
 

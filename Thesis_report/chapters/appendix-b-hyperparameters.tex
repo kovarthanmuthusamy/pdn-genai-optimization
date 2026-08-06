@@ -1,0 +1,1259 @@
+% appendix-b-hyperparameters.tex -- part of thesis_v3.tex; do not add \documentclass here.
+% Draft with the thesis-chapter workflow. Unsupported claims must use \fillin{...}.
+
+\chapter{Hyperparameter Configuration for Training and Optimisation}
+\label{ch:appendix_hyperparameters}
+
+\section{Scope and how to read these tables}
+\label{sec:appb_scope}
+
+This appendix records the configuration files that drive training and fine-tuning of the
+surrogate \texttt{exp059\_capacity\_freq}, the fine-tune override files that sit on top of
+the base configuration, and the \texttt{CONFIG} block of the Stage-2 latent-optimisation
+script. It is a transcription, not an analysis: every key name and every value is
+reproduced exactly as it appears in the source file, with no rounding, no unit
+conversion and no reformatting.
+
+\textbf{These are the current contents of the configuration files, not a run record.}
+\texttt{config.yaml} has been edited since the capacity-phase training run --- at least in
+the two keys \texttt{layout\_train\_prob} and \texttt{occ\_only\_encode\_prob}, discussed
+as C5 in \autoref{sec:appb_conflicts} --- and the fine-tune configuration that the
+active-learning loop actually launches is regenerated at every launch and overwritten
+(C1). Nothing in this appendix may be read as a per-run snapshot of the values that were
+in force when a particular checkpoint was produced.
+
+The training configuration lives in \texttt{experiments/exp059\_capacity\_freq/config.yaml}.
+Despite the extension, the file is a JSON document with 183 top-level keys. It is read by
+\texttt{load\_yaml\_config()} (\texttt{experiments/exp059\_capacity\_freq/codes/exp059\_common.py},
+lines 17--25), which discards blank lines and every line whose first non-space character
+is \texttt{\#}, then calls \texttt{json.loads} on the remainder. Consequently YAML syntax
+--- bare keys, \texttt{-} lists, anchors --- is not accepted. The base \texttt{config.yaml}
+contains no comment lines at all; the two override files do.
+
+The 183 keys are grouped below into 21 tables. \textbf{The grouping is editorial}: keys
+belonging to one table are in general not contiguous in the file, and the file itself
+imposes no ordering or sectioning. The grouping was introduced here so that the tables
+are readable; it should not be taken as structure present in the artifact.
+
+None of the 183 keys carries a comment or any other in-file documentation, so this
+appendix cannot state why an individual value was chosen.
+\fillin{for the values that were actually tuned rather than inherited from exp057/exp058,
+add the provenance --- the sweep, ablation or hand-tuning step that fixed them.
+\texttt{experiments/exp059\_capacity\_freq/notes.md} would be the artifact to check; no
+sweep record was located during evidence extraction.}
+
+\section{Surrogate training configuration: \texttt{exp059\_capacity\_freq}}
+\label{sec:appb_exp059_config}
+
+\subsection{Latent structure and architecture keys}
+\label{subsec:appb_arch}
+
+Five of the architecture-level switches are set explicitly in \texttt{config.yaml}. The
+remaining architecture switches are not present in the file and fall back to code
+defaults; they are listed separately in \autoref{sec:appb_code_defaults} so that this
+table does not imply they were configured.
+
+\begin{table}[htbp]
+\centering
+\caption{Latent and architecture keys set in \texttt{config.yaml} (5 keys).}
+\label{tab:appb_arch}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{latent\_dim} & 128 \\
+\texttt{heatmap\_private\_dim} & 40 \\
+\texttt{cond\_dim} & 32 \\
+\texttt{freq\_fourier\_features} & 16 \\
+\texttt{use\_heatmap\_film} & true \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Training schedule, optimiser and learning-rate scheduler}
+\label{subsec:appb_schedule}
+
+\autoref{tab:appb_schedule} gives the schedule keys. The optimiser itself is not
+configurable from the file: \texttt{train\_core.py} (lines 906--920) constructs
+\texttt{torch.optim.AdamW} with \texttt{weight\_decay} $=$ \texttt{1e-4}, first
+attempting the fused implementation on CUDA, then the \texttt{foreach} implementation,
+and falling back to plain \texttt{AdamW}. The learning-rate schedule is
+\texttt{ReduceLROnPlateau(mode="min", factor=c.lr\_factor, patience=c.lr\_patience,
+min\_lr=c.lr\_min)} (\texttt{train\_core.py}, lines 1431--1433), which with the values in
+\autoref{tab:appb_schedule} resolves to factor $0.5$, patience $15$ and minimum learning
+rate \texttt{1e-05}.
+
+On resume with \texttt{reset\_lr\_on\_resume} set, every parameter group's learning rate
+is reset to \texttt{learning\_rate}, except parameter group index 1 when the resume epoch
+is at or past \texttt{impedance\_peak\_focus\_epoch}, which is set to
+\texttt{learning\_rate} $\times$ \texttt{impedance\_decoder\_lr\_mult}; the scheduler is
+then recreated from scratch (\texttt{train\_core.py}, lines 1442--1451).
+
+\begin{table}[htbp]
+\centering
+\caption{Training schedule and scheduler keys (13 keys).}
+\label{tab:appb_schedule}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{num\_epochs} & 510 \\
+\texttt{batch\_size} & 224 \\
+\texttt{val\_batch\_size} & 320 \\
+\texttt{learning\_rate} & 1.5e-05 \\
+\texttt{lr\_min} & 1e-05 \\
+\texttt{lr\_patience} & 15 \\
+\texttt{lr\_factor} & 0.5 \\
+\texttt{train\_split} & 0.9 \\
+\texttt{num\_workers} & 4 \\
+\texttt{reset\_lr\_on\_resume} & true \\
+\texttt{train\_samples\_per\_epoch} & 64000 \\
+\texttt{impedance\_decoder\_lr\_mult} & 1.0 \\
+\texttt{impedance\_separate\_lr} & true \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Data splitting and class balancing}
+\label{subsec:appb_split}
+
+\begin{table}[htbp]
+\centering
+\caption{Data split and balancing keys (7 keys).}
+\label{tab:appb_split}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{balance\_k} & false \\
+\texttt{k\_balance\_power} & 0.4 \\
+\texttt{k\_balance\_smoothing} & 0.001 \\
+\texttt{stratify\_by\_k} & true \\
+\texttt{split\_by\_design} & true \\
+\texttt{balance\_freq} & false \\
+\texttt{freq\_balance\_power} & 1.4 \\
+\hline
+\end{tabular}
+\end{table}
+
+Note that \texttt{balance\_k} and \texttt{balance\_freq} are both \texttt{false} while
+\texttt{k\_balance\_power}, \texttt{k\_balance\_smoothing} and
+\texttt{freq\_balance\_power} carry non-default-looking values, i.e.\ the two weighting
+exponents are present but inactive under this configuration.
+\fillin{confirm from \texttt{train\_core.py} whether \texttt{k\_balance\_power} and
+\texttt{freq\_balance\_power} are read at all when the corresponding \texttt{balance\_*}
+flag is false, and state the sampler behaviour that is actually used.}
+
+\subsection{Dataset, overlay and checkpoint paths}
+\label{subsec:appb_paths}
+
+\begin{table}[htbp]
+\centering
+\caption{Dataset, overlay and checkpointing keys (8 keys).}
+\label{tab:appb_paths}
+\begin{tabular}{@{}lp{0.44\textwidth}@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{data\_dir} & \texttt{datasets/\allowbreak data\_multifreq\_\allowbreak train\_norm\_unbounded} \\
+\texttt{experiment\_dir} & \texttt{experiments/\allowbreak exp059\_capacity\_freq} \\
+\texttt{al\_overlay\_data\_dir} & \texttt{datasets/\allowbreak data\_multifreq\_\allowbreak al\_overlay\_exp059} \\
+\texttt{al\_overlay\_sample\_weight} & 128.0 \\
+\texttt{resume\_checkpoint} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak checkpoints/\allowbreak last\_model.pt} \\
+\texttt{recalculate\_curriculum\_on\_resume} & false \\
+\texttt{checkpoint\_interval} & 5 \\
+\texttt{keep\_last\_n\_checkpoints} & 0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Logging and validation cadence}
+\label{subsec:appb_logging}
+
+\begin{table}[htbp]
+\centering
+\caption{Logging and validation cadence keys (3 keys).}
+\label{tab:appb_logging}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{val\_on\_checkpoint\_only} & true \\
+\texttt{epoch\_print\_interval} & 1 \\
+\texttt{epoch\_log\_interval} & 2 \\
+\hline
+\end{tabular}
+\end{table}
+
+\clearpage
+
+\subsection{Heatmap loss weights}
+\label{subsec:appb_heatmap_loss}
+
+The heatmap branch carries the largest number of individually weighted loss terms.
+\autoref{tab:appb_heatmap_loss} lists the general reconstruction and structure weights,
+\autoref{tab:appb_heatmap_region} the peak- and valley-region terms, and
+\autoref{tab:appb_heatmap_focus} the keys governing the heatmap focus phase.
+\fillin{describe, in Chapter 3 rather than here, what each heatmap loss term penalises
+and why the relative weights were set this way; the config file records no rationale.}
+
+\begin{table}[htbp]
+\centering
+\caption{Heatmap reconstruction and structure loss weights (15 keys).}
+\label{tab:appb_heatmap_loss}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{heatmap\_weight} & 5.0 \\
+\texttt{heatmap\_phys\_p99\_weight} & 2.0 \\
+\texttt{heatmap\_phys\_p99\_percentile} & 99.0 \\
+\texttt{heatmap\_peak\_weight} & 3.0 \\
+\texttt{heatmap\_grad\_weight} & 1.5 \\
+\texttt{heatmap\_lap\_weight} & 2.0 \\
+\texttt{heatmap\_contrast\_weight} & 1.5 \\
+\texttt{heatmap\_contrast\_margin} & 0.5 \\
+\texttt{heatmap\_bg\_weight} & 0.5 \\
+\texttt{heatmap\_dynrange\_weight} & 2.0 \\
+\texttt{heatmap\_pearson\_weight} & 0.75 \\
+\texttt{heatmap\_grad\_vector\_weight} & 2.0 \\
+\texttt{heatmap\_grad\_direction\_weight} & 1.0 \\
+\texttt{heatmap\_grad\_direction\_min\_mag} & 0.08 \\
+\texttt{heatmap\_grad\_huber\_delta} & 0.5 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Heatmap peak- and valley-region loss terms (11 keys).}
+\label{tab:appb_heatmap_region}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{heatmap\_peak\_centroid\_top\_q} & 0.95 \\
+\texttt{heatmap\_valley\_centroid\_bottom\_q} & 0.05 \\
+\texttt{heatmap\_peak\_topregion\_weight} & 2.5 \\
+\texttt{heatmap\_valley\_topregion\_weight} & 2.5 \\
+\texttt{heatmap\_peak\_topregion\_q} & 0.95 \\
+\texttt{heatmap\_valley\_topregion\_q} & 0.05 \\
+\texttt{heatmap\_topregion\_huber\_delta} & 0.5 \\
+\texttt{heatmap\_peak\_loc\_weight} & 2.5 \\
+\texttt{heatmap\_peak\_loc\_temperature} & 0.035 \\
+\texttt{heatmap\_valley\_loc\_weight} & 0.0 \\
+\texttt{heatmap\_valley\_loc\_temperature} & 0.03 \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{heatmap\_valley\_loc\_weight} is $0.0$, so the valley-localisation term is
+switched off while its temperature is still specified.
+
+\begin{table}[htbp]
+\centering
+\caption{Heatmap focus phase and low-$K$ emphasis (9 keys).}
+\label{tab:appb_heatmap_focus}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{heatmap\_focus\_start\_frac} & 0.0 \\
+\texttt{heatmap\_focus\_start\_epoch} & 25 \\
+\texttt{heatmap\_focus\_heatmap\_weight} & 7.0 \\
+\texttt{heatmap\_focus\_impedance\_weight} & 4.0 \\
+\texttt{heatmap\_focus\_cross\_freq\_weight} & 1.1 \\
+\texttt{heatmap\_focus\_dynrange\_weight} & 3.0 \\
+\texttt{heatmap\_focus\_modality\_dropout} & 0.03 \\
+\texttt{hm\_low\_k\_threshold} & 3 \\
+\texttt{hm\_low\_k\_multiplier} & 2.0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Heatmap value range and clipping (4 keys).}
+\label{tab:appb_heatmap_clip}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{background\_value} & -3.1792 \\
+\texttt{heatmap\_z\_clip\_min} & -1.6791870594024658 \\
+\texttt{heatmap\_z\_clip\_max} & 6.275787830352783 \\
+\texttt{heatmap\_clip\_recon} & false \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{heatmap\_z\_clip\_min} and \texttt{physics\_fg\_clip\_min}
+(\autoref{tab:appb_physics}) hold the same value, $-1.6791870594024658$.
+\fillin{state where this number comes from --- presumably a percentile of the normalised
+heatmap distribution recorded in \texttt{normalization\_stats.json} --- and confirm that
+the two keys are meant to be tied. Do not keep the word "presumably": either cite the
+statistics file or mark the link as unverified.}
+
+\clearpage
+
+\subsection{Impedance loss weights and peak curriculum}
+\label{subsec:appb_impedance_loss}
+
+The impedance branch predicts the spectrum $Z(f)$ over the 231 frequency bins spanning
+1--600\,MHz. \autoref{tab:appb_impedance} lists its loss weights;
+\autoref{tab:appb_imp_curriculum} lists the curriculum keys that stage the peak-alignment
+terms during training.
+
+\begin{table}[htbp]
+\centering
+\caption{Impedance loss weights (11 keys).}
+\label{tab:appb_impedance}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{impedance\_weight} & 4.0 \\
+\texttt{impedance\_deriv\_weight} & 1.4 \\
+\texttt{impedance\_topk\_k} & 20 \\
+\texttt{impedance\_topk\_weight} & 4.5 \\
+\texttt{impedance\_under\_penalty} & 2.8 \\
+\texttt{impedance\_concavity\_weight} & 2.5 \\
+\texttt{impedance\_freq\_weight\_alpha} & 2.0 \\
+\texttt{impedance\_dual\_topk\_weight} & 0.75 \\
+\texttt{impedance\_peak\_index\_weight} & 1.5 \\
+\texttt{impedance\_peak\_mag\_weight} & 2.0 \\
+\texttt{impedance\_num\_peaks} & 8 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Impedance peak curriculum (6 keys).}
+\label{tab:appb_imp_curriculum}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{impedance\_peak\_start\_frac} & 0.1 \\
+\texttt{impedance\_peak\_ramp\_frac} & 0.05 \\
+\texttt{impedance\_peak\_focus\_frac} & 0.1 \\
+\texttt{impedance\_peak\_start\_epoch} & 25 \\
+\texttt{impedance\_peak\_ramp\_epochs} & 22 \\
+\texttt{impedance\_peak\_focus\_epoch} & 25 \\
+\hline
+\end{tabular}
+\end{table}
+
+Each curriculum stage is specified twice, once as a fraction of the run and once as an
+absolute epoch.
+\fillin{state which of the two forms \texttt{train\_core.py} actually uses --- the
+\texttt{*\_frac} keys or the \texttt{*\_epoch} keys --- and whether
+\texttt{recalculate\_curriculum\_on\_resume} (false, \autoref{tab:appb_paths}) selects
+between them on resume.}
+
+\subsection{Occupancy loss}
+\label{subsec:appb_occupancy_loss}
+
+The occupancy head predicts the placement vector $\mathbf{b} \in \{0,1\}^{52}$ under a
+budget $K$.
+
+\begin{table}[htbp]
+\centering
+\caption{Occupancy loss keys (11 keys).}
+\label{tab:appb_occupancy}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{occupancy\_weight} & 7.0 \\
+\texttt{occupancy\_focal\_gamma} & 1.5 \\
+\texttt{focal\_gamma\_warmup\_frac} & 0.0 \\
+\texttt{focal\_gamma\_warmup\_epochs} & 0 \\
+\texttt{occ\_k\_consistency\_weight} & 2.0 \\
+\texttt{use\_k\_weighting} & true \\
+\texttt{occ\_mid\_k\_center} & 25.0 \\
+\texttt{occ\_mid\_k\_sigma} & 8.0 \\
+\texttt{occ\_mid\_k\_boost} & 0.75 \\
+\texttt{occupancy\_binary\_decode} & true \\
+\texttt{occupancy\_binary\_ste\_train} & false \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{KL and latent regularisation}
+\label{subsec:appb_kl}
+
+\begin{table}[htbp]
+\centering
+\caption{KL, $\beta$-annealing and latent regularisation keys (17 keys).}
+\label{tab:appb_kl}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{free\_bits} & 0.12 \\
+\texttt{mu\_hinge\_threshold} & 4.0 \\
+\texttt{mu\_hinge\_weight} & 0.1 \\
+\texttt{mu\_bias\_weight} & 0.05 \\
+\texttt{per\_expert\_kl\_weight} & 0.02 \\
+\texttt{sigma\_reg\_weight} & 1.5 \\
+\texttt{sigma\_reg\_target} & 0.45 \\
+\texttt{use\_beta\_annealing} & false \\
+\texttt{beta\_start\_epoch} & 0 \\
+\texttt{beta\_end\_frac} & 0.3 \\
+\texttt{beta\_initial} & 0.0 \\
+\texttt{beta\_final} & 0.03 \\
+\texttt{beta\_phase2\_final} & 0.03 \\
+\texttt{beta\_phase2\_end\_frac} & 0.3 \\
+\texttt{beta\_end\_epoch} & 25 \\
+\texttt{beta\_phase2\_end\_epoch} & 25 \\
+\texttt{kan\_spline\_l1\_weight} & 0.0001 \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{use\_beta\_annealing} is \texttt{false}, so the eight $\beta$ schedule keys
+describe a schedule that is not active; \texttt{beta\_final} is $0.03$.
+\fillin{confirm from \texttt{train\_core.py} which single $\beta$ value is applied when
+\texttt{use\_beta\_annealing} is false.}
+
+\clearpage
+
+\subsection{Modality dropout and cross-modal terms}
+\label{subsec:appb_moddrop}
+
+Modality dropout is what makes the occupancy-only encode path usable at inference, which
+is the only path available when a placement is proposed rather than reconstructed.
+
+\begin{table}[htbp]
+\centering
+\caption{Modality dropout and cross-modal keys (8 keys).}
+\label{tab:appb_moddrop}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{modality\_dropout} & 0.06 \\
+\texttt{modality\_dropout\_start} & 0.06 \\
+\texttt{modality\_dropout\_anneal\_frac} & 0.04 \\
+\texttt{modality\_dropout\_anneal\_epochs} & 18 \\
+\texttt{modality\_dropout\_protect\_heatmap\_frac} & 0.325 \\
+\texttt{modality\_dropout\_protect\_heatmap\_epoch} & 25 \\
+\texttt{cross\_modal\_weight} & 0.75 \\
+\texttt{cross\_modal\_update\_freq} & 4 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Cross-frequency and layout path}
+\label{subsec:appb_crossfreq}
+
+\begin{table}[htbp]
+\centering
+\caption{Cross-frequency and layout-path keys (11 keys).}
+\label{tab:appb_crossfreq}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{cross\_freq\_weight} & 1.2 \\
+\texttt{cross\_freq\_start\_frac} & 0.025 \\
+\texttt{cross\_freq\_start\_epoch} & 20 \\
+\texttt{cross\_freq\_layout\_z\_only} & false \\
+\texttt{cross\_freq\_layout\_mix\_prob} & 0.45 \\
+\texttt{cross\_freq\_use\_encode\_z} & true \\
+\texttt{layout\_train\_prob} & 0.65 \\
+\texttt{occ\_only\_encode\_prob} & 0.4 \\
+\texttt{eval\_use\_occ\_only\_layout} & true \\
+\texttt{freq\_jitter\_prob} & 0.6 \\
+\texttt{freq\_jitter\_log10\_sigma} & 0.1 \\
+\hline
+\end{tabular}
+\end{table}
+
+The values of \texttt{layout\_train\_prob} and \texttt{occ\_only\_encode\_prob} in this
+table are the current contents of the file, not a record of the capacity-phase run.
+\texttt{docs/cursor-handoff.md} states that the capacity phase was run with
+\texttt{layout\_train\_prob} $=0$ and \texttt{occ\_only\_encode\_prob} $=0$, whereas
+\texttt{config.yaml} now holds $0.65$ and $0.4$. The file therefore no longer describes
+the run that produced the capacity checkpoint, and a reader must not treat
+\autoref{tab:appb_crossfreq} as the capacity-phase record for these two keys.
+\fillin{recover the two values that were in force when the capacity checkpoint was
+trained --- the training log or the config snapshot stored alongside
+\texttt{checkpoints/last\_model.pt} would settle it --- and state whether any other key
+in \autoref{sec:appb_exp059_config} was also edited after that run.}
+
+\subsection{Distillation and physics terms}
+\label{subsec:appb_distill_physics}
+
+\begin{table}[htbp]
+\centering
+\caption{Latent- and output-distillation keys (4 keys).}
+\label{tab:appb_distill}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{latent\_distill\_weight} & 2.5 \\
+\texttt{latent\_distill\_private\_mult} & 3.0 \\
+\texttt{latent\_distill\_logvar\_weight} & 0.3 \\
+\texttt{output\_distill\_weight} & 2.5 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Physics-loss keys (10 keys).}
+\label{tab:appb_physics}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{physics\_ri\_weight} & 1.0 \\
+\texttt{physics\_critic\_sup\_weight} & 2.0 \\
+\texttt{physics\_ar\_weight} & 0.5 \\
+\texttt{physics\_fg\_clip\_min} & -1.6791870594024658 \\
+\texttt{physics\_critic\_warmup\_frac} & 0.025 \\
+\texttt{physics\_slope\_anneal\_frac} & 0.05 \\
+\texttt{physics\_critic\_warmup\_epochs} & 11 \\
+\texttt{physics\_slope\_anneal\_epochs} & 22 \\
+\texttt{penalty\_warmup\_frac} & 0.025 \\
+\texttt{penalty\_warmup\_epochs} & 11 \\
+\hline
+\end{tabular}
+\end{table}
+
+\clearpage
+
+\subsection{Off-anchor evaluation and fine-tune early stopping}
+\label{subsec:appb_eval_keys}
+
+The \texttt{eval\_off\_anchor} keys define the frequencies at which the surrogate is scored
+outside the normal validation pass. The name is misleading and the set must not be read as
+a held-out frequency set. Of the three frequencies in \texttt{eval\_off\_anchor\_mhz},
+$155.0$ and $265.0$\,MHz are not training anchors, but $250.0$\,MHz is one of the 24
+anchors listed in \texttt{datasets/data\_multifreq\_train\_norm\_unbounded/\allowbreak
+dataset\_meta.json} (\texttt{pi\_frequencies\_mhz}) and reproduced in
+\autoref{ch:appendix_simulation_dataset}. It also carries the largest weight of the three,
+$3.0$ against $2.5$ for each of the other two. One third of this evaluation set is
+therefore trained on, and it is the most heavily weighted third.
+
+This matters beyond bookkeeping, because the metric is also a checkpoint-selection
+criterion: \texttt{experiments/exp059\_capacity\_freq/checkpoints/\allowbreak
+best\_off\_anchor\_model.pt} exists, so a checkpoint is retained on the basis of a score
+computed partly at a trained frequency. Any statement in Chapter 4 or Chapter 5 about
+generalisation to unseen frequencies must be made against $155.0$ and $265.0$\,MHz alone,
+not against the pooled off-anchor number.
+\fillin{state why 250.0\,MHz, an existing training anchor, is included in the off-anchor
+evaluation set, and whether the off-anchor metrics reported elsewhere in the thesis are
+per frequency or pooled across the three; the off-anchor evaluation code and the metrics
+CSVs under \texttt{experiments/exp059\_capacity\_freq/metrics/} would settle it.}
+
+\begin{table}[htbp]
+\centering
+\caption{Off-anchor evaluation keys (4 keys). \texttt{250.0} is a training anchor; see the
+text above.}
+\label{tab:appb_offanchor}
+\begin{tabular}{@{}lp{0.42\textwidth}@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{eval\_off\_anchor\_mhz} & \texttt{[ 155.0, 250.0, 265.0 ]} \\
+\texttt{eval\_off\_anchor\_mhz\_weights} & \texttt{\{ "155": 2.5, "250": 3.0, "265": 2.5 \}} \\
+\texttt{eval\_off\_anchor\_max\_batches} & 20 \\
+\texttt{eval\_off\_anchor\_interval} & 5 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Active-learning fine-tune early-stopping keys present in the base
+\texttt{config.yaml} (4 keys).}
+\label{tab:appb_earlystop}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{al\_finetune\_early\_stop} & true \\
+\texttt{al\_finetune\_early\_stop\_patience} & 3 \\
+\texttt{al\_finetune\_early\_stop\_min\_delta} & 0.01 \\
+\texttt{al\_finetune\_early\_stop\_kind} & \texttt{"layout\_cross"} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Numerical stability}
+\label{subsec:appb_numerics}
+
+\begin{table}[htbp]
+\centering
+\caption{Numerical-stability keys (10 keys).}
+\label{tab:appb_numerics}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{training\_force\_fp32} & true \\
+\texttt{training\_sanitize\_grads} & false \\
+\texttt{training\_skip\_nonfinite\_batches} & true \\
+\texttt{training\_grad\_clip\_norm} & 1.0 \\
+\texttt{training\_logvar\_clamp\_min} & -10.0 \\
+\texttt{training\_logvar\_clamp\_max} & 10.0 \\
+\texttt{training\_recon\_z\_soft\_floor} & -8.0 \\
+\texttt{training\_recon\_z\_soft\_cap} & null \\
+\texttt{training\_recon\_z\_cap\_mult} & 1.05 \\
+\texttt{training\_loss\_finite\_cap} & 1000000.0 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Hardware and runtime}
+\label{subsec:appb_runtime}
+
+\begin{table}[htbp]
+\centering
+\caption{Hardware and runtime keys (12 keys).}
+\label{tab:appb_hardware}
+\begin{tabular}{@{}ll@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{amp} & \texttt{"off"} \\
+\texttt{tf32} & false \\
+\texttt{compile} & false \\
+\texttt{compile\_mode} & \texttt{"reduce-overhead"} \\
+\texttt{cache\_in\_ram} & false \\
+\texttt{use\_ddp} & true \\
+\texttt{ddp\_base\_batch\_size} & 160 \\
+\texttt{ddp\_linear\_lr\_scale} & true \\
+\texttt{persistent\_workers} & false \\
+\texttt{prefetch\_factor} & 2 \\
+\texttt{empty\_cache\_interval} & 0 \\
+\texttt{device} & \texttt{"cuda:0"} \\
+\hline
+\end{tabular}
+\end{table}
+
+Mixed precision is off and \texttt{training\_force\_fp32} is true, so training ran in
+single precision. \texttt{use\_ddp} is true with \texttt{ddp\_base\_batch\_size} $=160$,
+\texttt{batch\_size} $=224$ and \texttt{ddp\_linear\_lr\_scale} $=$ true.
+\fillin{state the effective per-GPU and global batch size and the learning rate that
+linear scaling actually produced. No artifact recording the scaled learning rate was
+found; a training log line from the DDP run would settle it.}
+
+\clearpage
+
+\section{Architecture switches taken from code defaults}
+\label{sec:appb_code_defaults}
+
+Not every architecture switch is written into \texttt{config.yaml}. Keys absent from the
+file fall back to the defaults in \texttt{vae\_model\_kwargs()}
+(\texttt{experiments/exp059\_capacity\_freq/codes/exp059\_common.py}, lines 34--55).
+\autoref{tab:appb_code_defaults} lists those defaults and marks which of them
+\texttt{config.yaml} overrides. \textbf{The twelve rows marked ``code default'' were never
+configured for exp059}; they are recorded here because they determine the model that was
+built, not because a decision about them is documented anywhere.
+
+\begin{table}[htbp]
+\centering
+\caption{Defaults in \texttt{vae\_model\_kwargs()} and whether \texttt{config.yaml}
+overrides them. ``Code default'' means the key does not appear in any exp059
+configuration file.}
+\label{tab:appb_code_defaults}
+\begin{tabular}{@{}lll@{}}
+\hline
+Key & Code default & Status in exp059 \\
+\hline
+\texttt{latent\_dim} & 42 & overridden: 128 \\
+\texttt{cond\_dim} & 8 & overridden: 32 \\
+\texttt{heatmap\_private\_dim} & 8 & overridden: 40 \\
+\texttt{modality\_dropout} & 0.0 & overridden: 0.06 \\
+\texttt{freq\_fourier\_features} & 8 & overridden: 16 \\
+\texttt{use\_heatmap\_film} & True & overridden: true \\
+\texttt{use\_multiscale\_film} & True & code default \\
+\texttt{use\_freq\_poe\_expert} & True & code default \\
+\texttt{use\_occ\_spatial\_decoder} & True & code default \\
+\texttt{use\_occ\_spatial\_tower} & True & code default \\
+\texttt{occ\_spatial\_ch} & 8 & code default \\
+\texttt{use\_layout\_private\_head} & True & code default \\
+\texttt{layout\_private\_hidden} & 384 & code default \\
+\texttt{use\_layout\_private\_freq\_film} & True & code default \\
+\texttt{graph\_hidden\_dim} & 128 & code default \\
+\texttt{graph\_num\_layers} & 3 & code default \\
+\texttt{graph\_dropout} & 0.1 & code default \\
+\texttt{imp\_peak\_dim} & 8 & code default \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{use\_heatmap\_film} is set in \texttt{config.yaml} to the same value as the code
+default, so it is listed as overridden but does not change the model.
+
+\section{Fine-tune override configurations}
+\label{sec:appb_finetune_configs}
+
+Two override files sit beside the base configuration in
+\texttt{experiments/exp059\_capacity\_freq/}: \texttt{config\_al\_finetune.yaml} for the
+active-learning fine-tune and \texttt{config\_occ\_only\_finetune.yaml} for the
+occupancy-only warm-up. Both are partial: they set a subset of keys and inherit the rest
+from \texttt{config.yaml}.
+
+\subsection{Active-learning fine-tune: file value versus value actually used}
+\label{subsec:appb_al_finetune}
+
+The fine-tune that runs is not driven directly by \texttt{config\_al\_finetune.yaml}. At
+launch, \texttt{write\_runtime\_finetune\_config()}
+(\texttt{active\_learning\_pi/al/finetune\_run.py}, lines 61--123) copies that file,
+overwrites \texttt{resume\_checkpoint}, recomputes \texttt{num\_epochs} as the checkpoint
+epoch plus \texttt{finetune.extra\_epochs}, forces
+\texttt{eval\_use\_occ\_only\_layout} to \texttt{True}, and applies the overrides in the
+\texttt{finetune} block of the active-learning configuration. The result is written to
+\texttt{config\_al\_finetune.runtime.yaml}. \autoref{tab:appb_al_finetune} therefore
+prints both columns side by side; where they differ, the runtime column is what ran.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Active-learning fine-tune configuration: hand-written
+\texttt{config\_al\_finetune.yaml} (29 keys) against the generated
+\texttt{config\_al\_finetune.runtime.yaml} (29 keys). Rows in which the two disagree are
+discussed in \autoref{sec:appb_conflicts}.}
+\label{tab:appb_al_finetune}
+\begin{tabular}{@{}lp{0.24\textwidth}p{0.24\textwidth}@{}}
+\hline
+Key & \texttt{config\_al\_finetune.yaml} & \texttt{...runtime.yaml} \\
+\hline
+\texttt{resume\_checkpoint} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak checkpoints/\allowbreak last\_model.pt} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak checkpoints/\allowbreak last\_model.pt} \\
+\texttt{num\_epochs} & 1050 & 510 \\
+\texttt{learning\_rate} & 1.5e-05 & 1.5e-05 \\
+\texttt{reset\_lr\_on\_resume} & true & true \\
+\texttt{train\_samples\_per\_epoch} & 64000 & 64000 \\
+\texttt{al\_overlay\_data\_dir} & \texttt{datasets/\allowbreak data\_multifreq\_\allowbreak al\_overlay\_exp059} & \texttt{datasets/\allowbreak data\_multifreq\_\allowbreak al\_overlay\_exp059} \\
+\texttt{al\_overlay\_sample\_weight} & 128.0 & 128.0 \\
+\texttt{layout\_train\_prob} & 0.9 & 0.65 \\
+\texttt{occ\_only\_encode\_prob} & 0.7 & 0.4 \\
+\texttt{eval\_use\_occ\_only\_layout} & true & true \\
+\texttt{latent\_distill\_weight} & 2.5 & 2.5 \\
+\texttt{output\_distill\_weight} & 2.5 & 2.5 \\
+\texttt{use\_beta\_annealing} & false & false \\
+\texttt{beta\_final} & 0.03 & 0.03 \\
+\texttt{free\_bits} & 0.12 & 0.12 \\
+\texttt{heatmap\_weight} & 5.0 & 5.0 \\
+\texttt{heatmap\_focus\_heatmap\_weight} & 7.0 & 7.0 \\
+\texttt{heatmap\_focus\_start\_frac} & 0.0 & 0.0 \\
+\texttt{heatmap\_focus\_start\_epoch} & 0 & 0 \\
+\texttt{cross\_freq\_weight} & 1.2 & 1.2 \\
+\texttt{eval\_off\_anchor\_mhz} & \texttt{[ 155, 250, 265 ]} & \texttt{[ 155, 250, 265 ]} \\
+\texttt{eval\_off\_anchor\_interval} & 5 & 5 \\
+\texttt{eval\_off\_anchor\_max\_batches} & 20 & 20 \\
+\texttt{al\_finetune\_early\_stop} & true & true \\
+\texttt{al\_finetune\_early\_stop\_patience} & 3 & 3 \\
+\texttt{al\_finetune\_early\_stop\_min\_delta} & 0.01 & 0.01 \\
+\texttt{al\_finetune\_early\_stop\_kind} & \texttt{"layout\_cross"} & \texttt{"layout\_cross"} \\
+\texttt{checkpoint\_interval} & 5 & 5 \\
+\texttt{epoch\_print\_interval} & 1 & 1 \\
+\hline
+\end{tabular}
+\end{table}
+
+The override generator also copies \texttt{beta\_final}, \texttt{free\_bits} and
+\texttt{use\_beta\_annealing} from the occupancy-only warm-up configuration into the
+runtime fine-tune configuration (\texttt{finetune\_run.py}, lines 90--92). The keys that
+the active-learning configuration's \texttt{finetune} block is allowed to override
+(\texttt{finetune\_run.py}, lines 94--117) are: \texttt{al\_overlay\_sample\_weight},
+\texttt{layout\_train\_prob}, \texttt{occ\_only\_encode\_prob},
+\texttt{eval\_use\_occ\_only\_layout}, \texttt{latent\_distill\_weight},
+\texttt{output\_distill\_weight}, \texttt{latent\_distill\_logvar\_weight},
+\texttt{heatmap\_phys\_p99\_weight}, \texttt{eval\_off\_anchor\_mhz},
+\texttt{eval\_off\_anchor\_mhz\_weights}, \texttt{eval\_off\_anchor\_interval},
+\texttt{eval\_off\_anchor\_max\_batches}, \texttt{al\_finetune\_early\_stop},
+\texttt{al\_finetune\_early\_stop\_patience},
+\texttt{al\_finetune\_early\_stop\_min\_delta},
+\texttt{al\_finetune\_early\_stop\_kind}, \texttt{checkpoint\_interval},
+\texttt{beta\_final}, \texttt{free\_bits} and \texttt{use\_beta\_annealing}.
+
+\subsection{Occupancy-only warm-up configuration}
+\label{subsec:appb_occ_warmup}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{\texttt{config\_occ\_only\_finetune.yaml}, the occupancy-only warm-up override
+(28 keys).}
+\label{tab:appb_occ_warmup}
+\begin{tabular}{@{}lp{0.36\textwidth}@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{resume\_checkpoint} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak checkpoints/\allowbreak last\_model.pt} \\
+\texttt{num\_epochs} & 1100 \\
+\texttt{learning\_rate} & 1.2e-05 \\
+\texttt{reset\_lr\_on\_resume} & true \\
+\texttt{train\_samples\_per\_epoch} & 56000 \\
+\texttt{layout\_train\_prob} & 1.0 \\
+\texttt{occ\_only\_encode\_prob} & 1.0 \\
+\texttt{eval\_use\_occ\_only\_layout} & true \\
+\texttt{use\_beta\_annealing} & false \\
+\texttt{beta\_final} & 0.03 \\
+\texttt{free\_bits} & 0.12 \\
+\texttt{latent\_distill\_weight} & 2.5 \\
+\texttt{output\_distill\_weight} & 2.5 \\
+\texttt{cross\_freq\_weight} & 1.2 \\
+\texttt{cross\_freq\_layout\_z\_only} & true \\
+\texttt{heatmap\_weight} & 5.0 \\
+\texttt{heatmap\_focus\_heatmap\_weight} & 6.0 \\
+\texttt{heatmap\_focus\_start\_frac} & 0.0 \\
+\texttt{heatmap\_focus\_start\_epoch} & 0 \\
+\texttt{eval\_off\_anchor\_mhz} & \texttt{[ 155, 250, 265 ]} \\
+\texttt{eval\_off\_anchor\_interval} & 5 \\
+\texttt{eval\_off\_anchor\_max\_batches} & 20 \\
+\texttt{al\_finetune\_early\_stop} & true \\
+\texttt{al\_finetune\_early\_stop\_patience} & 4 \\
+\texttt{al\_finetune\_early\_stop\_min\_delta} & 0.01 \\
+\texttt{al\_finetune\_early\_stop\_kind} & \texttt{"layout\_cross"} \\
+\texttt{checkpoint\_interval} & 5 \\
+\texttt{epoch\_print\_interval} & 1 \\
+\hline
+\end{tabular}
+\end{table}
+
+The warm-up sets both \texttt{layout\_train\_prob} and \texttt{occ\_only\_encode\_prob}
+to $1.0$, i.e.\ it trains the occupancy-only encode path exclusively.
+
+\subsection{Active-learning configuration blocks that reach the fine-tune}
+\label{subsec:appb_al_blocks}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{\texttt{finetune} block of the primary active-learning configuration
+\texttt{active\_learning\_pi/config/exp059\_gp\_error.json} (lines 111--122).}
+\label{tab:appb_al_finetune_block}
+\begin{tabular}{@{}lp{0.38\textwidth}@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{enabled} & true \\
+\texttt{run\_after\_cycle} & false \\
+\texttt{experiment\_dir} & \texttt{experiments/\allowbreak exp059\_capacity\_freq} \\
+\texttt{config\_path} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config\_al\_finetune.yaml} \\
+\texttt{checkpoint\_path} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak checkpoints/\allowbreak last\_model.pt} \\
+\texttt{extra\_epochs} & 45 \\
+\texttt{overlay\_data\_dir} & \texttt{datasets/\allowbreak data\_multifreq\_\allowbreak al\_overlay\_exp059} \\
+\texttt{al\_overlay\_sample\_weight} & 128.0 \\
+\texttt{occ\_only\_encode\_prob} & 0.4 \\
+\texttt{layout\_train\_prob} & 0.65 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{pre\_al\_occ\_only\_warmup} block of
+\texttt{active\_learning\_pi/config/exp059\_gp\_error.json} (lines 106--110).}
+\label{tab:appb_al_warmup_block}
+\begin{tabular}{@{}lp{0.38\textwidth}@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{config\_path} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config\_occ\_only\_finetune.yaml} \\
+\texttt{checkpoint\_path} & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak checkpoints/\allowbreak last\_model.pt} \\
+\texttt{extra\_epochs} & 100 \\
+\hline
+\end{tabular}
+\end{table}
+
+The acquisition surrogate has its own settings in the \texttt{gp\_error} block of the same
+file, transcribed in \autoref{tab:appb_gp_error}. The primary active-learning
+configuration sets \texttt{acquisition\_mode} to \texttt{"gp\_error"} (line 139); within
+the block the GP type is \texttt{"svgp"}, the fitted target is \texttt{"p99\_ae"} on the
+\texttt{"pred"} path, and \texttt{score\_mode} is \texttt{"mu"}.
+\fillin{state what \texttt{kappa}, \texttt{novelty\_weight}, \texttt{novelty\_k},
+\texttt{joint\_alpha\_hm} and \texttt{joint\_alpha\_imp} do to the acquisition score, and
+in particular which of them are inactive when \texttt{score\_mode} is \texttt{"mu"} and
+\texttt{novelty\_weight} is $0.0$; the scoring function in
+\texttt{active\_learning\_pi/al/gp\_error\_surrogate.py} would settle it.}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{gp\_error} block of
+\texttt{active\_learning\_pi/config/exp059\_gp\_error.json} (lines 140--155), 14 keys.}
+\label{tab:appb_gp_error}
+\begin{tabular}{@{}lp{0.30\textwidth}@{}}
+\hline
+Key & Value \\
+\hline
+\texttt{path} & \texttt{"pred"} \\
+\texttt{target} & \texttt{"p99\_ae"} \\
+\texttt{gp} & \texttt{"svgp"} \\
+\texttt{kappa} & 0.5 \\
+\texttt{n\_fit} & 4000 \\
+\texttt{n\_inducing} & 256 \\
+\texttt{svgp\_epochs} & 80 \\
+\texttt{seed} & 0 \\
+\texttt{verbose} & true \\
+\texttt{novelty\_weight} & 0.0 \\
+\texttt{novelty\_k} & 10 \\
+\texttt{joint\_alpha\_hm} & 1.0 \\
+\texttt{joint\_alpha\_imp} & 1.0 \\
+\texttt{score\_mode} & \texttt{"mu"} \\
+\hline
+\end{tabular}
+\end{table}
+
+Three settings that a sparse variational GP normally needs are genuinely absent from this
+block: the minibatch size used to fit the variational parameters, the learning rate, and
+the kernel.
+\fillin{state the residual GP's batch size, learning rate and kernel --- they are not set
+in \texttt{active\_learning\_pi/config/exp059\_gp\_error.json}; if they are library
+defaults or hard-coded in \texttt{active\_learning\_pi/al/gp\_error\_surrogate.py}, name
+the source, and for a library default name the library and version that supplies it.}
+
+\clearpage
+
+\section{Conflicts between configuration files}
+\label{sec:appb_conflicts}
+
+Four disagreements between configuration artifacts were found while assembling this
+appendix. They are recorded here rather than resolved, because in each case two files that
+are both in use state different things and no authoritative artifact settles which was
+intended.
+
+\subsection*{C1: fine-tune layout probabilities}
+
+\texttt{experiments/exp059\_capacity\_freq/config\_al\_finetune.yaml} (lines 11--12) sets
+\texttt{layout\_train\_prob} $=0.9$ and \texttt{occ\_only\_encode\_prob} $=0.7$. The same
+pair appears in \texttt{docs/cursor-handoff.md} (lines 42 and 77),
+\texttt{docs/gp-error-surrogate.md} (line 86) and \texttt{CLAUDE.md} (line 17).
+
+However, \texttt{active\_learning\_pi/config/exp059\_gp\_error.json} (lines 120--121)
+overrides the pair in its \texttt{finetune} block to \texttt{layout\_train\_prob} $=0.65$
+and \texttt{occ\_only\_encode\_prob} $=0.4$. \texttt{write\_runtime\_finetune\_config()}
+(\texttt{finetune\_run.py}, lines 94--117) lets the active-learning JSON win over the
+hand-written fine-tune file for both keys, and the generated
+\texttt{config\_al\_finetune.runtime.yaml} (lines 9--10) accordingly carries $0.65$ and
+$0.4$. A fine-tune launched from the current configuration therefore runs at $0.65/0.4$,
+not at the documented $0.9/0.7$. Both values are stated in
+\autoref{tab:appb_al_finetune} and \autoref{tab:appb_al_finetune_block}; neither is
+presented here as the correct one.
+
+What the four completed active-learning cycles used is a separate question, and it cannot
+be answered from the repository. The runtime file is rewritten at every fine-tune launch,
+so it records only the most recent one, and no per-cycle configuration record survives: no
+iteration directory under
+\texttt{active\_learning\_pi/runs/al\_exp059\_gp\_error\_001/} records
+\texttt{layout\_train\_prob} at all, and neither \texttt{state.json} nor
+\texttt{decision\_ledger.json} carries these keys. This is a reproducibility gap, not a
+detail: the two probabilities govern how much of the fine-tune trains the occupancy-only
+encode path, which is the path the active-learning loop scores with.
+\fillin{pin down, from surviving training logs, which \texttt{layout\_train\_prob} and
+\texttt{occ\_only\_encode\_prob} were in force in each of the four completed cycles of
+\texttt{al\_exp059\_gp\_error\_001}. The repository preserves no per-cycle configuration
+snapshot, so a fine-tune console log or a checkpoint-side metadata record is the only
+thing that can settle it.}
+\fillin{decide which pair was intended, correct whichever file is wrong, and --- once the
+per-cycle values are recovered --- state in Chapter 5 whether any reported active-learning
+result is affected by the value actually used.}
+\fillin{if the per-cycle values cannot be recovered, add a per-iteration configuration
+snapshot to the active-learning pipeline so that future cycles are reproducible, and say
+so in the limitations section.}
+
+\subsection*{C2: fine-tune epoch count}
+
+\texttt{config\_al\_finetune.yaml} (line 5) states \texttt{num\_epochs} $=1050$, while the
+generated \texttt{config\_al\_finetune.runtime.yaml} (line 3) states $510$.
+\texttt{finetune\_run.py} (lines 71--79) recomputes \texttt{num\_epochs} as the checkpoint
+epoch plus \texttt{extra\_epochs}, which is $45$ in \texttt{exp059\_gp\_error.json}
+(line 117). The value in the hand-written file is therefore never the number of epochs
+that runs. The base \texttt{config.yaml} independently holds \texttt{num\_epochs} $=510$.
+\fillin{state the checkpoint epoch that the runtime recomputation started from, from the
+checkpoint metadata or the fine-tune log, so the 510 in the runtime file can be traced.}
+
+\subsection*{C3: stale experiment name in the override headers}
+
+The header comments on line 1 of both
+\texttt{experiments/exp059\_capacity\_freq/config\_al\_finetune.yaml} and
+\texttt{experiments/exp059\_capacity\_freq/config\_occ\_only\_finetune.yaml} read
+``for exp058'', while both files live under \texttt{exp059\_capacity\_freq} and set
+\texttt{resume\_checkpoint} (line 4 in each) to
+\texttt{experiments/exp059\_capacity\_freq/checkpoints/last\_model.pt}. The
+\texttt{config\_al\_finetune.yaml} header additionally reads ``only after fresh train has
+produced last\_model.pt / Do NOT point at exp057 checkpoints.'' The comment lines are
+stripped by \texttt{load\_yaml\_config()} before parsing, so they do not affect execution,
+but they mislabel the file.
+
+\subsection*{C4: normalisation statistics path}
+
+\texttt{experiments/exp059\_capacity\_freq/config.yaml} (line 134) points the training set
+at \texttt{datasets/data\_multifreq\_train\_norm\_unbounded}, whereas
+\texttt{pipelines/latent/optimize.py} (line 105) sets
+\texttt{NORMALIZATION\_STATS\_PATH} to
+\texttt{datasets/data\_multifreq\_norm/normalization\_stats.json}. The two are different
+directories.
+\fillin{state whether the two normalisation-statistics files contain the same per-MHz
+statistics; if they do not, any comparison between a Stage-2 result and an exp059
+prediction is in different units and must be flagged in Chapter 4.}
+
+\subsection*{C5: the base configuration is not the capacity-phase record}
+
+Beyond the four file-to-file conflicts, \texttt{config.yaml} has been edited since the
+capacity-phase run. \texttt{docs/cursor-handoff.md} states that the capacity phase ran
+with \texttt{layout\_train\_prob} $=0$ and \texttt{occ\_only\_encode\_prob} $=0$, and the
+file now holds $0.65$ and $0.4$ (\autoref{tab:appb_crossfreq}). The current file therefore
+does not describe the run that produced the capacity checkpoint. This is stated plainly
+because the tables in \autoref{sec:appb_exp059_config} would otherwise be read as a run
+record, which they are not.
+\fillin{check the remaining 181 keys against the training log or a config snapshot taken
+at the capacity run, and mark in \autoref{sec:appb_exp059_config} every key whose current
+value differs from the value used then.}
+
+\section{Stage-2 latent-optimisation configuration}
+\label{sec:appb_stage2}
+
+\textbf{The configuration in this section is not exp059's.}
+\texttt{pipelines/latent/optimize.py} still selects \texttt{EXPERIMENT =
+"exp038\_true\_multi"} for the occupancy decoder and the impedance surrogate (lines
+45--54), so no Stage-2 hyperparameter set wired to \texttt{exp059\_capacity\_freq} exists.
+The tables below record the \texttt{CONFIG} block as it stands: an exp038-targeted
+configuration. They must not be presented as the settings under which an exp059 model was
+inverted.
+
+Like every runnable script in this repository, \texttt{optimize.py} takes no command-line
+arguments; the values are module-level constants edited before the run. Several are
+overridable through environment variables, which is noted per row.
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{optimize.py} model and checkpoint selection (lines 45--54).}
+\label{tab:appb_opt_model}
+\begin{tabular}{@{}lp{0.42\textwidth}@{}}
+\hline
+Constant & Value \\
+\hline
+\texttt{EXPERIMENT} & \texttt{"exp038\_true\_multi"} \\
+\texttt{CHECKPOINT\_PATH} & \texttt{f"experiments/\{EXPERIMENT\}/\allowbreak checkpoints/last\_model.pt"} \\
+\texttt{SURROGATE\_CHECKPOINT\_PATH} & \texttt{f"experiments/\{EXPERIMENT\}/\allowbreak checkpoints/surrogate\_best.pt"} \\
+\texttt{USE\_SURROGATE} & \texttt{\_env\_flag("LATENT\_OPT\_USE\_SURROGATE", "1")} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{optimize.py} search setup (lines 56--69).}
+\label{tab:appb_opt_search}
+\begin{tabular}{@{}lp{0.42\textwidth}@{}}
+\hline
+Constant & Value \\
+\hline
+\texttt{K\_LIST} & \texttt{list(range(1, 26))} \\
+\texttt{NUM\_CANDIDATE\_SEEDS} & 32 \\
+\texttt{SEED\_MODE} & \texttt{os.getenv("LATENT\_OPT\_SEED\_MODE", "random").strip().lower()} \\
+\texttt{MASTER\_SEED} & \texttt{\_parse\_master\_seed()} (\texttt{None} when \texttt{LATENT\_OPT\_MASTER\_SEED} is unset) \\
+\texttt{OPTIMIZE\_BATCH\_PER\_K} & True \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{optimize.py} latent-optimiser settings and objective (lines 71--77).}
+\label{tab:appb_opt_optimizer}
+\begin{tabular}{@{}lp{0.40\textwidth}@{}}
+\hline
+Constant & Value \\
+\hline
+\texttt{NUM\_STEPS} & 1200 \\
+\texttt{LR} & 5e-2 \\
+\texttt{GRAD\_CLIP} & 5.0 \\
+\texttt{INIT\_SHARED\_TEMP} & 0.8 \\
+\texttt{OBJECTIVE\_MODE} & \texttt{"gap\_max"} (alternative: \texttt{"feasible\_map"}) \\
+\texttt{LOSS\_SPACE} & \texttt{"log"} (alternative: \texttt{"ohm"}) \\
+\hline
+\end{tabular}
+\end{table}
+
+The optimiser over the latent vector is \texttt{torch.optim.Adam([z], lr=LR)}
+(\texttt{optimize.py}, lines 504 and 514), with everything else in the model frozen. The
+discrete read-out from continuous occupancy probabilities to a hard top-$K$ placement is
+\texttt{\_ste\_topk(occ\_prob, K)} (\texttt{optimize.py}, line 259), the straight-through
+estimator that keeps the gradient path to $\mathbf{z}$ intact.
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{optimize.py} latent-prior and spectrum-shape regularisation weights
+(lines 79--86).}
+\label{tab:appb_opt_prior}
+\begin{tabular}{@{}ll@{}}
+\hline
+Constant & Value \\
+\hline
+\texttt{Z\_L2\_WEIGHT} & 0.05 \\
+\texttt{Z\_PRIOR\_MODE} & \texttt{"agg\_posterior"} \\
+\texttt{SHAPE\_REG\_WEIGHT} & 2.0 \\
+\texttt{SHAPE\_MIN\_STD\_DLOG} & 0.12 \\
+\texttt{SHAPE\_TRACK\_WEIGHT} & 2.0 \\
+\texttt{POSTERIOR\_BOUNDARY\_WEIGHT} & 10.0 \\
+\texttt{POSTERIOR\_SIGMA\_LIMIT} & 2.5 \\
+\texttt{PHYSICS\_AR\_WEIGHT} & 0.5 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{optimize.py} peak-aware spectrum terms (lines 88--94). Each is read from
+the named environment variable with the default shown.}
+\label{tab:appb_opt_peak}
+\begin{tabular}{@{}lll@{}}
+\hline
+Constant & Environment variable & Default \\
+\hline
+\texttt{PEAK\_LOSS\_WEIGHT} & \texttt{LATENT\_OPT\_PEAK\_LOSS\_WEIGHT} & \texttt{"1.0"} \\
+\texttt{PEAK\_INDEX\_WEIGHT} & \texttt{LATENT\_OPT\_PEAK\_INDEX\_WEIGHT} & \texttt{"3.0"} \\
+\texttt{PEAK\_MAG\_WEIGHT} & \texttt{LATENT\_OPT\_PEAK\_MAG\_WEIGHT} & \texttt{"2.0"} \\
+\texttt{DUAL\_TOPK\_WEIGHT} & \texttt{LATENT\_OPT\_DUAL\_TOPK\_WEIGHT} & \texttt{"2.5"} \\
+\texttt{IMPEDANCE\_NUM\_PEAKS} & \texttt{LATENT\_OPT\_IMPEDANCE\_NUM\_PEAKS} & \texttt{"8"} \\
+\texttt{IMPEDANCE\_TOPK\_K} & \texttt{LATENT\_OPT\_IMPEDANCE\_TOPK\_K} & \texttt{"20"} \\
+\hline
+\end{tabular}
+\end{table}
+
+The source comment at line 88 records that these terms are ``aligned with exp038
+impedance\_spectrum\_loss'', which is consistent with the exp038 target of the whole
+block.
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{optimize.py} diversity, occupancy-confidence and feasibility terms
+(lines 96--103).}
+\label{tab:appb_opt_feasibility}
+\begin{tabular}{@{}ll@{}}
+\hline
+Constant & Value \\
+\hline
+\texttt{DIVERSITY\_WEIGHT} & 0.35 \\
+\texttt{OCC\_CONFIDENCE\_WEIGHT} & 0.5 \\
+\texttt{BOUNDARY\_MARGIN} & 0.1 \\
+\texttt{GAP\_REWARD\_WEIGHT} & 1.0 \\
+\texttt{EXCEED\_WEIGHT} & 25.0 \\
+\texttt{EXCEED\_POWER} & 2.0 \\
+\texttt{SELECT\_METRIC} & \texttt{"max\_ohm"} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\texttt{optimize.py} paths, device and output naming (lines 105--120).}
+\label{tab:appb_opt_paths}
+\begin{tabular}{@{}lp{0.44\textwidth}@{}}
+\hline
+Constant & Value \\
+\hline
+\texttt{NORMALIZATION\_STATS\_PATH} & \texttt{datasets/\allowbreak data\_multifreq\_norm/\allowbreak normalization\_stats.json} \\
+\texttt{TARGET\_IMPEDANCE\_PATH} & \texttt{configs/\allowbreak target\_impedance.npy} \\
+\texttt{OUTPUT\_ROOT} & \texttt{data/latent\_runs} \\
+\texttt{DEVICE} & \texttt{"cuda" if torch.cuda.is\_available() else "cpu"} \\
+\texttt{DTYPE} & \texttt{torch.float32} \\
+\texttt{HIST\_KEYS} & \texttt{("total", "exceed", "gap\_mean", "best\_score")} \\
+\texttt{SOLUTION\_PREFIX} & \texttt{"best\_"} \\
+\texttt{SOLUTION\_LATENT\_NAME} & \texttt{f"\{SOLUTION\_PREFIX\}latent.npy"} \\
+\texttt{SOLUTION\_METRICS\_NAME} & \texttt{f"\{SOLUTION\_PREFIX\}metrics.json"} \\
+\hline
+\end{tabular}
+\end{table}
+
+\texttt{NORMALIZATION\_STATS\_PATH} is the second half of conflict C4 in
+\autoref{sec:appb_conflicts}: it does not point at the exp059 training set named in
+\texttt{config.yaml}.
+
+\clearpage
+
+\section{Values this appendix cannot supply}
+\label{sec:appb_missing}
+
+For completeness, the following are known gaps rather than omissions.
+
+\begin{itemize}
+  \item No per-key rationale exists for any of the 183 keys in \texttt{config.yaml}; the
+        file contains no comment lines.
+  \item No sweep record or hyperparameter table was located that distinguishes exp059
+        values that were tuned from values inherited from exp057 or exp058.
+  \item Twelve architecture switches (\autoref{tab:appb_code_defaults}) have no documented
+        value in any exp059 configuration file and exist only as code defaults.
+  \item The effective per-GPU and global batch size under DDP, and the learning rate
+        produced by \texttt{ddp\_linear\_lr\_scale}, are not recorded in any artifact.
+  \item No Stage-2 hyperparameter set targeting exp059 exists;
+        \autoref{sec:appb_stage2} documents an exp038-targeted configuration.
+  \item The residual-GP acquisition surrogate's minibatch size, learning rate and kernel
+        are not set in the \texttt{gp\_error} block (\autoref{tab:appb_gp_error}); the
+        remaining fourteen keys of that block are transcribed there.
+  \item The \texttt{layout\_train\_prob} and \texttt{occ\_only\_encode\_prob} values in
+        force during each completed active-learning cycle are not recoverable from the
+        repository: the runtime fine-tune configuration is overwritten at every launch and
+        no per-iteration snapshot is written (C1, \autoref{sec:appb_conflicts}).
+\end{itemize}
+
+% ---------------------------------------------------------------
+% FILL IN checklist:
+%  1. sec:appb_scope - provenance of tuned vs inherited exp059 values; check experiments/exp059_capacity_freq/notes.md, no sweep artifact located.
+%  2. subsec:appb_split - does train_core.py read k_balance_power / freq_balance_power when balance_k / balance_freq are false? State the sampler actually used.
+%  3. subsec:appb_heatmap_loss - move per-term explanation of the heatmap losses into Chapter 3; config records no rationale.
+%  4. tab:appb_heatmap_clip - origin of -1.6791870594024658 (shared by heatmap_z_clip_min and physics_fg_clip_min); check normalization_stats.json. Remove the word "presumably" once settled.
+%  5. subsec:appb_impedance_loss - which curriculum form train_core.py uses (*_frac vs *_epoch) and the role of recalculate_curriculum_on_resume.
+%  6. subsec:appb_kl - which single beta value applies when use_beta_annealing is false.
+%  7. subsec:appb_crossfreq - recover the layout_train_prob / occ_only_encode_prob values in force during the capacity-phase run (training log or config snapshot next to checkpoints/last_model.pt).
+%  8. subsec:appb_runtime - effective per-GPU/global batch size and the DDP-scaled learning rate, from a training log line.
+%  9. subsec:appb_eval_keys - why 250.0 MHz (a training anchor) sits in eval_off_anchor_mhz, and whether off-anchor metrics are reported per frequency or pooled.
+% 10. subsec:appb_al_blocks - role of kappa / novelty_weight / novelty_k / joint_alpha_hm / joint_alpha_imp in the acquisition score when score_mode="mu"; check gp_error_surrogate.py.
+% 11. subsec:appb_al_blocks - residual-GP batch size, learning rate and kernel: not in exp059_gp_error.json; name gp_error_surrogate.py or the library+version supplying the defaults.
+% 12. sec:appb_conflicts C1 - pin the per-cycle layout_train_prob / occ_only_encode_prob for the four completed cycles from surviving training logs (no per-iteration snapshot exists in the repo).
+% 13. sec:appb_conflicts C1 - decide intended layout probability pair; then state in Chapter 5 whether any AL result is affected.
+% 14. sec:appb_conflicts C1 - add a per-iteration config snapshot to the AL pipeline, or record the gap in the limitations section.
+% 15. sec:appb_conflicts C2 - checkpoint epoch that the runtime num_epochs recomputation started from.
+% 16. sec:appb_conflicts C4 - whether the two normalisation-statistics files hold the same per-MHz statistics.
+% 17. sec:appb_conflicts C5 - diff the remaining 181 keys against the capacity-run snapshot and mark every key that changed.
+%
+% Citation verification queue:
+%  - None. This appendix cites no literature by design; every statement is sourced to a
+%    configuration file or a source-code line range given in the evidence block.
+%
+% Evidence warnings:
+%  - C1 (layout_train_prob / occ_only_encode_prob 0.9/0.7 vs 0.65/0.4): documented value
+%    and the value the current configuration would execute differ. Both printed in
+%    tab:appb_al_finetune; not resolved here. What the four COMPLETED cycles of
+%    al_exp059_gp_error_001 actually ran at is NOT recoverable from the repository - the
+%    runtime config is overwritten at every launch and no iteration directory, state.json
+%    or decision_ledger.json records these keys. Stated in the text as a reproducibility
+%    gap. Do not write "the completed cycles ran at 0.65/0.4" anywhere in the thesis.
+%  - C2 (num_epochs 1050 in config_al_finetune.yaml vs 510 in the generated runtime file;
+%    config.yaml also 510). Not resolved. The runtime value is recomputed at launch, so
+%    the base file value never runs. No arithmetic reconstruction of the checkpoint epoch
+%    was performed here - deliberately, since that would be recomputation.
+%  - C3 (both override files carry "for exp058" headers while pointing at exp059
+%    checkpoints). Cosmetic at runtime because comment lines are stripped, but mislabels
+%    the artifact.
+%  - C4 (normalisation stats path differs between config.yaml and optimize.py).
+%  - C5 (config.yaml no longer describes the capacity-phase run per docs/cursor-handoff.md:
+%    capacity phase used layout_train_prob=0 / occ_only_encode_prob=0). Tables in
+%    sec:appb_exp059_config must not be read as a run record.
+%  - Stage 2 (sec:appb_stage2) targets exp038_true_multi. No exp059 optimiser
+%    hyperparameter set exists; nothing in this appendix may be used to attribute an
+%    end-to-end inverse-design result to exp059.
+%  - Table grouping into 21 groups is editorial, not structure present in config.yaml; the
+%    cited line ranges are spans, and the keys inside a group are not contiguous in the file.
+%  - eval_off_anchor_mhz = [155.0, 250.0, 265.0] is NOT a held-out set: 250.0 is one of
+%    the 24 training anchors (datasets/data_multifreq_train_norm_unbounded/dataset_meta.json,
+%    pi_frequencies_mhz) and carries the highest weight (3.0 vs 2.5, 2.5). The metric is
+%    also a checkpoint-selection criterion - checkpoints/best_off_anchor_model.pt exists.
+%    Any frequency-generalisation claim must be restricted to 155.0 and 265.0 MHz.
+%  - The gp_error block (tab:appb_gp_error, 14 keys, lines 140-155) was read directly from
+%    active_learning_pi/config/exp059_gp_error.json during this revision, not taken from
+%    the evidence block. Only batch size, learning rate and kernel are genuinely absent.
+%  - No experimental result, ranking, or improvement claim appears anywhere in this
+%    appendix, by design.
+% ---------------------------------------------------------------

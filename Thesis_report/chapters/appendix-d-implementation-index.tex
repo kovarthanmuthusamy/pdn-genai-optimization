@@ -1,0 +1,429 @@
+% appendix-d-implementation-index.tex -- part of thesis_v3.tex; do not add \documentclass here.
+% Generated from the register pass on Chapters 2 and 3. Each row records the repository
+% artifact that a statement in the running text was taken from.
+
+\chapter{Implementation Index}
+\label{ch:appendix_implementation_index}
+
+Chapters~\ref{ch:theory_background} and~\ref{ch:design_implementation} describe the method and
+the system in the usual narrative form, without interrupting the text with source-file references.
+This appendix restores that traceability. Each row names a statement made in the running text and
+the artifact in the project repository it was taken from, grouped by the section in which the
+statement appears. Line numbers are omitted deliberately: they move as the code changes, whereas
+file and symbol names are stable. Paths are relative to the repository root.
+
+\fillin{state the repository URL and the commit hash the thesis was written against, so a reader can resolve these paths to an exact revision}
+
+\section{Chapter 2 --- Theoretical Background}
+\label{sec:appD_ch2}
+
+\subsection*{Impedance Behavior and Decoupling Strategies}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Anti-resonance enters the surrogate as a shape prior: every impedance peak must be preceded by a resonance dip, scored as mean(peak\_score * exp(-10 * prior\_dip)) on the raw log-impedance channel. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak physics\_loss.py-233} \\
+From bin index 190 upwards the spectrum is monotonically increasing by construction, so the anti-resonance term acts mainly at low frequency. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak physics\_loss.py-233 (docstring)} \\
+The target mask is a fixed array of 231 values, minimum 0.8 and maximum 49.99999999999999, stored with shape (231,1) and squeezed to (231,); Stage 2 aborts if the squeezed shape is not (231,). & \texttt{configs/\allowbreak target\_impedance.npy; pipelines/\allowbreak latent/\allowbreak optimize.py-548} \\
+\hline
+\end{longtable}
+
+\subsection*{Power Integrity Simulation and Multi-modal Design Data}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Six-step data flow: sample/merge combination CSVs, build PEB project in ECADSTAR script order, simulate via headless engineer.exe --batch on Windows, append to the raw multi-frequency dataset, robust log1p per-MHz normalization with optional K<=30 filter, then train/evaluate/active-learn. & \texttt{docs/\allowbreak data-pipeline.md, section 1} \\
+Row i of a combination CSV maps to the ECADSTAR object PI-(i+1) in output order. & \texttt{docs/\allowbreak data-pipeline.md, section 1} \\
+The conventional manual design loop the framework replaces: place, simulate spectrum, on mask violation run a spatial PI distribution, move capacitors toward hotspots, repeat. & \texttt{docs/\allowbreak framework-overview.md, section 1} \\
+Board carries 52 decap slots on a 7x8 grid with four invalid cells at (0,3), (0,4), (6,3), (6,4); ordered labels C1-C52, index i of b maps to LABELS\_ORDERED[i]. & \texttt{libs/\allowbreak data\_creation/\allowbreak occupancy.py-31} \\
+Slot count is derived from the label list: NUM\_SLOTS = len(LABELS\_ORDERED). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak graph\_occ.py} \\
+Occupancy tensors are loaded from the layout store, flattened, clamped to [0,1], and the budget recovered as K = sum\_i b\_i. & \texttt{src\_vae/\allowbreak others/\allowbreak dataloader.py-201} \\
+The spectrum has exactly 231 points; the raw CSV reader rejects any file of different length (EXPECTED\_IMP\_LENGTH = 231). & \texttt{libs/\allowbreak data\_creation/\allowbreak impedance.py,33-36} \\
+Spectrum batches of shape (B,231) are unsqueezed to (B,1,231) inside the model. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_core.py-736} \\
+The impedance decoder returns shape (B,1,231). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py} \\
+The frequency grid is a stored array of shape (231,) running 1000000.0 Hz, 1100000.0 Hz, ... 600000000.0 Hz; first log10 step 0.0414, last 0.0073; no specification document defines it. & \texttt{configs/\allowbreak Frequency\_data\_hz.npy} \\
+The PI-distribution heatmap is interpolated onto a 64x64 grid (HEATMAP\_GRID\_SIZE = 64); raw creation returns the two-channel stack [Zi * mask\_board, mask\_board]. & \texttt{libs/\allowbreak data\_creation/\allowbreak heatmap.py,74} \\
+Normalized heatmaps that reach training are single-channel float32 of shape (1,64,64). & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak heatmap/\allowbreak sample\_1000000.npy} \\
+Heatmap encoder first layer is nn.Conv2d(1, 16, ...), consistent with single-channel input. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py} \\
+Heatmap decoder ends in nn.Conv2d(16, 1, kernel\_size=3, padding=1), i.e. one channel at 64x64. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py} \\
+The training set declares 24 PI frequency anchors in MHz (10.0 ... 500.0). & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak dataset\_meta.json, key pi\_frequencies\_mhz} \\
+The same 24-anchor list appears in the normalization statistics under Heatmap.anchors\_mhz and PI\_freq.anchor\_mhz. & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak normalization\_stats.json} \\
+Anchors are resolved in order from dataset\_meta.json, the environment data directory, a legacy manifest, configs/multifreq\_anchors.yaml, then a built-in default tuple (10,63,80,130,150,200,250,270,330,400,500); the YAML file lists 20 entries. Both fall-backs disagree with the live 24-anchor dataset and are marked legacy. & \texttt{src\_vae/\allowbreak others/\allowbreak multifreq\_anchors.py-21,49-81; configs/\allowbreak multifreq\_anchors.yaml} \\
+PI\_freq normalization constants for the current dataset: log10\_min = 6.0, log10\_range = 2.778151250383644. & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak normalization\_stats.json, key PI\_freq} \\
+When a batch carries no frequency the training code substitutes the normalized value for 200.0 MHz, the default\_mhz of pi\_freq\_norm\_for\_model. & \texttt{src\_vae/\allowbreak others/\allowbreak multifreq\_anchors.py (pi\_freq\_norm\_for\_model)} \\
+Normalized training dataset: 582997 manifest rows over 24979 unique layouts, layout store, max\_k\_filter 30; per-anchor counts 24979 except 80 MHz with 8480. & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak dataset\_meta.json} \\
+The K <= 30 filter drops layouts with K > 30 before statistics and output are computed. & \texttt{docs/\allowbreak dataset.md, section 3} \\
+Heatmap normalization robust\_log1p\_per\_mhz\_unbounded with per-MHz median/IQR, background -3.1792, clip\_min -1.6791870594024658, clip\_max 6.275787830352783; the same three values appear in the exp059 config. & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak normalization\_stats.json; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-142} \\
+The unbounded loader path applies no clip. & \texttt{src\_vae/\allowbreak others/\allowbreak dataloader.py-217} \\
+Impedance normalization is a log z-score with mu\_log = -1.039238452911377 and sigma\_log = 1.7831873893737793, fitted over 24979 layouts. & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak normalization\_stats.json} \\
+Layout-level holdout: all frequencies of one design\_id go to train or validation but never both; train\_split 0.9, seed 42. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml,19; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak dataloader\_multifreq.py-80} \\
+\hline
+\end{longtable}
+
+\subsection*{Formulation of the Decoupling Capacitor Placement Problem}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Engineering problem statement: keep Z(f) below the target mask over 1-600 MHz at 231 bins with b in \{0,1\}\textasciicircum{}52; exhaustive search over 2\textasciicircum{}52 placements is intractable. & \texttt{docs/\allowbreak framework-overview.md, section 1} \\
+Feasibility is tested against the mask shifted inward by BOUNDARY\_MARGIN = 0.1. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py,357-363} \\
+The default comparison space is LOSS\_SPACE = 'log', i.e. z-scored log-impedance, so the margin 0.1 is in normalized units and not 0.1 ohm. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+Per-bin violation exponent EXCEED\_POWER = 2.0; base objective weights w\_gap = 1.0 and w\_exc = 25.0; default OBJECTIVE\_MODE = 'gap\_max', alternative 'feasible\_map' keeps only the exceed term. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py,100-102,313-329} \\
+Selection metric defaults to SELECT\_METRIC = 'max\_ohm'; the best candidate is only updated for feasible seeds, and a no\_solution.json is written per K when no seed is feasible. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py,366-369,466-471,644-646} \\
+Stage 2 loads the exp038\_true\_multi VAE and impedance surrogate (EXPERIMENT = 'exp038\_true\_multi'); no Stage-2 entry point is wired to exp059\_capacity\_freq. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py,45-47} \\
+NORMALIZATION\_STATS\_PATH points at datasets/data\_multifreq\_norm/normalization\_stats.json, a directory absent from the current checkout; the live dataset is datasets/data\_multifreq\_train\_norm\_unbounded. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+\hline
+\end{longtable}
+
+\subsection*{Variational Autoencoders and Multi-modal Learning}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+exp059 KL settings: free\_bits 0.12, beta annealing off with beta\_final 0.03, per-expert KL weight 0.02, sigma-regularization weight 1.5 toward target 0.45. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-118} \\
+PoE fusion: precision-weighted product of Gaussian experts, a unit-Gaussian prior expert always appended, eps = 1e-8 added to each variance and to the combined precision. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-449} \\
+Expert log-variances clamped to [-6.0, 1.0] at each head; fused log-variance clamped to [-4.0, 2.0] before reparameterization. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_poe\_freq.py,160-162} \\
+Latent partition arithmetic: d\_shared = d\_latent - d\_hm\_priv - d\_imp\_peak and d\_layout = d\_shared + d\_imp\_peak. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-133,171-174} \\
+exp059 capacity: latent\_dim 128, heatmap\_private\_dim 40, cond\_dim 32. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-4} \\
+imp\_peak\_dim is unset in the exp059 config and takes the builder default 8, alongside graph\_hidden\_dim 128, graph\_num\_layers 3, graph\_dropout 0.1. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak exp059\_common.py-54} \\
+d\_shared = 80 is independently stated in the experiment notes (d\_layout = 88 follows from the partition arithmetic). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md} \\
+Expert-to-latent wiring: heatmap expert writes the full latent, occupancy expert the shared dims, impedance expert shared+peak; unowned dims padded with the prior. Heatmap encoder input width 64 + 2*cond\_dim; occupancy/impedance heads 64 + cond\_dim. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-258,394-413} \\
+A dedicated frequency expert maps the frequency embedding to the heatmap-private dims only; use\_freq\_poe\_expert defaults to True and is not overridden in the exp059 config. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_poe\_freq.py-84; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak exp059\_common.py} \\
+Occupancy slot graph: 52 nodes, four-neighbour edges on the 7x8 grid, self-loops, symmetric normalization D\textasciicircum{}-1/2 A D\textasciicircum{}-1/2; node features occupancy (1) + slot embedding (hidden/2) + normalized row/col (2), positions normalized by 6.0 and 7.0; mean+max pooling projected to width 64. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak graph\_occ.py-47} \\
+Spectrum chain graph over 231 bins with optional self-loops and the same symmetric normalization; node features bin value (1) + bin embedding (hidden/2) + normalized position (1) from torch.linspace(0.0, 1.0, 231), pooled to width 64. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak graph\_imp.py,13-24} \\
+Graph convolution layer computes lin\_self(x) + lin\_neigh(Ax) followed by LayerNorm, LeakyReLU(0.1) and optional dropout, in plain PyTorch with no torch\_geometric dependency. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak graph\_occ.py-75 (imported by graph\_imp.py)} \\
+The two 64-wide graph features are concatenated and projected by Linear(128, 64) with LayerNorm and LeakyReLU into the joint feature feeding the occupancy and impedance expert heads. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-247,422-428} \\
+Graph decoders broadcast latent+conditioning to every node and read out 52 occupancy logits / 231 spectrum values. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak graph\_occ.py-178; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak graph\_imp.py-123} \\
+Budget embedding table has 53 entries covering K in \{0,...,52\}; the heatmap conditioning vector is the concatenation of the K and frequency embeddings, width 2*cond\_dim. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-193,457-468} \\
+Frequency embedding is a Fourier-feature MLP over [f, sin(2*pi*f*b), cos(2*pi*f*b)] for b = 1..B, input width 1 + 2B, mapped Linear-SiLU-Linear-SiLU to cond\_dim; exp059 sets freq\_fourier\_features 16 (exp057/exp058 set 8). The exp059 model imports this module from exp043. & \texttt{experiments/\allowbreak exp043/\allowbreak codes/\allowbreak freq\_conditioning.py-42} \\
+FiLM applies x -> x*(1+gamma) + beta with gamma/beta from a Linear layer whose weights and bias are zero-initialized except that the bias entries of the gamma half are set to 1.0. & \texttt{experiments/\allowbreak exp043/\allowbreak codes/\allowbreak freq\_conditioning.py-59} \\
+Multi-scale FiLM at four decoder scales: 8x8 on 128 channels, 16x16 on 64, 32x32 on 32, 64x64 on 16, each conditioned on the 2*cond\_dim vector; a further FiLM2d(32, 2*cond\_dim) sits in the heatmap encoder. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-375,505-544} \\
+use\_multiscale\_film is absent from the exp059 config and defaults to True in the model-kwargs builder; the exp057 builder has no such key. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak exp059\_common.py} \\
+The exp059 heatmap decoder has no U-Net skip connections: latent plus FiLM only, to match Stage 2 and generation. exp057's builder still exposes use\_heatmap\_unet\_skips defaulting to True. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py} \\
+Modality dropout: inside encode(), each of the three data experts is kept with probability 1 - modality\_dropout via torch.bernoulli(torch.full((3,), 1.0 - modality\_dropout)); if all three drop, one is forced back on; the frequency expert is appended afterwards and never dropped; modality\_dropout\_protect\_heatmap forces the heatmap expert on. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_poe\_freq.py-158} \\
+exp059 modality-dropout values: 0.06 with the same start value, heatmap protection from epoch 25 / fraction 0.325, focus-phase 0.03. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-33,46,118-119} \\
+encode\_occupancy\_latent\_full builds a zero impedance batch, runs the joint layout encoder and forms the posterior from the occupancy expert plus the PoE prior alone; its docstring records that this matches the AL inference path and the occupancy-only fine-tune. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-905} \\
+With probability layout\_train\_prob the decode latent comes from the layout branch, and within it with probability occ\_only\_encode\_prob from the occupancy-only encode; the full encode is always run for the KL term. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_core.py-715} \\
+Config-vs-notes disagreement: live config sets layout\_train\_prob 0.65 and occ\_only\_encode\_prob 0.4 and distillation weights 2.5/2.5; the AL fine-tune override sets 0.9 and 0.7; the notes record 0/0 and 0/0 plus different eval\_use\_occ\_only\_layout, al\_overlay\_data\_dir, learning\_rate, num\_epochs and resume\_checkpoint. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml,48,159,162; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config\_al\_finetune.yaml; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md; CLAUDE.md} \\
+Layout-to-private head: two-hidden-layer MLP over [occ\_feat(64), imp\_feat(64), cond(2*cond\_dim)] predicting the heatmap-private dims, optional frequency FiLM, squashed as 4*tanh(x/4); acts as distillation student for the heatmap encode teacher. use\_layout\_private\_head and use\_layout\_private\_freq\_film default True and are unset in the exp059 config. Weights: latent 2.5, private multiplier 3.0, logvar 0.3, output 2.5. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-291; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_poe\_freq.py-264} \\
+\hline
+\end{longtable}
+
+\subsection*{Physics-Informed and Surrogate Modeling}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+PhysicsCritic CNN maps occ\_spatial (B,1,7,8) plus PI\_freq to an effectiveness map (B,1,64,64) in [0,1], supervised by inverting and min-max normalizing the heatmap foreground, supplying a radius-influence penalty; detached during the VAE step. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak physics\_loss.py-52,76,164-217} \\
+Physics weights: radius-influence 1.0, critic supervision 2.0, anti-resonance 0.5. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-126} \\
+Occupancy is binarized to a hard top-K vector before the heatmap decode via occupancy\_for\_heatmap\_decode(occupancy, K, force\_binary=True, ste=self.occupancy\_binary\_ste), vectorized through a descending-sort threshold so per-row variable K needs no Python loop. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-646; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak occupancy\_binary.py-65} \\
+exp059 sets occupancy\_binary\_decode = true and occupancy\_binary\_ste\_train = false. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-165} \\
+Decoder input widths: heatmap decoder takes full latent + 2*cond\_dim; occupancy decoder z\_shared + K embedding; impedance decoder z\_layout + K embedding + 64-wide occupancy graph context (passed occupancy, else sigmoid(occ\_recon)). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-296,625-654} \\
+The frequency-weighted 2D-FFT heatmap loss (L1 between log1p magnitudes of rfft2, optional Gaussian MHz bump) is implemented but disabled: heatmap\_spectral\_weight is absent from the config and from the Config dataclass, so the lookup falls back to 0.0 and the function returns None. The exp059 notes claim weight 1.5, mid-boost 1.5, centre 200 MHz, width 80 MHz. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_vae\_simple.py-222,199-201; experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md} \\
+eval\_off\_anchor\_mhz = [155.0, 250.0, 265.0] with weights 2.5, 3.0, 2.5; 250.0 MHz is itself one of the 24 training anchors. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-60; datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak dataset\_meta.json} \\
+decode\_heatmap\_blended log-blends the decodes at the two bracketing anchors with (lo, hi, w) from bracket\_anchors\_mhz(mhz); the training and evaluation path decodes directly at the requested PI\_freq. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-694} \\
+AL candidate generation settings: K from 3 to 10, 1600 candidates per K, 80 worst per K, 640 ECAD simulations per cycle, heatmap grid 64, evaluation MHz grid [120,150,155,170,180,200,230,250,265,270,280,300]. & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json} \\
+\hline
+\end{longtable}
+
+\subsection*{Optimization in Latent Representation Spaces}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Straight-through top-K read-out implemented as hard + occ\_prob - occ\_prob.detach(); the docstring records that without it the top-K argsort severs the gradient and z never moves in response to the spectrum target. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py-268} \\
+Stage-2 search settings: K\_LIST = 1..25, NUM\_CANDIDATE\_SEEDS 32, NUM\_STEPS 1200, LR 5e-2, GRAD\_CLIP 5.0. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py-57,71-73} \\
+Total Stage-2 objective weights (z-L2 0.05, shape 2.0, posterior 10.0, track 2.0, anti-resonance 0.5, peak w\_peak, diversity 0.35, occupancy-confidence 0.5) and POSTERIOR\_SIGMA\_LIMIT = 2.5. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py-97,372-416} \\
+The impedance path defaults to a separate occupancy-to-spectrum surrogate: USE\_SURROGATE = \_env\_flag('LATENT\_OPT\_USE\_SURROGATE', '1'). & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py,271-282} \\
+That surrogate maps occupancy (52,) to a log-z spectrum (1,231) with hidden widths (256, 512, 512, 512, 256); its docstring states PI\_freq is not used. & \texttt{experiments/\allowbreak exp038\_true\_multi/\allowbreak codes/\allowbreak surrogate\_impedance.py-8,36-53} \\
+\hline
+\end{longtable}
+
+\subsection*{Research Gap and Motivation for the Proposed Framework}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Retargeting to a new Z\_target(f) by re-running the latent search with the decoder frozen is a property of the implemented Stage-2 script, which is wired to exp038\_true\_multi. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py,45-47} \\
+\hline
+\end{longtable}
+
+\section{Chapter 3 --- Design and Implementation}
+\label{sec:appD_ch3}
+
+\subsection*{Raw Power-Integrity Simulation Outputs and File Structure}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+The raw ECADSTAR export is converted into a layout store of layouts/, heatmap/ and PI\_freq/ trees plus a manifest.csv index. & \texttt{pipelines/\allowbreak data/\allowbreak processing\_multifreq.py} \\
+The processing stage follows the repository convention of a module-level CONFIGURATION block instead of command-line arguments. & \texttt{pipelines/\allowbreak data/\allowbreak processing\_multifreq.py} \\
+Per design the store keeps occ.npy of shape (52,) and imp.npy of shape (231,); the occupancy encoder is sized by NUM\_SLOTS = len(LABELS\_ORDERED) and the impedance encoder by NUM\_BINS = 231. & \texttt{pipelines/\allowbreak data/\allowbreak processing\_multifreq.py} \\
+Only the active-learning batch invocation of the simulator is documented (engineer.exe <design.erf> --batch <file.peb> --batch-auto-exit); bulk data generation is not described anywhere. & \texttt{docs/\allowbreak data-pipeline.md sec.5} \\
+The 64x64 heatmap resolution is inferred from the AL config heatmap\_grid\_size = 64 and the decoder's final FiLM stage, not read from dataset metadata. & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json} \\
+\hline
+\end{longtable}
+
+\subsection*{Multi-frequency Dataset Construction and Normalization}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Dataset stage 'normalized', source script pipelines/normalize/multifreq.py, timestamp 2026-07-06T13:39:03.768907+00:00; 582997 manifest rows, 24979 unique layouts, 24979 layout dirs, 582997 heatmap and 582997 PI\_freq files; 24 anchor frequencies; samples\_per\_mhz 24979 for all anchors except 80 MHz at 8480. & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak dataset\_meta.json} \\
+Heatmap normalization mode robust\_log1p\_per\_mhz\_unbounded with unbounded = true; per-MHz medians and IQRs (10.0 MHz: 0.05887173116207123 / 0.03866304084658623; 500.0 MHz: 1.3578120470046997 / 0.6529430150985718); clip\_min -1.6791870594024658, clip\_max 6.275787830352783, z\_max 11.23223876953125, background\_value -3.1792. Impedance log\_mean -1.039238452911377, log\_std 1.7831873893737793, layout\_count 24979, z\_min -2.7170498371124268, z\_max 2.474900722503662. Frequency log10\_min 6.0, log10\_range 2.778151250383644, min\_hz 1000000.0, max\_hz 600000000.0. & \texttt{datasets/\allowbreak data\_multifreq\_train\_norm\_unbounded/\allowbreak normalization\_stats.json} \\
+Foreground/background threshold BG\_OHM = 0.05; robust clip percentiles 0.5 and 99.5 apply only in bounded mode; env switches NORM\_ROBUST\_PER\_MHZ (default '1') and NORM\_UNBOUNDED\_Z (default '0'). & \texttt{pipelines/\allowbreak normalize/\allowbreak multifreq.py} \\
+The unbounded build filters layouts at MAX\_K = 30, with K recovered per design as (occ > 0.5).sum(), dropping them from both the statistics fit and the written output. & \texttt{pipelines/\allowbreak normalize/\allowbreak build\_train\_norm\_unbounded.py} \\
+The experiment config mirrors the heatmap normalization constants (background\_value -3.1792, heatmap\_z\_clip\_min -1.6791870594024658, heatmap\_z\_clip\_max 6.275787830352783) and sets heatmap\_clip\_recon = false. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Documentation conflict on the anchor set: a 'Full 16-MHz set' is claimed here. & \texttt{docs/\allowbreak dataset.md sec.4} \\
+Documentation conflict on the anchor set: anchors named as (10, 70, 120, 200, 270, 400) MHz here. & \texttt{docs/\allowbreak normalization-and-losses.md sec.1.4} \\
+\hline
+\end{longtable}
+
+\subsection*{Data Splitting, Sampling, and Batch Construction}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Layout-level holdout: split\_by\_design = true, train\_split = 0.9; \_split\_indices\_by\_design assigns all rows of a design\_id to one side via torch.randperm; default split seed 42. The docstring records that an earlier frequency-level split 'leaked layout identity into val and is unsuitable for GP / AL residual evaluation'. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak dataloader\_base.py} \\
+stratify\_by\_k only enables precompute\_k on the dataset; it does not stratify the split. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak dataloader\_base.py} \\
+The weighted sampler is constructed only when balance\_k or balance\_freq is true; both are false in exp059, so no K-stratification or K/frequency balancing is active. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak dataloader\_base.py-362} \\
+Config sets stratify\_by\_k = true (conflicting with the dataloader behaviour), balance\_k = false, balance\_freq = false. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Layout holdout dated 2026-07-20; seed 42 and train\_split 0.9 give approximately 22481 train and 2498 validation layouts (stated with a tilde); required a fresh retrain with resume\_checkpoint null, prior artifacts archived under archive\_pre\_layout\_holdout\_*. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md-62} \\
+train\_samples\_per\_epoch = 64000 with RandomSampler with replacement; batch\_size 224, val\_batch\_size 320, num\_workers 4, prefetch\_factor 2, persistent\_workers false, cache\_in\_ram false. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Cross-frequency pair lookup maps each training index to alternate-MHz rows of the same design; make\_multifreq\_collate\_with\_pairs attaches the paired row to the batch. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak dataloader\_base.py} \\
+\hline
+\end{longtable}
+
+\subsection*{Architectural Design}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Decoder input widths: dec\_in\_occ = shared\_latent\_dim + cond\_dim; dec\_in\_imp = layout\_latent\_dim + cond\_dim + 64 ('z\_layout + K + occ graph ctx'); heatmap decoder takes full z plus 2*cond\_dim. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py-296} \\
+layout\_latent\_dim = shared\_latent\_dim + imp\_peak\_dim. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py} \\
+The shared latent block is 80 dimensions for the exp059 configuration. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md} \\
+FiLM2d and FreqConditioner are imported from an earlier fork, so the exp059 stack is not self-contained. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py -> experiments/\allowbreak exp043/\allowbreak codes/\allowbreak freq\_conditioning.py} \\
+U-Net skip modules (OptionalSkipFuse, \_last\_heatmap\_skips, heatmap\_skips) were deleted; decoder is latent+FiLM only. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md-51} \\
+use\_multiscale\_film is absent from config.yaml and defaults to True in vae\_model\_kwargs, so the headline architectural change of exp059 is governed by a code default. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak exp059\_common.py} \\
+latent\_dim 128, heatmap\_private\_dim 40, cond\_dim 32, freq\_fourier\_features 16, use\_heatmap\_film true; imp\_peak\_dim unset (constructor default 8); graph hyperparameters unset (defaults graph\_hidden\_dim 128, graph\_num\_layers 3, graph\_dropout 0.1). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Modality dropout schedule: modality\_dropout 0.06, modality\_dropout\_start 0.06, modality\_dropout\_anneal\_epochs 18, modality\_dropout\_protect\_heatmap\_epoch 25, heatmap\_focus\_modality\_dropout 0.03; occupancy\_binary\_decode true, occupancy\_binary\_ste\_train false. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Model class MultiInputVAEPoeFreq: PoE fusion subclass adding a PI\_freq expert on the private dims and removing U-Net skips; expert logvar clamp [-6.0, 1.0], fused PoE logvar clamp [-4.0, 2.0]; encoders (52-slot 7x8 graph, 231-bin chain graph, CNN with HM\_BOTTLENECK 8, HM\_DROPOUT 0.05); layout\_joint\_fusion Linear(128,64)+LayerNorm+LeakyReLU(0.1); nn.Embedding(53, cond\_dim); layout\_private\_hidden 384 with 4.0*tanh(mu/4.0) squash; topk\_occ\_binary vectorised read-out; encode paths encode, encode\_cross\_modal, encode\_layout\_latent\_full, encode\_occupancy\_latent. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak vae\_multi\_input\_simple.py} \\
+\hline
+\end{longtable}
+
+\subsection*{Objective Functions and Physics-Informed Regularization}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+The 2D-FFT log-magnitude L1 anti-blur loss (\_heatmap\_spectral\_loss) is implemented, with an optional Gaussian MHz bump. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_vae\_simple.py-221} \\
+The heatmap\_spectral\_weight lookup returns the default 0.0 because the key is absent from config.yaml, and the function returns None for any non-positive weight, so the term never enters the total. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_vae\_simple.py} \\
+The experiment notes present the frequency-weighted spectral loss as one of three headline exp059 changes, with heatmap\_spectral\_weight 1.5, mid\_boost 1.5, centre 200 MHz, width 80 MHz -- keys that do not exist in config.yaml. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md-23} \\
+PhysicsLoss is instantiated in the training core, and its parameters reach the optimizer and the checkpoints. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_core.py} \\
+The trainer monkey-patches the live epoch function (\_tr.\_run\_epoch = \_run\_epoch\_encode). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_vae\_simple.py} \\
+The replacement epoch function drops the physics and pw arguments from its signature. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak run\_epoch\_encode.py} \\
+The replacement epoch function calls the loss with physics=None. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak run\_epoch\_encode.py} \\
+\_vae\_loss\_exp055 likewise forwards physics=None. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_vae\_simple.py} \\
+train\_core.vae\_loss guards the radius-influence, critic-supervision and anti-resonance terms with 'if physics is not None', so none of them is added in exp059. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_core.py-613} \\
+Physics module implements radius influence, critic supervision (PhysicsCritic, dual-branch, freq\_emb\_dim 16, detached inside the radius term) and the anti-resonance formulation of eq:anti\_resonance. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak physics\_loss.py} \\
+Physics weights configured non-zero: physics\_ri\_weight 1.0, physics\_critic\_sup\_weight 2.0, physics\_ar\_weight 0.5, physics\_critic\_warmup\_epochs 11, physics\_slope\_anneal\_epochs 22, physics\_fg\_clip\_min -1.6791870594024658. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Reconstruction weights heatmap 5.0, occupancy 7.0, impedance 4.0, occ\_k\_consistency 2.0, with heatmap-focus overrides from epoch 25 (heatmap 7.0, impedance 4.0, cross-freq 1.1, dynamic range 3.0); occupancy focal gamma 1.5 with pos-weight (52-K)/K clamped [0.5, 10.0]; impedance composite weights (deriv 1.4, topk\_k 20, topk 4.5, under 2.8, concavity 2.5, freq alpha 2.0, dual topk 0.75, peak index 1.5, peak mag 2.0, num\_peaks 8, peak start 25 / ramp 22 / focus 25); heatmap shape terms (pearson 0.75, grad vector 2.0, grad direction 1.0, min grad magnitude 0.08, grad huber delta 0.5, top-region 2.5 at q=0.95 and 2.5 at q=0.05 with delta 0.5, peak-loc 2.5 at temperature 0.035, valley-loc 0.0); latent terms (free\_bits 0.12, use\_beta\_annealing false, beta\_final 0.03, mu\_hinge\_weight 0.1 threshold 4.0, mu\_bias\_weight 0.05, per\_expert\_kl\_weight 0.02, sigma\_reg\_target 0.45, sigma\_reg\_weight 1.5, upper band 1.3x target); cross-frequency (weight 1.2, start epoch 20, layout\_mix\_prob 0.45, use\_encode\_z true); distillation (latent 2.5 with private x3.0 and logvar 0.3, output 2.5 Huber vs detached teacher); frequency jitter (prob 0.6, log10 sigma 0.1). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+\hline
+\end{longtable}
+
+\subsection*{Training, Inference}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Training is launched as a module: 'python -m experiments.exp059\_capacity\_freq.codes.train\_vae\_simple' with VAE\_EXPERIMENT\_DIR set and VAE\_CONFIG\_PATH unset; two-GPU runs use 'torchrun --standalone --nproc\_per\_node=2 -m experiments.exp059\_capacity\_freq.codes.train\_vae\_simple'. (Invocation mechanics; removed from the body.) & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_vae\_simple.py} \\
+load\_yaml\_config strips '\#' comment lines and calls json.loads, so config.yaml is JSON despite its extension; an optional VAE\_CONFIG\_PATH environment override is layered on top of config.yaml. (File-format mechanics; removed from the body, override mechanism retained.) & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak exp059\_common.py} \\
+The exp059 trainer monkey-patches train\_core: Config, build\_vae\_model, \_run\_epoch, heatmap\_loss, vae\_loss, \_on\_stats\_loaded, the dataloader factory, the YAML loader and the impedance loss. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_vae\_simple.py} \\
+AdamW with weight\_decay 1e-4 (fused, then foreach, then plain fallback on CUDA); ReduceLROnPlateau min mode with lr\_factor 0.5, lr\_patience 15, lr\_min 1e-5; impedance\_separate\_lr true, impedance\_decoder\_lr\_mult 1.0, impedance\_peak\_focus\_epoch 25. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+The experiment notes state the exp059 fresh run used learning\_rate 2e-4, num\_epochs 500 and resume\_checkpoint null. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md} \\
+The current config states learning\_rate 1.5e-05, num\_epochs 510, reset\_lr\_on\_resume true and resume\_checkpoint experiments/exp059\_capacity\_freq/checkpoints/last\_model.pt -- no longer matching the notes. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml,8,138} \\
+Numerical-stability policy: amp 'off', tf32 false, compile false, training\_force\_fp32 true, training\_skip\_nonfinite\_batches true, training\_grad\_clip\_norm 1.0, logvar clamp [-10.0, 10.0], recon z soft floor -8.0, finite loss cap 1000000.0; clipping applied as torch.nn.utils.clip\_grad\_norm\_(params, 1.0). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml, experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_core.py} \\
+Curriculum milestones: cross\_freq\_start\_epoch 20, heatmap\_focus\_start\_epoch 25, modality\_dropout\_protect\_heatmap\_epoch 25, impedance\_peak\_start\_epoch 25, beta\_end\_epoch 25, physics\_critic\_warmup\_epochs 11, penalty\_warmup\_epochs 11. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Validation on epoch 1, each checkpoint interval and the final epoch (val\_on\_checkpoint\_only true), checkpoint\_interval 5, keep\_last\_n\_checkpoints 0; off-anchor evaluation every 5 epochs at 155.0/250.0/265.0 MHz with weights 2.5/3.0/2.5, max 20 batches, eval\_use\_occ\_only\_layout true. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+The off-anchor metric doubles as a checkpoint-selection criterion. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak checkpoints/\allowbreak best\_off\_anchor\_model.pt} \\
+Each run writes loss.csv, heatmap\_peak\_split.csv, impedance\_split.csv, off\_anchor\_eval.csv, epoch\_timing.csv and timing.json. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak metrics/\allowbreak } \\
+DDP enabled with ddp\_base\_batch\_size 160 and ddp\_linear\_lr\_scale true; nccl backend with a default 30-minute timeout overridable by NCCL\_TIMEOUT\_MINUTES; model wrapped with find\_unused\_parameters=True. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak distributed\_train.py, experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+Encode-path mixing: layout\_train\_prob 0.65 and occ\_only\_encode\_prob 0.4. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml-48} \\
+The notes describe the exp059 capacity phase as full-encode only, with both mixing probabilities at 0. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak notes.md-14} \\
+The handover document likewise describes the capacity phase as full-encode only (probabilities 0). & \texttt{docs/\allowbreak cursor-handoff.md-37} \\
+The model parameter count is printed at runtime but stored in no artifact. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak codes/\allowbreak train\_core.py} \\
+\hline
+\end{longtable}
+
+\subsection*{Auxiliary Guidance Network for Latent-Space Optimization}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+The nearest artifact to an 'auxiliary guidance network' is a feed-forward occupancy-to-impedance surrogate: occupancy (52,) to impedance log-z (1, 231), PI\_freq unused; hidden\_dims (256, 512, 512, 512, 256), dropout 0.1, num\_epochs 200, batch\_size 128, learning\_rate 3e-4, lr\_patience 15, lr\_factor 0.5, lr\_min 1e-5, weight\_decay 1e-4, topk\_k 20, topk\_weight 7.0, under\_penalty 2.8. Present only in exp037\_lat\_change, exp038\_true\_multi, exp039\_improved\_heatmap, exp040 and exp041; absent from exp057, exp058, exp059, exp060. & \texttt{experiments/\allowbreak exp038\_true\_multi/\allowbreak codes/\allowbreak surrogate\_impedance.py} \\
+Stage 2 loads the impedance surrogate checkpoint when USE\_SURROGATE is on (the default), and otherwise falls back to the VAE impedance decoder head. & \texttt{experiments/\allowbreak exp038\_true\_multi/\allowbreak checkpoints/\allowbreak surrogate\_best.pt} \\
+\hline
+\end{longtable}
+
+\subsection*{Problem Formulation}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Stage 2 defaults to EXPERIMENT = 'exp038\_true\_multi' for both the VAE occupancy decoder and the impedance surrogate checkpoint, and imports MultiInputVAE from that fork; feasibility margin BOUNDARY\_MARGIN 0.1, objective mode 'gap\_max', LOSS\_SPACE 'log', EXCEED\_POWER 2.0, gap weight 1.0, exceed weight 25.0; target mask loaded from configs/target\_impedance.npy, required shape (231,) after squeeze, converted by (log Z - mu\_log)/sigma\_log. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+Exact form of the exceed maximum-excursion component and of the gap term (not extracted; subject of a \textbackslash\{\}fillin). & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py-329} \\
+Stage-2 default normalization statistics path is datasets/data\_multifreq\_norm/normalization\_stats.json, a directory absent from the current checkout. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+The exp059 training set is datasets/data\_multifreq\_train\_norm\_unbounded, which is the path Stage 2 should use. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml} \\
+The limitation that Stage 2 is not wired to exp059 is also recorded in the project documentation. & \texttt{docs/\allowbreak latent-optimization.md sec.7} \\
+The stored target mask has shape (231, 1), dtype float64, minimum 0.8 and maximum 49.99999999999999, with no unit metadata and no located generating script. & \texttt{configs/\allowbreak target\_impedance.npy} \\
+\hline
+\end{longtable}
+
+\subsection*{Optimization Procedure and Feasibility Assessment}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Search settings: K\_LIST 1..25, NUM\_CANDIDATE\_SEEDS 32, NUM\_STEPS 1200, LR 5e-2, GRAD\_CLIP 5.0, INIT\_SHARED\_TEMP 0.8, OPTIMIZE\_BATCH\_PER\_K True; seeds random per run (saved to run\_config.json) or fixed 0..N-1 via LATENT\_OPT\_SEED\_MODE, default 'random'. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+Straight-through top-K (\_ste\_topk) with the in-code justification 'Without this the top-K argsort severs the gradient and z never moves on the spectrum target'; applied only on the surrogate branch, surrogate(\_ste\_topk(occ, K)), while the fallback model.decode\_impedance(z, K) branch keeps the read-out out of the gradient path. USE\_SURROGATE defaults to True. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+Search regularizers: Z\_L2\_WEIGHT 0.05 with Z\_PRIOR\_MODE 'agg\_posterior', POSTERIOR\_BOUNDARY\_WEIGHT 10.0 beyond POSTERIOR\_SIGMA\_LIMIT 2.5, SHAPE\_REG\_WEIGHT 2.0 with SHAPE\_MIN\_STD\_DLOG 0.12, SHAPE\_TRACK\_WEIGHT 2.0, PEAK\_LOSS\_WEIGHT 1.0, PEAK\_INDEX\_WEIGHT 3.0, PEAK\_MAG\_WEIGHT 2.0, DUAL\_TOPK\_WEIGHT 2.5, IMPEDANCE\_NUM\_PEAKS 8, IMPEDANCE\_TOPK\_K 20 (all overridable via LATENT\_OPT\_* environment variables), DIVERSITY\_WEIGHT 0.35, OCC\_CONFIDENCE\_WEIGHT 0.5, PHYSICS\_AR\_WEIGHT 0.5 overridable by the checkpoint config's physics\_ar\_weight. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+Selection metric SELECT\_METRIC = 'max\_ohm' (alternative 'mean'); infeasible budgets emit an explicit no\_solution.json rather than a best-effort placement. & \texttt{pipelines/\allowbreak latent/\allowbreak optimize.py} \\
+\hline
+\end{longtable}
+
+\subsection*{Experimental Setup}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+ECADSTAR host settings: erf\_path C:\textbackslash\{\}Users\textbackslash\{\}muthusamy\textbackslash\{\}Desktop\textbackslash\{\}design\textbackslash\{\}H-shape.emc\textbackslash\{\}H-shape.erf, powerbus Power\_GND, peb\_components IC1\_Port1, heatmap\_only\_peb true, wait\_timeout\_sec 18000. (Absolute Windows path removed from the body.) & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json} \\
+ECADSTAR is driven from WSL with Windows path conversion; the simulation steps cannot run without that host. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak ecadstar.py} \\
+The residual GP is implemented with GPyTorch as an ApproximateGP trained with a VariationalELBO. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak gp\_error\_surrogate.py} \\
+Stale reference document: dated 2026-06-22, describes the exp050 Tier-A configuration, lists six anchors and a heatmap weight of 4.0, neither matching the exp059 dataset nor its config. Usable for method description, not for numbers. & \texttt{docs/\allowbreak normalization-and-losses.md} \\
+Stale reference document: written for the exp054-to-exp057 lineage, with its own caveat that exact epoch counts, weights and off-anchor MHz lists are config-specific and should be taken from the experiment's config.yaml. & \texttt{docs/\allowbreak training-procedure.md} \\
+Configuration files of record: capacity phase and AL fine-tune, the latter injected at runtime by VAE\_CONFIG\_PATH. & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config.yaml, experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config\_al\_finetune.yaml} \\
+\hline
+\end{longtable}
+
+\subsection*{Active Learning for scaling the model}
+\begin{longtable}{p{0.56\textwidth} p{0.36\textwidth}}
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endfirsthead
+\hline
+Statement in the text & Source artifact \\
+\hline
+\endhead
+Entry point with a CONFIG block: COMMAND = 'full' runs the whole cycle, PROPOSE\_ONLY = True runs generation and inference only. (Entry-point mechanics removed from the body.) & \texttt{pipelines/\allowbreak active\_learning/\allowbreak run.py} \\
+The AL pipeline module refuses to run directly and instructs the user to edit the CONFIG block in run.py. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak pipeline.py} \\
+The cycle step count is computed at runtime and is 8 only when fine-tuning and post-fine-tune evaluation are enabled, otherwise 7 or 6. & \texttt{pipelines/\allowbreak active\_learning/\allowbreak run.py} \\
+Primary configuration (residual-GP acquisition) with k\_min 3, k\_max 10, k\_sweep\_per\_pool true, candidates\_per\_k 1600, worst\_per\_k 80, total\_ecad\_per\_cycle 640, candidate\_seed 42 with seed = candidate\_seed + iteration*10000 + K, MHz grid and per-K strata quotas, explore\_candidates\_per\_k 160 over 120-320 MHz quantized to 5 MHz with band edges [120, 180, 230, 280, 320], min\_uncertainty\_percentile 40, mhz\_strata\_per\_k set with worst\_mhz\_strata\_per\_k null (auto-scaled to worst\_n). & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json} \\
+Alternative configurations: Monte-Carlo acquisition and equal-budget random control. & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059.json, active\_learning\_pi/\allowbreak config/\allowbreak exp059\_random.json} \\
+Exp057-era documented budgets conflict with the exp059 configuration: candidates\_per\_k 400, worst\_per\_k 10, 80 ECAD simulations per cycle, off-anchor frequencies 90/265/435/510 MHz. & \texttt{docs/\allowbreak active-learning.md sec.3-4} \\
+GP settings: feature path 'pred', target 'p99\_ae', regressor 'svgp', kappa 0.5, n\_fit 4000, n\_inducing 256, svgp\_epochs 80, seed 0, novelty\_weight 0.0, score\_mode 'mu'. Alternative residual targets peak\_px, peak\_soft\_px, peak\_sharp\_px, struct, mae, mse, imp\_mse. & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json, active\_learning\_pi/\allowbreak al/\allowbreak gp\_error\_surrogate.py} \\
+predict\_candidates dispatches between gp\_error, random and mc, defaulting to mc when unset; the GP feature path encodes occupancy (encode\_occupancy\_latent), decodes, re-encodes the model's own predicted heatmap and uses that posterior mean. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak inference\_pool.py} \\
+Docstring conflict: states that gp\_error candidates are ranked 'by UCB mu\_e + kappa*sigma\_e'. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak inference\_pool.py-179} \\
+score\_mode 'mu' resolves to the posterior mean only, with sigma unused; the novelty term enters only under 'ucb\_novelty'. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak gp\_error\_surrogate.py-352} \\
+Documentation states the mean-only default explicitly. & \texttt{docs/\allowbreak gp-error-surrogate.md sec.5} \\
+The fitted GP artifact is cleared at the start of every per-K acquisition, so each cycle refits. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak per\_k\_acquire.py-69} \\
+Random control assigns uniform scores from np.random.default\_rng(seed + iteration), preserving the ECAD budget exactly. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak inference\_pool.py, active\_learning\_pi/\allowbreak config/\allowbreak exp059\_random.json} \\
+MC-mode parameters retained in the exp059 config: mc\_passes 4, mc\_latent\_passes 4, mc\_decoder\_passes 8, mc\_decoder\_dropout true, score\_metric 'auto\_bad', weights decoder\_dropout\_rce 1.0, latent\_heatmap\_mse 1.0, p99\_var 1.0, p99\_range 0.5, peak\_loc\_spread 0.5, peak\_cv 0.25, prior\_tension 0.35. & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json} \\
+The exp059 acquisition A/B (validate\_acquisition\_ab.py) is still an open task and the claim ledger records acq\_ab\_gp\_vs\_mc as UNCERTAIN. & \texttt{docs/\allowbreak cursor-handoff.md sec.3D} \\
+Scoring settings: inference\_mode 'layout', pi\_ref\_mhz 200.0, shared\_temp 1.5, heatmap\_grid\_size 64, normalization\_stats\_json pointing at the unbounded training set. & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json} \\
+Board mask used at scoring time is a 64x64 boolean array. & \texttt{configs/\allowbreak binary\_mask.npy} \\
+Ingested labels are merged into the AL overlay dataset mixed into training with al\_overlay\_sample\_weight 128.0; fine-tune resumes from checkpoints/last\_model.pt with num\_epochs = checkpoint\_epoch + extra\_epochs, extra\_epochs 45; the merged runtime config is written to config\_al\_finetune.runtime.yaml and passed via VAE\_CONFIG\_PATH. & \texttt{datasets/\allowbreak data\_multifreq\_al\_overlay\_exp059, active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json} \\
+Fine-tune configuration sets layout\_train\_prob 0.9 and occ\_only\_encode\_prob 0.7, with latent\_distill\_weight 2.5, output\_distill\_weight 2.5, eval\_use\_occ\_only\_layout true and early stopping (patience 3, min delta 0.01, kind 'layout\_cross'). & \texttt{experiments/\allowbreak exp059\_capacity\_freq/\allowbreak config\_al\_finetune.yaml-12} \\
+write\_runtime\_finetune\_config copies the AL JSON keys over the values in config\_al\_finetune.yaml, so the executed fine-tune values are 0.65 and 0.4. & \texttt{active\_learning\_pi/\allowbreak al/\allowbreak finetune\_run.py-117} \\
+Project documentation states the fine-tune mixing probabilities as 0.9 / 0.7, which is not what runs. & \texttt{docs/\allowbreak cursor-handoff.md sec.2, CLAUDE.md} \\
+Reporting gates: decision\_min\_rank\_n 30, decision\_min\_ecad\_n 20, infer\_scope 'ingested'. Per-cycle artifacts: scored\_candidates.json, acquisition\_rank\_quality.json, eval\_off\_anchor\_pre\_finetune.json, eval\_off\_anchor\_post\_finetune.json, eval\_cycle\_summary.json, CYCLE\_EVAL\_REPORT.md, DECISION\_REPORT.md, decision\_ledger.json. & \texttt{active\_learning\_pi/\allowbreak config/\allowbreak exp059\_gp\_error.json, active\_learning\_pi/\allowbreak al/\allowbreak decision\_report.py} \\
+The loop has run on exp059 for four iterations; the fourth records acquisition mode gp\_error, K values [3,4,5,6,7,8,9,10], candidates\_per\_k 1600, worst\_per\_k 80, total\_candidates 12800, total\_selected 640. & \texttt{active\_learning\_pi/\allowbreak runs/\allowbreak al\_exp059\_gp\_error\_001/\allowbreak iter\_0004/\allowbreak k\_sweep\_summary.json} \\
+\hline
+\end{longtable}
+

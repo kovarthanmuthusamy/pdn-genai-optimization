@@ -20,14 +20,10 @@ port is $Z(f)$ sampled at $231$ frequency bins spanning $1$--$600$~MHz, and
 $Z_{\mathrm{target}}(f)$ denotes the frequency-dependent target impedance mask
 the design must stay below.
 
-Source citations in this chapter are repo-relative paths. Where a file name is
-given without a directory, \texttt{config.yaml} means
-\texttt{experiments/exp059\_capacity\_freq/config.yaml}, \texttt{optimize.py}
-means \texttt{pipelines/latent/optimize.py}, and every other unqualified file
-name means the corresponding file in
-\texttt{experiments/exp059\_capacity\_freq/codes/}. The convention is stated
-because the experiment directories each carry their own configuration and code
-files under the same names, so a bare file name is not unique in the repository.
+Numerical settings quoted in this chapter are those of the implemented
+framework. Their source locations in the code base are recorded in the
+implementation index appendix rather than in the text, so that the discussion
+here stays with the concepts and the method.
 
 \section{Power Delivery Networks and the Optimization Problem}
 \label{sec:pdn_optimization}
@@ -99,7 +95,7 @@ parts rather than one large capacitor. The multilayer ceramic capacitor model,
 the equivalent series inductance and the loop-inductance approximation behind it
 are treated in \cite{bogatin2018signal} (ch.~13.12--13.14).
 
-\subsubsection*{Anti-resonance}
+\subsubsection*{Anti-resonance in parallel capacitor banks}
 
 Connecting capacitors in parallel does not lower the impedance everywhere.
 Consider two branches at a frequency at which one is already above its
@@ -129,7 +125,7 @@ reducing the parallel-resonant peak by adding more capacitors; the other two
 strategies are stated here from general design practice and were not read from a
 verified page.}
 
-\subsubsection*{Mounting inductance and why the slot matters}
+\subsubsection*{Mounting inductance and the spatial nature of the problem}
 
 The $\mathrm{ESL}$ quoted for a part is only one contribution to the inductance
 of the current loop it forms with the load. The capacitor pads, the mounting
@@ -161,71 +157,62 @@ could not be retrieved for this draft, so no statement about cavity modes, their
 frequencies or their spatial pattern is made here, and this sentence should
 either be substantiated or removed.}
 
-\subsubsection*{What the codebase encodes of this}
+\subsubsection*{Anti-resonance as a training prior}
 
-The only anti-resonance statement that exists inside the codebase is a shape
-prior, not a circuit model. The physics loss module encodes the rule that every
-impedance peak must be preceded by a resonance dip, evaluated on the raw
-log-impedance channel as the mean of
-$\text{peak\_score} \cdot \exp(-10 \cdot \text{prior\_dip})$
-(\texttt{experiments/exp059\_capacity\_freq/codes/physics\_loss.py:218--233}).
-Its own docstring records that the high-frequency region from bin index~$190$
-onwards is monotonically increasing by construction, so the term acts mainly in
-the low-frequency region. This is a training regularizer with a physical
-motivation, and this chapter presents it as such rather
-than as a derived circuit relation.
+The framework does not carry a circuit model of anti-resonance. What it carries
+is a shape prior on the predicted spectrum: every impedance peak must be
+preceded by a resonance dip. The penalty is evaluated on the raw log-impedance
+channel as the mean of
+$\text{peak\_score} \cdot \exp(-10 \cdot \text{prior\_dip})$. From bin
+index~$190$ upwards the spectrum is monotonically increasing by construction, so
+the term acts mainly in the low-frequency region. It is therefore a training
+regularizer with a physical motivation, and this chapter presents it as such
+rather than as a derived circuit relation.
 
-Two design levers are relevant here. The first is which slots carry a capacitor,
-which is the discrete variable this thesis optimizes. The second is which part is
-placed in a slot. \fillin{State explicitly that the decap type is fixed in the
-main study, and give the capacitance / ESR / ESL / part number actually used in
-the ECADSTAR simulations. No parameter table exists anywhere in the repository:
-the occupancy modality is binary presence only, and although the exploratory
-fork \texttt{exp060\_multitype\_occ} names capacitor types it does not record
-their electrical parameters.}
+Two design levers follow from the physics above. The first is which slots carry a
+capacitor, which is the discrete variable this thesis optimizes. The second is
+which part is placed in a slot. \fillin{State explicitly that the decap type is
+fixed in the main study, and give the capacitance, ESR, ESL and part number
+actually used in the ECADSTAR simulations. No parameter table exists: the
+occupancy modality is binary presence only, and although the exploratory fork
+\texttt{exp060\_multitype\_occ} names capacitor types it does not record their
+electrical parameters. Settled by the ECADSTAR component library or the PEB
+project.}
 
-\subsubsection*{The target mask used in this work}
+\subsubsection*{The frequency-dependent target mask}
 
-The impedance requirement is supplied to the framework as a fixed array. The file
-\texttt{configs/target\_impedance.npy} holds $231$ values with minimum $0.8$ and
-maximum $49.99999999999999$, stored with shape $(231,1)$ and squeezed to
-$(231,)$ when loaded. The Stage-2 script aborts if the shape after squeezing is
-not $(231,)$
-(\texttt{pipelines/latent/optimize.py:538--548}).
+The impedance requirement enters the framework as a fixed mask over the $231$
+frequency bins, running from $0.8~\Omega$ at the low-frequency end to
+$49.99999999999999~\Omega$ at the high-frequency end. Only the mask values are
+supplied; no analytic form is fitted to them.
 
 \fillin{Derivation and justification of this mask: why $0.8~\Omega$ at the low
 end rising to $50~\Omega$ at the high end, which load current and ripple budget
-it corresponds to, and who specified it. No document, config comment or script in
-the repository records how the array was produced -- this is a gap the author
-must close from the original design brief.}
+it corresponds to, and who specified it. Nothing in the repository records how
+the array was produced -- this is a gap the author must close from the original
+design brief.}
 
 \figplace{Target impedance mask $Z_{\mathrm{target}}(f)$ over the 231 bins, on log--log axes.}
 
 \subsection{Power Integrity Simulation and Multi-modal Design Data}
 \label{subsec:pi_simulation_multimodal}
 
-\subsubsection*{The simulation and data flow}
+\subsubsection*{Simulation flow and dataset generation}
 
-The curated data-pipeline documentation describes an end-to-end flow in six
-steps: sample and merge combination CSVs; build a PEB project in ECADSTAR script
-order; simulate impedance and PI-distribution heatmaps on Windows through a
-headless \texttt{engineer.exe --batch} invocation; append the result to the raw
-multi-frequency dataset; normalize (robust \texttt{log1p} per~MHz, with an
-optional $K \le 30$ filter); and then train, evaluate or active-learn
-(\texttt{docs/data-pipeline.md}, section~1). Row $i$ of a combination CSV maps to
-the ECADSTAR object \texttt{PI-}$(i{+}1)$ in output order.
+Training data is produced by an end-to-end flow in six steps: sample and merge
+placement combination tables; build a PEB project in ECADSTAR script order;
+simulate the impedance spectrum and the PI-distribution heatmaps on Windows
+through a headless batch invocation of the field solver; append the result to the
+raw multi-frequency dataset; normalize, by a robust per-MHz $\log(1+x)$ transform
+with an optional $K \le 30$ filter; and then train, evaluate or active-learn.
+Row $i$ of a combination table corresponds to the ECADSTAR object
+PI-$(i{+}1)$ in output order.
 
-The same documentation describes the conventional manual design loop the
-framework is meant to replace: place capacitors, simulate the spectrum, and if
-peaks violate the mask, run a spatial PI distribution, move capacitors nearer the
-hotspots, and repeat (\texttt{docs/framework-overview.md}, section~1). This is a
-prose statement in the curated docs; no source file or run artifact in the
-repository documents the loop, so it is reported here as documentation rather
-than as measured practice. That document is also stale on a different point --
-its section~3 code map still names \texttt{exp057\_structured\_graph} as the
-current surrogate stage -- which is recorded in
-Section~\ref{subsec:vae_multimodal}; the staleness concerns the experiment
-lineage, not the section~1 description used here.
+The conventional manual design loop that the framework is meant to replace runs
+as follows: place capacitors, simulate the spectrum, and if peaks violate the
+mask, run a spatial PI distribution, move capacitors nearer the hotspots, and
+repeat. This description is taken from the project documentation and not from a
+measured study of designer behaviour.
 
 \fillin{PI solver configuration: solver type, meshing, frequency-sweep setup and
 convergence criteria. The documentation covers only the batch invocation and file
@@ -238,54 +225,38 @@ artifact in the repository records it. A single timed batch run would settle it.
 
 \fillin{Board description: layer stackup, layer count, dielectric, physical
 dimensions, plane geometry and the definition of the observation port. The
-active-learning configuration carries only the strings \texttt{IC1\_Port1} and
-the powerbus name \texttt{Power\_GND}; no geometry document exists.}
+active-learning configuration names only the port IC1\_Port1 and the powerbus
+Power\_GND; no geometry document exists.}
 
-\subsubsection*{The three modalities}
+\subsubsection*{The three design modalities}
 
 The framework consumes one design as three coupled views.
 
 \emph{Occupancy.} The board carries $52$ decap slots laid out on a $7 \times 8$
-grid with four invalid cells at $(0,3)$, $(0,4)$, $(6,3)$ and $(6,4)$; the
-ordered slot labels are \texttt{C1}--\texttt{C52} and index $i$ of the placement
-vector maps to \texttt{LABELS\_ORDERED[i]}
-(\texttt{libs/data\_creation/occupancy.py:20--31}). The slot count follows from
-the label list, \texttt{NUM\_SLOTS = len(LABELS\_ORDERED)}
-(\texttt{experiments/exp059\_capacity\_freq/codes/graph\_occ.py:14}). Occupancy
-tensors are loaded from the layout store, flattened, clamped to $[0,1]$, and the
-budget for a sample is recovered as the sum of the vector,
-$K = \sum_i b_i$ (\texttt{src\_vae/others/dataloader.py:188--201}).
+grid with four invalid cells at $(0,3)$, $(0,4)$, $(6,3)$ and $(6,4)$. The slots
+are labelled C1--C52 in a fixed order, and index $i$ of the placement vector
+$\mathbf{b}$ refers to the $i$-th label in that order. The budget of a sample is
+recovered from the vector itself as $K = \sum_i b_i$.
 
-\emph{Impedance spectrum.} The spectrum has exactly $231$ points; the raw CSV
-reader rejects any file whose length differs from
-\texttt{EXPECTED\_IMP\_LENGTH = 231}
-(\texttt{libs/data\_creation/impedance.py:10,33--36}). Inside the model the
-spectrum carries an explicit channel dimension: batches of shape $(B,231)$ are
-unsqueezed to $(B,1,231)$ and the impedance decoder returns $(B,1,231)$
-(\texttt{train\_core.py:733--736}; \texttt{vae\_multi\_input\_simple.py:652}).
+\emph{Impedance spectrum.} The spectrum has exactly $231$ points, and the length
+is enforced at ingestion: a raw file of any other length is rejected. Inside the
+model the spectrum carries an explicit channel dimension, so a batch of shape
+$(B,231)$ is expanded to $(B,1,231)$ and the impedance decoder returns
+$(B,1,231)$.
 
-The frequency grid itself is stored as a binary array,
-\texttt{configs/Frequency\_data\_hz.npy}, of shape $(231,)$ running from
+The frequency grid itself is a stored array of $231$ values running from
 $1000000.0$~Hz through $1100000.0$~Hz to $600000000.0$~Hz. The spacing is not
 uniform in $\log_{10}$: the first $\log_{10}$ step is $0.0414$ and the last is
-$0.0073$. There is no specification document that defines this sweep; it exists
-only as the binary array and the hard-coded length check.
+$0.0073$.
 \fillin{Record who defined the 231-bin sweep and on what basis, and state whether
-it matches the ECADSTAR sweep settings exactly.}
+it matches the ECADSTAR sweep settings exactly. No specification document defines
+the grid; it exists only as the stored array.}
 
 \emph{PI-distribution heatmap.} The spatial view is interpolated onto a
-$64 \times 64$ grid, \texttt{HEATMAP\_GRID\_SIZE = 64}. Raw creation returns a
-two-channel stack, \texttt{[Zi * mask\_board, mask\_board]}
-(\texttt{libs/data\_creation/heatmap.py:11,74}), i.e. the masked impedance field
-and the board mask itself. The normalized arrays that reach training are
-single-channel \texttt{float32} of shape $(1,64,64)$; that shape was read
-directly from one stored array,
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/heatmap/sample\_1000000.npy},
-and is consistent with the
-heatmap encoder's first layer \texttt{nn.Conv2d(1, 16, ...)}
-(\texttt{vae\_multi\_input\_simple.py:202}), and the heatmap
-decoder ends in \texttt{nn.Conv2d(16, 1, kernel\_size=3, padding=1)}, i.e. one
-channel at $64 \times 64$ (\texttt{vae\_multi\_input\_simple.py:378}).
+$64 \times 64$ grid. At creation it is a two-channel stack of the masked
+impedance field and the board mask itself. The normalized arrays that reach
+training are single-channel and of shape $(1,64,64)$, which is also the input and
+output width of the heatmap encoder and decoder.
 
 \figplace{The three modalities for one design: 52-slot occupancy grid, 231-bin spectrum, 64x64 PI heatmap.}
 
@@ -296,27 +267,19 @@ set of inspection frequencies called anchors. The current normalized training se
 declares $24$ PI frequency anchors in MHz: $10.0$, $63.0$, $80.0$, $100.0$,
 $120.0$, $150.0$, $170.0$, $180.0$, $200.0$, $230.0$, $250.0$, $270.0$, $280.0$,
 $300.0$, $330.0$, $350.0$, $370.0$, $390.0$, $400.0$, $420.0$, $430.0$, $450.0$,
-$470.0$ and $500.0$
-(\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/dataset\_meta.json},
-key \texttt{pi\_frequencies\_mhz}). The same list appears in
-\texttt{normalization\_stats.json} under \texttt{Heatmap.anchors\_mhz} and
-\texttt{PI\_freq.anchor\_mhz}.
+$470.0$ and $500.0$. The same list appears in the normalization statistics of
+that dataset.
 
-Anchors are resolved at runtime, in order, from the dataset's
-\texttt{dataset\_meta.json}, then the environment-provided data directory, then a
-legacy dataset manifest, then \texttt{configs/multifreq\_anchors.yaml}, and
-finally a built-in default tuple
-(\texttt{src\_vae/others/multifreq\_anchors.py:19--21,49--81}). The two
-fall-backs disagree with the live dataset: the built-in tuple is
-$(10, 63, 80, 130, 150, 200, 250, 270, 330, 400, 500)$ and the YAML file lists
-$20$ entries. The code marks both as legacy or last-resort, so the dataset
-metadata is authoritative, but the disagreement is recorded here because a run
-that silently falls through to a fallback would train against a different anchor
-set.
+The dataset metadata is the authoritative anchor definition and is resolved
+first at runtime. Two legacy definitions in the code base disagree with it -- a
+built-in default tuple $(10, 63, 80, 130, 150, 200, 250, 270, 330, 400, 500)$
+and a configuration file listing $20$ entries -- and both are reached only as
+fall-backs, so a run that silently fell through to one of them would train
+against a different anchor set.
 
-Frequency enters the model as a scalar conditioning variable. \texttt{PI\_freq}
-is a $\log_{10}$ normalization between $1 \times 10^{6}$~Hz and
-$600 \times 10^{6}$~Hz, clipped to $[0,1]$:
+Frequency enters the model as a scalar conditioning variable, normalized in
+$\log_{10}$ between $1 \times 10^{6}$~Hz and $600 \times 10^{6}$~Hz and clipped
+to $[0,1]$:
 \begin{equation}
 \mathrm{PI\_freq}(f) =
 \mathrm{clip}\!\left(
@@ -325,52 +288,39 @@ $600 \times 10^{6}$~Hz, clipped to $[0,1]$:
 \right).
 \label{eq:pifreq_norm}
 \end{equation}
-The normalization statistics for the current dataset record
-\texttt{PI\_freq.log10\_min} $= 6.0$ and \texttt{PI\_freq.log10\_range}
-$= 2.778151250383644$. When a batch carries no frequency the training code
-substitutes the normalized value for $200.0$~MHz, which is also the
-\texttt{default\_mhz} of \texttt{pi\_freq\_norm\_for\_model}.
+For the current dataset the normalization constants are a $\log_{10}$ minimum of
+$6.0$ and a $\log_{10}$ range of $2.778151250383644$. When a batch carries no
+frequency, the normalized value for $200.0$~MHz is substituted.
 
 \subsubsection*{Dataset scale and normalization}
 
 The normalized training dataset contains $582997$ manifest rows over $24979$
-unique layouts, held as a layout store, with a \texttt{max\_k\_filter} of $30$;
-\texttt{docs/dataset.md} section~3 states that the $K \le 30$ filter drops
-layouts with $K > 30$ before statistics and output are computed. Per-anchor
-sample counts are $24979$ for every anchor except $80$~MHz, which has $8480$.
+unique layouts, held as a layout store, and was built with a maximum-budget
+filter that drops layouts with $K > 30$ before statistics and outputs are
+computed. Per-anchor sample counts are $24979$ for every anchor except
+$80$~MHz, which has $8480$.
 
-Heatmap normalization for this dataset is
-\texttt{robust\_log1p\_per\_mhz\_unbounded} with per-MHz median/IQR statistics, a
-background value of $-3.1792$, and recorded clip bounds
-$\texttt{clip\_min} = -1.6791870594024658$ and
-$\texttt{clip\_max} = 6.275787830352783$. The same three values appear in
-\texttt{experiments/exp059\_capacity\_freq/config.yaml:140--142}; the unbounded
-loader path applies no clip (\texttt{src\_vae/others/dataloader.py:216--217}).
-Impedance normalization is a log $z$-score with
-$\mu_{\log} = -1.039238452911377$ and $\sigma_{\log} = 1.7831873893737793$,
-fitted over $24979$ layouts.
+Heatmap normalization for this dataset is a robust per-MHz $\log(1+x)$ transform
+in its unbounded variant, using per-MHz median and interquartile-range
+statistics, a background value of $-3.1792$, and recorded clip bounds of
+$-1.6791870594024658$ and $6.275787830352783$. The same three values appear in
+the training configuration of \texttt{exp059\_capacity\_freq}; the unbounded
+loader path applies no clip. Impedance normalization is a logarithmic
+$z$-score with $\mu_{\log} = -1.039238452911377$ and
+$\sigma_{\log} = 1.7831873893737793$, fitted over $24979$ layouts.
 
-Training uses a layout-level holdout: all frequencies of one \texttt{design\_id}
-go to train or to validation but never both, with \texttt{train\_split} $=0.9$
-and seed $42$
-(\texttt{experiments/exp059\_capacity\_freq/config.yaml:12,19};
-\texttt{experiments/exp059\_capacity\_freq/codes/dataloader\_multifreq.py:66--80}).
-The loader prints that all MHz of a design stay together and that there is no
-layout overlap. \fillin{State why layout-level rather than row-level splitting
-matters here in one sentence, with the leakage argument written out.}
+Training uses a layout-level holdout: all frequencies of one design identifier go
+to train or to validation but never both, with a train split of $0.9$ and seed
+$42$. \fillin{State why layout-level rather than row-level splitting matters
+here in one sentence, with the leakage argument written out.}
 
 \subsection{Formulation of the Decoupling Capacitor Placement Problem}
 \label{subsec:decap_placement_formulation}
 
-The engineering problem, as stated in the curated framework overview, is to keep
-$Z(f)$ below a frequency-dependent target mask over $1$--$600$~MHz sampled at
-$231$ bins, with the design lever being the binary placement
-$\mathbf{b} \in \{0,1\}^{52}$ and $K = \lVert \mathbf{b} \rVert_0$. Exhaustive
-search over the $2^{52}$ placements is intractable
-(\texttt{docs/framework-overview.md}, section~1). The underlying shape facts --
-$52$ slots, $231$ bins, the $1 \times 10^{6}$--$6 \times 10^{8}$~Hz grid -- are
-independently confirmed in source, as cited in
-Section~\ref{subsec:pi_simulation_multimodal}.
+The engineering problem is to keep $Z(f)$ below a frequency-dependent target mask
+over $1$--$600$~MHz sampled at $231$ bins, with the design lever being the binary
+placement $\mathbf{b} \in \{0,1\}^{52}$ and $K = \lVert \mathbf{b} \rVert_0$.
+Exhaustive search over the $2^{52}$ placements is intractable.
 
 \subsubsection*{Feasibility with a safety margin}
 
@@ -384,8 +334,7 @@ search counts a candidate feasible if and only if
 \qquad \text{for all } j = 1,\dots,231,
 \label{eq:feasibility}
 \end{equation}
-with $\delta = \texttt{BOUNDARY\_MARGIN} = 0.1$
-(\texttt{pipelines/latent/optimize.py:99,357--363}).
+with a margin of $\delta = 0.1$.
 
 Equation~\ref{eq:feasibility} is a surrogate-predicted feasibility test, not a
 verified one. The quantity $\hat{Z}_j$ is the model's prediction, so a candidate
@@ -395,25 +344,24 @@ simulation. Wherever this thesis calls a candidate feasible without saying
 otherwise, the word refers to Equation~\ref{eq:feasibility} on predicted
 impedance and is not a sign-off.
 
-The comparison space matters
-for interpreting $\delta$. The default \texttt{LOSS\_SPACE} is \texttt{'log'}
-(\texttt{optimize.py:77}), in which case $\hat{Z}$ and $Z_{\mathrm{target}}$ are
+The comparison space matters for interpreting $\delta$. The search runs by
+default in logarithmic space, in which $\hat{Z}$ and $Z_{\mathrm{target}}$ are
 the $z$-scored log-impedance, so $\delta = 0.1$ is in normalized units and is not
-$0.1~\Omega$. In that mode the mask is converted by
-$\log Z_{\mathrm{target}}$ followed by $z$-scoring with the dataset impedance log
-mean and standard deviation.
+$0.1~\Omega$. In that mode the mask is converted by $\log Z_{\mathrm{target}}$
+followed by $z$-scoring with the dataset impedance log mean and standard
+deviation.
 
 \fillin{How the value $0.1$ was chosen, and what it corresponds to in ohms at a
 representative frequency. Nothing in the repository records the rationale, and
 its physical size depends on the $z$-scoring constants above.}
 
-\subsubsection*{Objective per budget}
+\subsubsection*{The per-budget objective}
 
 The search is run per budget $K$. Let $Z^{\mathrm{bnd}}_j = Z_{\mathrm{target},j} - \delta$
 be the shifted boundary, and define the per-bin violation
 \begin{equation}
 v_j = \big[\max(0,\; \hat{Z}_j - Z^{\mathrm{bnd}}_j)\big]^{p},
-\qquad p = \texttt{EXCEED\_POWER} = 2.0 .
+\qquad p = 2.0 .
 \label{eq:violation}
 \end{equation}
 The violation is aggregated as the sum of its mean and its maximum over bins,
@@ -433,37 +381,32 @@ objective in the default mode is
 w_{\mathrm{gap}} = 1.0, \quad w_{\mathrm{exc}} = 25.0 .
 \label{eq:base_objective}
 \end{equation}
-The default \texttt{OBJECTIVE\_MODE} is \texttt{'gap\_max'}; in the alternative
-\texttt{'feasible\_map'} mode the base term reduces to
-$w_{\mathrm{exc}} \cdot \mathrm{exceed}$ only
-(\texttt{pipelines/latent/optimize.py:76,313--329,100--102}).
+The default objective mode is the gap-and-maximum form written above; in the
+alternative feasibility-mapping mode the base term reduces to
+$w_{\mathrm{exc}} \cdot \mathrm{exceed}$ only.
 
 Among the candidates that satisfy Equation~\ref{eq:feasibility} on predicted
-impedance, the selection metric defaults to \texttt{SELECT\_METRIC = 'max\_ohm'}: the candidate with the
-lowest maximum predicted impedance in ohms is kept, and the best candidate is
+impedance, the default selection metric is the maximum predicted impedance in
+ohms: the candidate with the lowest maximum is kept, and the best candidate is
 only ever updated for seeds flagged feasible. If no seed is feasible for a
-budget, the run writes an explicit \texttt{no\_solution.json} for that $K$ rather
-than returning the least-bad infeasible design
-(\texttt{optimize.py:103,366--369,466--471,644--646}).
+budget, the run records explicitly that no solution was found for that $K$ rather
+than returning the least-bad infeasible design.
 
-\subsubsection*{Scope caveat on this formalization}
+\subsubsection*{Scope of the implemented formulation}
 
-This formalization is the one implemented in \texttt{pipelines/latent/optimize.py}.
-That script imports the \texttt{exp038\_true\_multi} model and sets
-\texttt{EXPERIMENT = 'exp038\_true\_multi'} for both the VAE and the impedance
-surrogate checkpoints (\texttt{optimize.py:40,45--47}), and its
-\texttt{NORMALIZATION\_STATS\_PATH} points at
-\texttt{datasets/data\_multifreq\_norm/normalization\_stats.json}, a directory
-that does not exist in the current checkout -- the live dataset is
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded}
-(\texttt{optimize.py:105}). There is no Stage-2 entry point wired to
-\texttt{exp059\_capacity\_freq}. The formalization is therefore presented here as
-implemented, and no inverse-design result may be attributed to the current
-surrogate on this basis.
+The formulation above is the one implemented in the Stage-2 latent-optimization
+script, which loads the VAE and the impedance surrogate of
+\texttt{exp038\_true\_multi} for both roles, and whose normalization-statistics
+path refers to a dataset directory that is not present in the current checkout
+-- the live dataset is the unbounded normalized multi-frequency set described in
+Section~\ref{subsec:pi_simulation_multimodal}. There is no Stage-2 entry point
+wired to \texttt{exp059\_capacity\_freq}. The formulation is therefore presented
+here as implemented, and no inverse-design result may be attributed to the
+current surrogate on this basis.
 \fillin{Either port Stage 2 to \texttt{exp059\_capacity\_freq} and update the
-normalization-stats path, or state in the thesis that Stage 2 is demonstrated on
-\texttt{exp038\_true\_multi} only. Also write the per-$K$ objective against the
-exp059 model if that port happens.}
+normalization-statistics path, or state in the thesis that Stage 2 is
+demonstrated on \texttt{exp038\_true\_multi} only. Also write the per-$K$
+objective against the exp059 model if that port happens.}
 
 \section{Generative Modeling and Latent-Space Optimization}
 \label{sec:generative_latent_opt}
@@ -525,11 +468,10 @@ The weighting of the KL term against reconstruction is the $\beta$-VAE
 formulation \cite{higgins2017beta}, and conditioning a VAE on side information
 follows the conditional generative framework of \cite{sohn2015conditional}.
 
-The KL settings actually used in \texttt{exp059\_capacity\_freq} are
-\texttt{free\_bits} $=0.12$, $\beta$ annealing off with \texttt{beta\_final}
-$=0.03$, a per-expert KL weight of $0.02$, and a $\sigma$-regularization weight
-of $1.5$ toward a target of $0.45$
-(\texttt{experiments/exp059\_capacity\_freq/config.yaml:102--118}).
+In \texttt{exp059\_capacity\_freq} the KL term is configured with
+\texttt{free\_bits} $=0.12$, $\beta$ annealing disabled at a final $\beta$ of
+$0.03$, a per-expert KL weight of $0.02$, and a $\sigma$-regularization weight of
+$1.5$ toward a target of $0.45$.
 
 The first of those settings addresses a known failure mode of
 Equation~\ref{eq:elbo}. The KL term is minimized outright by making
@@ -546,17 +488,16 @@ alongside the inverse-autoregressive-flow work of \cite{kingma2016iaf}. The idea
 is to stop penalizing the KL contribution of a latent dimension once it has
 fallen below a fixed threshold, so that each dimension may retain a minimum
 amount of information at no cost and the optimizer has no incentive to drive it to
-zero. \texttt{exp059\_capacity\_freq} sets \texttt{free\_bits} $= 0.12$, as
-recorded above.
+zero. The threshold used here is the value $0.12$ quoted above.
 \fillin{Confirm the exact hinge form of the free-bits objective and the units of
 the threshold -- nats or bits, per latent dimension or per group of dimensions --
-directly from the PDF of \cite{kingma2016iaf}, and check it against the
-implementation in \texttt{experiments/exp059\_capacity\_freq/codes/}, before
-writing the equation. The formulation could not be read from the paper's own full
-text for this draft, so only the qualitative description above is given.}
+directly from the PDF of \cite{kingma2016iaf}, and check it against the exp059
+implementation, before writing the equation. The formulation could not be read
+from the paper's own full text for this draft, so only the qualitative
+description above is given.}
 \fillin{Explain what the $\sigma$-regularizer (weight $1.5$ toward a target of
-$0.45$) is doing here, and why \texttt{free\_bits} $=0.12$, \texttt{beta\_final}
-$=0.03$ and the per-expert KL weight $0.02$ were chosen at those particular
+$0.45$) is doing here, and why the free-bits threshold $0.12$, the final $\beta$
+of $0.03$ and the per-expert KL weight $0.02$ were chosen at those particular
 values; the configuration records the values but no note records the reasoning.}
 
 \subsubsection*{Product-of-Experts fusion}
@@ -578,136 +519,120 @@ $\mu_i$ and variances $\sigma_i^2$,
 \end{equation}
 and a unit-Gaussian prior expert with $\mu = 0$, $\log \sigma^2 = 0$ is always
 appended as an extra expert; $\epsilon = 10^{-8}$ is added to each variance and
-to the combined precision
-(\texttt{vae\_multi\_input\_simple.py:432--449}). Expert log-variances are
-clamped to $[-6.0, 1.0]$ at each expert head and the fused log-variance is
-clamped to $[-4.0, 2.0]$ before reparameterization
-(\texttt{vae\_poe\_freq.py:10,160--162}).
+to the combined precision. Expert log-variances are clamped to $[-6.0, 1.0]$ at
+each expert head and the fused log-variance is clamped to $[-4.0, 2.0]$ before
+reparameterization.
 
 \fillin{Recorded rationale for choosing PoE over MoE or another fusion scheme for
-this problem. Nothing beyond the class docstring describing what PoE does was
-found in the repository, so this is the author's own design argument to write.}
+this problem. Nothing beyond a description of what PoE does was found in the
+repository, so this is the author's own design argument to write.}
 
 \subsubsection*{Structured latent and expert wiring}
 
 The latent is partitioned rather than shared uniformly. Writing
 $\mathbf{z} = [\mathbf{z}_{\mathrm{shared}} \mid \mathbf{z}_{\mathrm{peak}} \mid \mathbf{z}_{\mathrm{spatial}}]$,
-the code computes
+the widths are
 \begin{align}
 d_{\mathrm{shared}} &= d_{\mathrm{latent}} - d_{\mathrm{hm\,priv}} - d_{\mathrm{imp\,peak}},
 \label{eq:shared_dim}\\
 d_{\mathrm{layout}} &= d_{\mathrm{shared}} + d_{\mathrm{imp\,peak}},
 \label{eq:layout_dim}
 \end{align}
-(\texttt{vae\_multi\_input\_simple.py:128--133,171--174}). For
-\texttt{exp059\_capacity\_freq} the configuration sets
-$d_{\mathrm{latent}} = 128$, $d_{\mathrm{hm\,priv}} = 40$ and
-$d_{\mathrm{cond}} = 32$
-(\texttt{config.yaml:2--4}). The key \texttt{imp\_peak\_dim} is not set in that
-configuration, so the model-kwargs builder supplies its default of $8$, along
-with \texttt{graph\_hidden\_dim} $=128$, \texttt{graph\_num\_layers} $=3$ and
-\texttt{graph\_dropout} $=0.1$
-(\texttt{exp059\_common.py:51--54}). With those values
-Equations~\ref{eq:shared_dim}--\ref{eq:layout_dim} evaluate to
-$d_{\mathrm{shared}} = 80$ and $d_{\mathrm{layout}} = 88$;
-\texttt{experiments/exp059\_capacity\_freq/notes.md} independently states
-\texttt{shared=80}.
+where $d_{\mathrm{hm\,priv}}$ is the number of heatmap-private dimensions and
+$d_{\mathrm{imp\,peak}}$ the number of impedance-peak dimensions. For
+\texttt{exp059\_capacity\_freq} the total latent width is
+$d_{\mathrm{latent}} = 128$, with $d_{\mathrm{hm\,priv}} = 40$ and a
+conditioning width $d_{\mathrm{cond}} = 32$. The peak width is not set in that
+configuration and takes its default of $d_{\mathrm{imp\,peak}} = 8$, alongside
+default graph settings of hidden width $128$, three layers and dropout $0.1$.
+Equations~\ref{eq:shared_dim}--\ref{eq:layout_dim} then give
+$d_{\mathrm{shared}} = 80$ and $d_{\mathrm{layout}} = 88$.
 
 The experts are wired to different slices of that latent. The heatmap expert
 predicts the full latent vector; the occupancy expert predicts only the shared
 dimensions; the impedance expert predicts the shared plus peak dimensions; and
 dimensions an expert does not own are padded with the prior
-($\mu = 0$, $\log \sigma^2 = 0$) before the product is taken
-(\texttt{vae\_multi\_input\_simple.py:249--258,394--413}). The heatmap encoder
-input width is $64 + 2 d_{\mathrm{cond}}$ because it sees both $K$ and
-\texttt{PI\_freq}, while the occupancy and impedance heads take
+($\mu = 0$, $\log \sigma^2 = 0$) before the product is taken. The heatmap encoder
+input width is $64 + 2 d_{\mathrm{cond}}$ because it sees both $K$ and the
+normalized frequency, while the occupancy and impedance heads take
 $64 + d_{\mathrm{cond}}$ and see $K$ only. A dedicated frequency expert maps the
 frequency embedding to the heatmap-private dimensions alone, with its shared and
-layout dimensions padded by the prior; \texttt{use\_freq\_poe\_expert} defaults
-to \texttt{True} and is not overridden in the exp059 configuration
-(\texttt{vae\_poe\_freq.py:62--84}; \texttt{exp059\_common.py:44}).
+layout dimensions padded by the prior; that expert is enabled by default and is
+not disabled in the exp059 configuration.
 
 \figplace{Latent partition and expert-to-latent wiring: which expert writes which dimensions.}
 
-\subsubsection*{Graph encoders over slots and bins}
+\subsubsection*{Graph encoders over slots and frequency bins}
 
 Two of the three modalities are encoded with graph neural networks in the spirit
 of \cite{kipf2016graph} and the message-passing formulation of
 \cite{gilmer2017message}. The occupancy GNN operates on a fixed slot graph: the
 $52$ slots are nodes, edges connect four-neighbours on the $7 \times 8$ grid,
 self-loops are added, and the adjacency is symmetrically degree-normalized as
-$D^{-1/2} A D^{-1/2}$ (\texttt{graph\_occ.py:17--47}). Node features are the
-occupancy value ($1$), a learned slot embedding
-($\texttt{hidden\_dim}/2$) and the normalized row and column position ($2$),
-with positions normalized by $6.0$ and $7.0$ respectively; the graph is pooled by
-concatenating the mean and the max over nodes and projected to an output width of
-$64$.
+$D^{-1/2} A D^{-1/2}$. Node features are the occupancy value ($1$), a learned
+slot embedding (half the hidden width) and the normalized row and column
+position ($2$), with positions normalized by $6.0$ and $7.0$ respectively; the
+graph is pooled by concatenating the mean and the max over nodes and projected to
+an output width of $64$.
 
 The spectrum is treated as a chain graph over its $231$ bins, with optional
-self-loops and the same symmetric degree normalization
-(\texttt{graph\_imp.py:10,13--24}). Its node features are the bin value ($1$), a
-learned bin embedding ($\texttt{hidden\_dim}/2$) and a normalized bin position
-($1$) taken from \texttt{torch.linspace(0.0, 1.0, 231)}, pooled the same way to
-width $64$.
+self-loops and the same symmetric degree normalization. Its node features are the
+bin value ($1$), a learned bin embedding (half the hidden width) and a normalized
+bin position ($1$) taken from an evenly spaced grid on $[0,1]$, pooled the same
+way to width $64$.
 
-Each graph convolution layer computes
-$\texttt{lin\_self}(x) + \texttt{lin\_neigh}(Ax)$ followed by LayerNorm, a
-LeakyReLU with slope $0.1$ and optional dropout, implemented in plain PyTorch
-with no \texttt{torch\_geometric} dependency
-(\texttt{graph\_occ.py:60--75}); \texttt{graph\_imp.py} imports the same layer.
-Before the latent heads, the two $64$-wide features are concatenated and
-projected by \texttt{Linear(128, 64)} with LayerNorm and LeakyReLU into a joint
-feature that feeds both the occupancy and the impedance expert head
-(\texttt{vae\_multi\_input\_simple.py:243--247,422--428}).
+Each graph convolution layer computes a linear transform of the node features
+plus a linear transform of the neighbour aggregate $A\mathbf{x}$, followed by
+LayerNorm, a LeakyReLU with slope $0.1$ and optional dropout, implemented in
+plain PyTorch with no external graph-learning dependency. Before the latent
+heads, the two $64$-wide features are concatenated and projected from width $128$
+to width $64$ with LayerNorm and LeakyReLU into a joint feature that feeds both
+the occupancy and the impedance expert head.
 
 Both discrete modalities are decoded by graph decoders as well: a global latent
 and conditioning vector is broadcast to every node, concatenated with node
 embeddings and positions, passed through GNN layers and read out per node --
-$52$ logits for occupancy, $231$ values for the spectrum
-(\texttt{graph\_occ.py:130--178}; \texttt{graph\_imp.py:84--123}).
+$52$ logits for occupancy, $231$ values for the spectrum.
 
 \subsubsection*{Conditioning on budget and frequency}
 
 The budget is embedded with a learned table of $53$ entries, covering
 $K \in \{0,\dots,52\}$, and the conditioning vector handed to the heatmap path is
 the concatenation of the $K$ embedding and the frequency embedding, of width
-$2 d_{\mathrm{cond}}$ (\texttt{vae\_multi\_input\_simple.py:192--193,457--468}).
+$2 d_{\mathrm{cond}}$.
 
 Frequency is embedded by a Fourier-feature MLP. The input is
 $[f,\ \sin(2\pi f b),\ \cos(2\pi f b)]$ for $b = 1,\dots,B_{\mathrm{four}}$,
 giving an input width of $1 + 2B_{\mathrm{four}}$, mapped by
-Linear--SiLU--Linear--SiLU to $d_{\mathrm{cond}}$
-(\texttt{experiments/exp043/codes/freq\_conditioning.py:11--42}; the exp059 model
-imports this module). \texttt{exp059\_capacity\_freq} sets
-\texttt{freq\_fourier\_features} $=16$, where exp057 and exp058 set $8$.
+Linear--SiLU--Linear--SiLU to $d_{\mathrm{cond}}$. In
+\texttt{exp059\_capacity\_freq} the number of Fourier features is
+$B_{\mathrm{four}} = 16$, where \texttt{exp057\_structured\_graph} and
+\texttt{exp058\_asymmetric\_kl} use $8$.
 
 Conditioning is injected into the heatmap decoder by feature-wise linear
 modulation \cite{perez2018film}. The implementation applies
 $x \mapsto x \cdot (1 + \gamma) + \beta$ with $\gamma$ and $\beta$ produced by a
 Linear layer from the conditioning vector, whose weights and bias are
 zero-initialized except that the bias entries for the $\gamma$ half are filled
-with $1.0$ (\texttt{experiments/exp043/codes/freq\_conditioning.py:45--59}).
+with $1.0$.
 \fillin{Reconcile the FiLM initialization: the forward pass adds $1.0$ to
 $\gamma$ while the bias for the $\gamma$ half is also set to $1.0$, so the layer
 does not start exactly at identity. Confirm the intended behaviour against the
-exp043 source and state it.}
+exp043 frequency-conditioning module and state it.}
 
-With \texttt{use\_multiscale\_film} enabled, exp059 instantiates FiLM at four
-decoder scales: the $8\times8$ bottleneck on $128$ channels, $16\times16$ on
-$64$ channels, $32\times32$ on $32$ channels, and $64\times64$ on $16$ channels,
-each conditioned on the $2 d_{\mathrm{cond}}$ vector
-(\texttt{vae\_multi\_input\_simple.py:365--375,505--544}); a further
-\texttt{FiLM2d(32, 2*cond\_dim)} sits in the heatmap encoder. The key
-\texttt{use\_multiscale\_film} is not present in the exp059 configuration file
-and the model-kwargs builder defaults it to \texttt{True}
-(\texttt{exp059\_common.py:43}); the corresponding exp057 builder has no such key
-at all.
+Multi-scale conditioning is enabled, so FiLM is instantiated at four decoder
+scales: the $8\times8$ bottleneck on $128$ channels, $16\times16$ on $64$
+channels, $32\times32$ on $32$ channels, and $64\times64$ on $16$ channels, each
+conditioned on the $2 d_{\mathrm{cond}}$ vector; a further FiLM layer on $32$
+channels sits in the heatmap encoder. The corresponding switch is not present in
+the exp059 configuration file and defaults to enabled, whereas the
+\texttt{exp057\_structured\_graph} model builder has no such key at all.
 
-The exp059 heatmap decoder has no U-Net skip connections. The source comment
-states the decoder is latent plus FiLM only, to match Stage 2 and generation
-(\texttt{vae\_multi\_input\_simple.py:310}). exp057's builder still exposes
-\texttt{use\_heatmap\_unet\_skips} with default \texttt{True}; exp059's builder
-has no such key.
+The exp059 heatmap decoder has no U-Net skip connections: it is driven by the
+latent and by FiLM conditioning only, which is the form Stage 2 and unconditional
+generation require. The \texttt{exp057\_structured\_graph} builder still exposes
+a heatmap skip-connection switch, enabled by default; the exp059 builder has no
+such key.
 
 \subsubsection*{Modality dropout and the occupancy-only path}
 
@@ -715,103 +640,73 @@ At inference time, when a placement is being proposed, the spectrum and the
 heatmap are exactly the quantities that are not yet known. The encoder must
 therefore work from occupancy alone. Modality dropout is included so that the
 encoder is trained on subsets of the modalities, which is the condition the
-occupancy-only path faces at inference. The mechanism is as follows: inside
-\texttt{encode()}, during training each of the three data experts
-is independently kept with probability $1 - p_{\mathrm{drop}}$ and otherwise
-replaced by the prior, sampled as
-\texttt{torch.bernoulli(torch.full((3,), 1.0 - modality\_dropout))}; if all three
-are dropped one is forced back on, and the frequency expert is appended after the
-dropout step and is never dropped
-(\texttt{vae\_poe\_freq.py:137--158}). When
-\texttt{modality\_dropout\_protect\_heatmap} is set, the heatmap expert is forced
-on. exp059 sets \texttt{modality\_dropout} $=0.06$ with the same start value,
-heatmap protection switching on at epoch $25$ / fraction $0.325$, and a
-focus-phase \texttt{modality\_dropout} of $0.03$
-(\texttt{config.yaml:32--33,46,118--119}).
+occupancy-only path faces at inference. During training each of the three data
+experts is independently kept with probability $1 - p_{\mathrm{drop}}$ and
+otherwise replaced by the prior; if all three are dropped, one is forced back on.
+The frequency expert is appended after the dropout step and is never dropped, and
+an optional protection flag forces the heatmap expert on. In
+\texttt{exp059\_capacity\_freq} the dropout probability is
+$p_{\mathrm{drop}} = 0.06$, both initially and as the start value of the
+schedule, heatmap protection switches on at epoch $25$, corresponding to a
+training fraction of $0.325$, and the focus phase uses $p_{\mathrm{drop}} =
+0.03$.
 \fillin{Quantify the effect of modality dropout on the occupancy-only path:
 occupancy-only reconstruction and heatmap error with and without modality
 dropout, from a matched pair of runs. No such ablation exists in the repository,
 so this draft states the design intent behind the mechanism and makes no causal
 claim that the path would be unusable without it.}
 
-The occupancy-only encode is also available as an explicit method:
-\texttt{encode\_occupancy\_latent\_full} builds a zero impedance batch, runs the
-joint layout encoder, and forms the posterior from the occupancy expert plus the
-PoE prior alone,
-\texttt{mu, logvar = self.product\_of\_experts([occ\_mu], [occ\_lv])}
-(\texttt{vae\_multi\_input\_simple.py:875--905}). Its docstring records that this
-matches the active-learning inference path and the occupancy-only fine-tune.
+The occupancy-only encode is also available as an explicit inference path: the
+impedance input is set to zero, the joint layout encoder is run, and the
+posterior is formed from the occupancy expert together with the PoE prior expert
+alone. This is the same path the active-learning loop uses for scoring and the
+occupancy-only fine-tune uses for training.
 
 During training the decode latent is sometimes taken from a layout encode instead
 of the full posterior: with probability \texttt{layout\_train\_prob} the layout
 branch is used, and within that branch with probability
 \texttt{occ\_only\_encode\_prob} the occupancy-only encode is used. The full
-\texttt{encode()} is always run for the KL term; only the decode latent is
-swapped (\texttt{train\_core.py:696--715}).
+encode is always run for the KL term; only the decode latent is swapped.
 
-\paragraph{Recorded conflict.} The live
-\texttt{experiments/exp059\_capacity\_freq/config.yaml} sets
-\texttt{layout\_train\_prob} $=0.65$ (line~47) and
-\texttt{occ\_only\_encode\_prob} $=0.4$ (line~48), while the AL fine-tune
-override \texttt{config\_al\_finetune.yaml} sets $0.9$ and $0.7$. However,
-\texttt{experiments/exp059\_capacity\_freq/notes.md} states that the capacity
-study ran with both probabilities at $0$ (``full-encode path only, AL
-disabled''), and also states \texttt{latent\_distill\_weight}~$=0$ and
-\texttt{output\_distill\_weight}~$=0$, whereas the current configuration sets
-both to $2.5$ (lines~159 and~162). The same file and notes disagree on
-\texttt{eval\_use\_occ\_only\_layout}, \texttt{al\_overlay\_data\_dir},
-\texttt{learning\_rate}, \texttt{num\_epochs} and \texttt{resume\_checkpoint}.
-\texttt{CLAUDE.md} documents this as a capacity phase versus current values, but
-the notes file has not been updated.
-\fillin{Resolve the conflict between
-\texttt{experiments/exp059\_capacity\_freq/notes.md} and the live
-\texttt{config.yaml} by stating, per reported run, which configuration was
-actually in force -- the checkpoint's own recorded config would settle it.}
+The live \texttt{exp059\_capacity\_freq} configuration sets
+\texttt{layout\_train\_prob} $=0.65$ and \texttt{occ\_only\_encode\_prob} $=0.4$,
+while the active-learning fine-tune override sets $0.9$ and $0.7$. The
+experiment notes for the capacity study record both probabilities at $0$
+(full-encode path only, active learning disabled) and both distillation weights
+at $0$, whereas the current configuration sets the latent and output
+distillation weights to $2.5$; the notes and the configuration also disagree on
+the occupancy-only evaluation flag, the overlay data directory, the learning
+rate, the number of epochs and the resume checkpoint.
+\fillin{Resolve the disagreement between the exp059 notes and the live exp059
+configuration by stating, per reported run, which configuration was actually in
+force -- the checkpoint's own recorded config would settle it.}
 
-The layout-to-private head is a two-hidden-layer MLP over
-$[\texttt{occ\_feat}(64), \texttt{imp\_feat}(64), \texttt{cond}(2 d_{\mathrm{cond}})]$
-that predicts the heatmap-private latent dimensions, optionally FiLM-modulated by
-the frequency embedding and squashed as $4\tanh(x/4)$; the code calls it the
-distillation student for the heatmap encode teacher
-(\texttt{vae\_multi\_input\_simple.py:260--291};
-\texttt{vae\_poe\_freq.py:253--264}). Both \texttt{use\_layout\_private\_head}
-and \texttt{use\_layout\_private\_freq\_film} default to \texttt{True} and
-neither key is set in the exp059 configuration. The configured distillation
-weights are \texttt{latent\_distill\_weight} $=2.5$,
-\texttt{latent\_distill\_private\_mult} $=3.0$,
-\texttt{latent\_distill\_logvar\_weight} $=0.3$ and
-\texttt{output\_distill\_weight} $=2.5$ -- subject to the conflict recorded
-above.
+The layout-to-private head is a two-hidden-layer MLP over the concatenation of
+the $64$-wide occupancy feature, the $64$-wide impedance feature and the
+$2 d_{\mathrm{cond}}$ conditioning vector. It predicts the heatmap-private latent
+dimensions, optionally FiLM-modulated by the frequency embedding and squashed as
+$4\tanh(x/4)$, and acts as the distillation student for the heatmap encode as
+teacher. Both the private head and its frequency modulation are enabled by
+default and neither is disabled in the exp059 configuration. The configured
+distillation weights are $2.5$ for the latent term, a multiplier of $3.0$ on the
+private dimensions, $0.3$ for the log-variance term and $2.5$ for the output
+term -- subject to the disagreement recorded above.
 
-\subsubsection*{Experiment lineage in one paragraph}
+\subsubsection*{Model capacity across the experiment lineage}
 
-\texttt{exp057\_structured\_graph} and \texttt{exp058\_asymmetric\_kl} used
-\texttt{latent\_dim} $=65$, \texttt{heatmap\_private\_dim} $=15$,
-\texttt{cond\_dim} $=8$ and \texttt{freq\_fourier\_features} $=8$;
-\texttt{exp059\_capacity\_freq} raises these to $128$, $40$, $32$ and $16$.
-exp058 differs from exp057 in the AL-path training mix and KL settings:
-\texttt{layout\_train\_prob} $0.9$ and \texttt{occ\_only\_encode\_prob} $0.7$
-against $0.65$ and $0.4$, \texttt{free\_bits} $0.12$ against $0.08$, and
-\texttt{beta\_final} $0.03$ against $0.05$. \texttt{exp060\_multitype\_occ} is a
-fork of exp059 that replaces binary occupancy with a multi-type one-hot schema
+\texttt{exp057\_structured\_graph} and \texttt{exp058\_asymmetric\_kl} used a
+latent width of $65$, a heatmap-private width of $15$, a conditioning width of
+$8$ and $8$ Fourier features; \texttt{exp059\_capacity\_freq} raises these to
+$128$, $40$, $32$ and $16$. exp058 differs from exp057 in the layout-path
+training mix and the KL settings: \texttt{layout\_train\_prob} $0.9$ and
+\texttt{occ\_only\_encode\_prob} $0.7$ against $0.65$ and $0.4$, a free-bits
+threshold of $0.12$ against $0.08$, and a final $\beta$ of $0.03$ against $0.05$.
+\texttt{exp060\_multitype\_occ} is a fork of exp059 that replaces binary
+occupancy with a multi-type one-hot schema
 $\mathrm{occ} \in \{0,1\}^{52 \times T}$, an all-zero row meaning empty, default
-$T = 2$, decoded with sigmoid/focal BCE rather than softmax cross-entropy; that
-description comes from a hand-written \texttt{notes.md}, not from a run artifact,
-and exp060's configuration carries the same four capacity values as exp059.
-
-\paragraph{Recorded conflict.} \texttt{docs/framework-overview.md} section~3
-still lists \texttt{experiments/exp057\_structured\_graph/} as the current
-surrogate-training stage, while \texttt{docs/experiment-lineage.md} marks
-\texttt{exp059\_capacity\_freq} as the current model and AL track, and
-\texttt{CLAUDE.md} states exp059 is the only model used going forward.
-\texttt{framework-overview.md} is stale on the question of which experiment is
-current, and this thesis never takes its section-3 code map as the authority on
-that question. Its section-1 material is a different matter and is used twice:
-for the conventional design loop in
-Section~\ref{subsec:pi_simulation_multimodal} and for the engineering-problem
-statement in Section~\ref{subsec:decap_placement_formulation}, where the
-underlying shape facts -- $52$ slots, $231$ bins, the frequency grid -- are
-independently confirmed in source.
+$T = 2$, decoded with sigmoid and focal binary cross-entropy rather than softmax
+cross-entropy; that description comes from hand-written notes, not from a run
+artifact, and exp060 carries the same four capacity values as exp059.
 
 \subsection{Physics-Informed and Surrogate Modeling}
 \label{subsec:physics_surrogate}
@@ -832,72 +727,59 @@ the physics-informed learning literature. This is an interpretive framing the
 author should write.}
 
 Three physics terms are implemented in \texttt{exp059\_capacity\_freq}. The
-anti-resonance term of Section~\ref{subsec:impedance_decoupling} is one. The
-second and third come from a \texttt{PhysicsCritic} CNN that maps the decap
-occupancy grid together with \texttt{PI\_freq} to a spatial effectiveness map in
-$[0,1]$ at $64 \times 64$: its documented signature is
-\texttt{occ\_spatial: (B, 1, 7, 8)} $\to$ \texttt{effectiveness (B, 1, 64, 64)}.
-It is supervised by inverting and min--max normalizing the heatmap foreground,
-and it supplies a radius-influence penalty on reconstructed heatmap pixels that
-are cold where decap coverage is weak. The critic is detached during the VAE step
-(\texttt{physics\_loss.py:23--52,76,164--217}). The configured weights are
-radius-influence $1.0$, critic supervision $2.0$ and anti-resonance $0.5$
-(\texttt{config.yaml:124--126}).
+anti-resonance shape prior of Section~\ref{subsec:impedance_decoupling} is one.
+The second and third come from a physics critic, a CNN that maps the
+$7 \times 8$ decap occupancy grid together with the normalized inspection
+frequency to a spatial effectiveness map in $[0,1]$ at $64 \times 64$. It is
+supervised by inverting and min--max normalizing the heatmap foreground, and it
+supplies a radius-influence penalty on reconstructed heatmap pixels that are cold
+where decap coverage is weak. The critic is detached during the VAE step. The
+configured weights are radius-influence $1.0$, critic supervision $2.0$ and
+anti-resonance $0.5$.
 
 Before the heatmap is decoded, occupancy is binarized to a hard top-$K$
 zero/one vector, described in the source as CAD-aligned, optionally with a
-straight-through estimator:
-\texttt{occupancy\_for\_heatmap\_decode(occupancy, K, force\_binary=True, ste=self.occupancy\_binary\_ste)}
-(\texttt{vae\_multi\_input\_simple.py:638--646};
-\texttt{occupancy\_binary.py:13--65}). The top-$K$ operation is vectorized
-through a descending-sort threshold so that a per-row variable $K$ needs no
-Python loop. exp059 enables binary occupancy decode and disables the
-straight-through variant during training
-(\texttt{occupancy\_binary\_decode = true},
-\texttt{occupancy\_binary\_ste\_train = false}; \texttt{config.yaml:164--165}).
+straight-through estimator. The top-$K$ operation is vectorized through a
+descending-sort threshold so that a per-row variable $K$ needs no Python loop.
+\texttt{exp059\_capacity\_freq} enables the binary occupancy decode and disables
+the straight-through variant during training.
 
 Decoder input widths follow from the latent partition: the heatmap decoder
 receives the full latent plus $2 d_{\mathrm{cond}}$ conditioning; the occupancy
 decoder receives $\mathbf{z}_{\mathrm{shared}}$ plus the $K$ embedding; and the
 impedance decoder receives $\mathbf{z}_{\mathrm{layout}}$ plus the $K$ embedding
 plus a $64$-wide occupancy graph context, which is the passed occupancy if one is
-given and otherwise $\mathrm{sigmoid}(\texttt{occ\_recon})$
-(\texttt{vae\_multi\_input\_simple.py:293--296,625--654}).
+given and otherwise the sigmoid of the reconstructed occupancy logits.
 
-\paragraph{Recorded conflict -- a loss term that is not active.} A
-frequency-weighted 2D-FFT spectral heatmap loss is implemented, computing an
-$L_1$ distance between \texttt{log1p} magnitudes of the \texttt{rfft2} of the
-reconstruction and of the target, with an optional Gaussian MHz bump
-(\texttt{train\_vae\_simple.py:191--222}). It is not active. The key
-\texttt{heatmap\_spectral\_weight} is absent from the exp059 configuration and is
-not a field of the \texttt{Config} dataclass, so the lookup falls back to $0.0$
-and the function returns \texttt{None}
-(\texttt{train\_vae\_simple.py:199--201}).
-\texttt{experiments/exp059\_capacity\_freq/notes.md} states the opposite -- that
-the loss runs with weight $1.5$, mid-boost $1.5$, centre $200$~MHz and width
-$80$~MHz. The configuration is authoritative over the notes, so this thesis does
-not describe the spectral loss as an active training term.
+A frequency-weighted two-dimensional FFT loss on the heatmap is also implemented,
+computing an $L_1$ distance between $\log(1+x)$ magnitudes of the real FFT of the
+reconstruction and of the target, with an optional Gaussian bump in MHz. It is
+not active in \texttt{exp059\_capacity\_freq}: its weight key is absent from the
+configuration and from the configuration dataclass, so the lookup falls back to
+$0.0$ and the term is skipped. The experiment notes state the opposite, namely a
+weight of $1.5$, a mid-boost of $1.5$, a centre of $200$~MHz and a width of
+$80$~MHz. The configuration is taken as authoritative, and this thesis does not
+describe the spectral loss as an active training term.
 
 \subsubsection*{Off-anchor evaluation}
 
 Because heatmaps exist only at the $24$ anchors, generalization between anchors
-has to be measured explicitly. exp059 declares evaluation frequencies of $155.0$,
-$250.0$ and $265.0$~MHz with weights $2.5$, $3.0$ and $2.5$
-(\texttt{config.yaml:51--60}) under the key \texttt{eval\_off\_anchor\_mhz}.
-That key name is not literally accurate: $250.0$~MHz is itself one of the $24$
-anchors in \texttt{dataset\_meta.json}, so only $155$ and $265$~MHz are genuinely
-off-anchor. Any evaluation reported over the three-frequency set therefore mixes
-one in-distribution anchor with two held-out frequencies, and
-Chapter~\ref{ch:results_evaluations} and Chapter~\ref{ch:conclusion_outlook}
-must state which of the two readings is meant.
+has to be measured explicitly. \texttt{exp059\_capacity\_freq} declares
+evaluation frequencies of $155.0$, $250.0$ and $265.0$~MHz with weights $2.5$,
+$3.0$ and $2.5$ under the key \texttt{eval\_off\_anchor\_mhz}. That key name is
+not literally accurate: $250.0$~MHz is itself one of the $24$ training anchors,
+so only $155$ and $265$~MHz are genuinely off-anchor. Any evaluation reported
+over the three-frequency set therefore mixes one in-distribution anchor with two
+held-out frequencies, and Chapter~\ref{ch:results_evaluations} and
+Chapter~\ref{ch:conclusion_outlook} must state which of the two readings is
+meant.
 
-Off-anchor decoding at a non-anchor frequency is implemented by log-blending the
-decodes at the two bracketing training anchors,
-$\hat{h} = (1-w)\,\hat{h}_{\mathrm{lo}} + w\,\hat{h}_{\mathrm{hi}}$ with
-$(\mathrm{lo}, \mathrm{hi}, w)$ from \texttt{bracket\_anchors\_mhz(mhz)}
-(\texttt{vae\_multi\_input\_simple.py:656--694}).
-\texttt{decode\_heatmap\_blended} is a separate method; the training and
-evaluation path decodes directly at the requested \texttt{PI\_freq}.
+Decoding at a non-anchor frequency is also available in blended form, by
+log-blending the decodes at the two bracketing training anchors,
+$\hat{h} = (1-w)\,\hat{h}_{\mathrm{lo}} + w\,\hat{h}_{\mathrm{hi}}$ with the
+bracketing pair and the weight $w$ determined by the requested frequency. That
+blend is a separate method; the training and evaluation path decodes directly at
+the requested normalized frequency.
 
 \subsubsection*{Active learning as a data-efficiency mechanism}
 
@@ -911,9 +793,9 @@ optimization \cite{srinivas2010gp} is the reference point for the residual-GP
 acquisition used in this work. The exp059 candidate generator searches budgets
 $K$ from $3$ to $10$, with $1600$ candidates per $K$, $80$ worst per $K$, $640$
 total ECAD simulations per cycle, a heatmap grid size of $64$, and an evaluation
-MHz grid of $[120, 150, 155, 170, 180, 200, 230, 250, 265, 270, 280, 300]$
-(\texttt{active\_learning\_pi/config/exp059\_gp\_error.json}). The loop itself is
-described in Chapter~\ref{ch:design_implementation}, not here.
+frequency grid of $[120, 150, 155, 170, 180, 200, 230, 250, 265, 270, 280, 300]$
+in MHz. The loop itself is described in
+Chapter~\ref{ch:design_implementation}, not here.
 
 \subsection{Optimization in Latent Representation Spaces}
 \label{subsec:latent_space_opt}
@@ -950,25 +832,21 @@ vector obtained by selecting the $K$ largest entries,
 \tilde{\mathbf{b}} = \mathbf{b}_{\mathrm{hard}} + \mathbf{p} - \mathrm{sg}(\mathbf{p}),
 \label{eq:ste}
 \end{equation}
-where $\mathrm{sg}(\cdot)$ denotes the stop-gradient operator, implemented as
-\texttt{hard + occ\_prob - occ\_prob.detach()}
-(\texttt{pipelines/latent/optimize.py:255--268}). The forward pass therefore sees
-the hard $K$-hot vector while the backward pass passes identity gradient to the
-probabilities. The docstring states plainly that without this the top-$K$
-\texttt{argsort} severs the gradient and $\mathbf{z}$ never moves in response to
+where $\mathrm{sg}(\cdot)$ denotes the stop-gradient operator. The forward pass
+therefore sees the hard $K$-hot vector while the backward pass passes identity
+gradient to the probabilities. Without it the sorting operation behind the
+top-$K$ selection severs the gradient and $\mathbf{z}$ never moves in response to
 the spectrum target. This is the structural reason the estimator is required
 here, and Section~\ref{subsec:research_gap} returns to it.
 
 With the decoder frozen, the search runs Adam over $\mathbf{z}$ per budget $K$
-with parallel seeds. The configured settings are
-\texttt{K\_LIST} $= 1,\dots,25$, \texttt{NUM\_CANDIDATE\_SEEDS} $=32$,
-\texttt{NUM\_STEPS} $=1200$, \texttt{LR} $=5\times10^{-2}$ and
-\texttt{GRAD\_CLIP} $=5.0$ (\texttt{optimize.py:56--57,71--73}). The total
-objective adds to the base term of Equation~\ref{eq:base_objective} a latent
-prior term, a spectrum shape regularizer, a posterior-boundary term, a track
-term (MSE to target), the anti-resonance physics term and a peak / dual-top-$K$
-alignment term; with more than one seed it further adds a diversity term and an
-occupancy-confidence term:
+with parallel seeds. The configured settings are budgets $K = 1,\dots,25$, $32$
+candidate seeds, $1200$ steps, a learning rate of $5\times10^{-2}$ and gradient
+clipping at $5.0$. The total objective adds to the base term of
+Equation~\ref{eq:base_objective} a latent prior term, a spectrum shape
+regularizer, a posterior-boundary term, a track term (MSE to target), the
+anti-resonance physics term and a peak / dual-top-$K$ alignment term; with more
+than one seed it further adds a diversity term and an occupancy-confidence term:
 \begin{equation}
 \begin{split}
 \mathcal{L} = \overline{\mathcal{L}_{\mathrm{base}}}
@@ -983,24 +861,21 @@ occupancy-confidence term:
 \end{split}
 \label{eq:stage2_total}
 \end{equation}
-with \texttt{POSTERIOR\_SIGMA\_LIMIT} $=2.5$
-(\texttt{optimize.py:79--97,372--416}).
-\fillin{Insert the configured value of \texttt{PEAK\_LOSS\_WEIGHT}
-($w_{\mathrm{peak}}$) from \texttt{pipelines/latent/optimize.py}, and give the
-functional form of the shape, track, posterior-boundary, peak, diversity and
-occupancy-confidence terms. Only the weights were extracted, not the formulas.}
+with the posterior-boundary term limiting $\mathbf{z}$ to $2.5$ posterior
+standard deviations.
+\fillin{Insert the configured peak-loss weight $w_{\mathrm{peak}}$ from the
+Stage-2 optimization script, and give the functional form of the shape, track,
+posterior-boundary, peak, diversity and occupancy-confidence terms. Only the
+weights were extracted, not the formulas.}
 
 Two implementation details qualify what Equation~\ref{eq:stage2_total} optimizes
 against. The impedance path defaults to a separate occupancy-to-spectrum
-surrogate rather than the VAE impedance head
-(\texttt{USE\_SURROGATE = \_env\_flag('LATENT\_OPT\_USE\_SURROGATE', '1')},
-\texttt{optimize.py:54,271--282}); that surrogate is a direct map from occupancy
-$(52,)$ to a log-$z$ spectrum $(1,231)$ with hidden widths
-$(256, 512, 512, 512, 256)$, and its own docstring states that \texttt{PI\_freq}
-is not used
-(\texttt{experiments/exp038\_true\_multi/codes/surrogate\_impedance.py:1--8,36--53}).
-And, as recorded in Section~\ref{subsec:decap_placement_formulation}, the whole
-script is wired to \texttt{exp038\_true\_multi}.
+surrogate rather than the VAE impedance head; that surrogate is a direct map from
+an occupancy vector of length $52$ to a log-$z$ spectrum of shape $(1,231)$ with
+hidden widths $(256, 512, 512, 512, 256)$, and it does not use the normalized
+inspection frequency at all. And, as recorded in
+Section~\ref{subsec:decap_placement_formulation}, the whole script is wired to
+\texttt{exp038\_true\_multi}.
 
 \figplace{Stage-2 loop: z init, decode to soft occupancy, STE top-K, surrogate spectrum, loss against the mask, Adam step.}
 
@@ -1019,23 +894,23 @@ nature-inspired algorithm \cite{electronics2019nature}, a genetic algorithm
 minimizing the number of capacitors \cite{ga2020minimum}, and an iterative
 genetic algorithm combined with machine learning
 \cite{electronics2020iterative}; simulation-driven module generation for decap
-placement is reported in \cite{ars2023ai}. For this draft only the titles of
-those four were verified, so nothing is asserted here about the evaluator each
-one queries.
+placement is reported in \cite{ars2023ai}. Only the bibliographic titles of those
+four could be verified for this draft, so nothing is asserted here about the
+evaluator each one queries.
 \fillin{Confirm from each of electronics2019nature, ga2020minimum,
 electronics2020iterative and ars2023ai what the evaluator is (a field solver or
 a learned model) and whether it is queried for a scalar score without a gradient
 being taken through it. Only then can a shared black-box-search structure be
 claimed for this group.}
 
-The one work in this group whose search mechanism is recorded in the literature
-survey for this thesis is \cite{convga2024gcn}, and it is also the closest
-complete instance to the present framework: a graph-convolutional impedance
-surrogate wrapped in a genetic algorithm that queries the surrogate's scalar
-value, with no gradient taken through the surrogate. The distinction to hold
-onto is not the surrogate, which both approaches have, but what is done with it
--- a GA samples and scores, whereas this thesis differentiates through the
-surrogate and moves a latent vector.
+The one work in this group whose search mechanism could be verified is
+\cite{convga2024gcn}, and it is also the closest complete instance to the present
+framework: a graph-convolutional impedance surrogate wrapped in a genetic
+algorithm that queries the surrogate's scalar value, with no gradient taken
+through the surrogate. The distinction to hold onto is not the surrogate, which
+both approaches have, but what is done with it -- a GA samples and scores,
+whereas this thesis differentiates through the surrogate and moves a latent
+vector.
 
 \subsubsection*{Impedance surrogates}
 
@@ -1123,20 +998,19 @@ non-gradient-based route: a deterministic decision-tree filter followed by an
 Earth Mover's Distance ranking over continuous design-parameter predictions,
 explicitly avoiding both inverse modelling and stochastic search.
 
-The distinction was checked rather than assumed. The abstracts of all three
-papers were re-fetched and inspected for any mention of a latent or embedding
-space, of discrete design variables, of top-$K$ or cardinality-constrained
-selection, and of a straight-through or relaxed gradient estimator. None of the
-three contains any of them: the optimization variable in each case is a vector of
-continuous parameters in the original design-parameter space -- equalizer and
-buffer parameters, PCB parameters, interconnect design variables. This thesis
-instead optimizes a latent vector $\mathbf{z}$ that is decoded to a placement, and
-the read-out from the decoder to the placement is a hard top-$K$ selection over
-$52$ discrete slots. That is precisely why the straight-through estimator of
-Equation~\ref{eq:ste} is structurally necessary here and is absent there: with a
-continuous parameter vector there is nothing between the optimizer and the
-surrogate to break the gradient, whereas here the top-$K$ \texttt{argsort} would
-sever it.
+The distinction rests on a targeted reading of all three, checking each for any
+mention of a latent or embedding space, of discrete design variables, of top-$K$
+or cardinality-constrained selection, and of a straight-through or relaxed
+gradient estimator. None of the three contains any of them: the optimization
+variable in each case is a vector of continuous parameters in the original
+design-parameter space -- equalizer and buffer parameters, PCB parameters,
+interconnect design variables. This thesis instead optimizes a latent vector
+$\mathbf{z}$ that is decoded to a placement, and the read-out from the decoder to
+the placement is a hard top-$K$ selection over $52$ discrete slots. That is
+precisely why the straight-through estimator of Equation~\ref{eq:ste} is
+structurally necessary here and is absent there: with a continuous parameter
+vector there is nothing between the optimizer and the surrogate to break the
+gradient, whereas here the top-$K$ selection would sever it.
 
 Two further differences are worth stating without inflating them. Those works
 address signal integrity; this one addresses power integrity, which the thesis
@@ -1163,7 +1037,7 @@ when the requirement changes. For \cite{kim2023devformer} the literature survey
 for this thesis records a policy that must be retrained per target scenario
 class. On the other side, the framework here retargets to a new
 $Z_{\mathrm{target}}(f)$ by re-running the latent search with the decoder
-frozen -- as implemented in \texttt{pipelines/latent/optimize.py} against
+frozen, as implemented in the Stage-2 script against
 \texttt{exp038\_true\_multi}. That retargeting has not been exercised against
 the exp059 surrogate, for the wiring reason given in
 Section~\ref{subsec:decap_placement_formulation}, so it is a property of the
@@ -1201,7 +1075,7 @@ frequency, against on-chip IR drop -- and the role of the model: those works
 predict a field, whereas here the spatial decoder is one branch of a joint
 generative model whose latent is subsequently optimized.
 
-\subsubsection*{Comparability caveat}
+\subsubsection*{Absence of a shared benchmark}
 
 No shared benchmark exists across any of these PDN decap-placement works. The
 Götze-group papers, the KAIST RL line, DevFormer, \cite{convga2024gcn} and
@@ -1214,7 +1088,7 @@ the $231$-bin mask used here.
 board for Chapter~5, and what the equal-budget protocol would be. As of this
 draft no baseline has been re-run.}
 
-\subsubsection*{What follows from the gap}
+\subsubsection*{From the gap to the research questions}
 
 \fillin{The author's own statement of the research questions and hypotheses that
 follow from this gap, agreed with the supervisor. This is deliberately not
@@ -1241,8 +1115,8 @@ corresponding chapter for each.}
 %     delete the sentence. No cavity-mode behaviour is asserted in the draft.
 %   - Decap type fixed in main study? give capacitance/ESR/ESL/part number used in
 %     the ECADSTAR sims. Settled by: the ECADSTAR component library / PEB project.
-%   - Derivation of configs/target_impedance.npy (0.8 -> 50 ohm). Settled by: the
-%     original design brief; nothing in the repo records it.
+%   - Derivation of the target mask (0.8 -> 50 ohm), stored as configs/target_impedance.npy.
+%     Settled by: the original design brief; nothing in the repo records it.
 %   - PI solver settings (mesh, sweep, solver type, convergence). Settled by: the
 %     ECADSTAR project settings.
 %   - Wall-clock cost of one ECADSTAR PI simulation. Settled by: one timed batch run.
@@ -1250,7 +1124,7 @@ corresponding chapter for each.}
 %     geometry document that does not yet exist.
 %   - Provenance of the 231-bin sweep in configs/Frequency_data_hz.npy.
 %   - Why layout-level (not row-level) holdout matters: leakage argument, one sentence.
-%   - How BOUNDARY_MARGIN = 0.1 was chosen and its size in ohms.
+%   - How the feasibility margin 0.1 (BOUNDARY_MARGIN) was chosen and its size in ohms.
 %   - Port Stage 2 to exp059 (or state it is exp038-only) + fix NORMALIZATION_STATS_PATH.
 %   - Free-bits formulation: exact hinge form and the units of the threshold (nats or
 %     bits; per dimension or per group) from the kingma2016iaf PDF, cross-checked against
@@ -1281,6 +1155,10 @@ corresponding chapter for each.}
 %   - Which baseline (if any) will be re-run on this board for Ch.5, and the protocol.
 %   - Research questions/hypotheses following from the gap (author + supervisor).
 %   - Paragraph linking the gap to the Ch.1 contributions.
+%   - APPENDIX DEPENDENCY: the chapter preamble now promises an "implementation index
+%     appendix". All file:line evidence removed from this chapter in the academic-register
+%     pass is preserved in scratchpad thesis_phase1/ch2-impl-index.json (69 entries) and
+%     must be rendered as that appendix, or the preamble sentence must be deleted.
 %
 % Citation verification queue (refs.bib note = "VERIFY: bibliographic fields not
 % confirmed from source page") -- keys cited in this chapter that need checking:
@@ -1321,7 +1199,7 @@ corresponding chapter for each.}
 %   - kim2021epeps: title/authors/year/venue confirmed from the KAIST EE lab project
 %     page, not from the IEEE Xplore landing page.
 %   - park2020drldecap: confirmed via pure.kaist.ac.kr, not from IEEE Xplore directly.
-%   - kim2021epeps and usama2025dram were added to refs.bib in this drafting session.
+%   - kim2021epeps and usama2025dram were added to refs.bib in an earlier drafting session.
 %   - duan2024hierarchical, kutuzova2021defense, srinivas2010gp, gal2016dropout,
 %     lakshminarayanan2016deep, bengio2013straight, jang2016gumbel, kipf2016graph,
 %     gilmer2017message, perez2018film, wu2018mvae, kingma2013auto, sohn2015conditional,
@@ -1334,16 +1212,16 @@ corresponding chapter for each.}
 % Evidence warnings:
 %   1. docs/framework-overview.md sec.3 still calls exp057_structured_graph the current
 %      surrogate stage; docs/experiment-lineage.md and CLAUDE.md say exp059_capacity_freq.
-%      Surfaced in subsec:vae_multimodal. Scoping: the document is treated as stale ONLY
-%      on which experiment is current. Its section-1 material IS used twice -- the
-%      conventional design loop (subsec:pi_simulation_multimodal) and the
-%      engineering-problem statement incl. 2^52 (subsec:decap_placement_formulation) --
-%      and both use sites now point at this conflict. Both are vault-note authority; the
-%      shape facts behind the second are independently confirmed in source.
+%      The academic-register pass REMOVED the paragraph that argued this out in the body
+%      (it was repository meta). The document is treated as stale ONLY on which experiment
+%      is current; its section-1 material is still used twice -- the conventional design
+%      loop (subsec:pi_simulation_multimodal) and the engineering-problem statement incl.
+%      2^52 (subsec:decap_placement_formulation) -- and the shape facts behind the second
+%      (52 slots, 231 bins, frequency grid) are independently confirmed in source.
 %   2. exp059 notes.md vs live config.yaml disagree on layout_train_prob (0 vs 0.65),
 %      occ_only_encode_prob (0 vs 0.4), latent/output distill weights (0 vs 2.5),
 %      eval_use_occ_only_layout, al_overlay_data_dir, learning_rate, num_epochs,
-%      resume_checkpoint. Surfaced, not resolved.
+%      resume_checkpoint. Surfaced in one plain sentence, not resolved.
 %   3. The frequency-weighted 2D-FFT spectral heatmap loss is IMPLEMENTED but its weight
 %      key is absent from config.yaml and from the Config dataclass, so it falls back to
 %      0.0 and the function returns None -- the term is DISABLED. exp059 notes.md claims
@@ -1359,20 +1237,16 @@ corresponding chapter for each.}
 %   7. Provenance caveat: exp059 config.yaml, vae_multi_input_simple.py and
 %      docs/framework-overview.md are untracked in git; the current exp059 architecture
 %      and config are not committed, and the latest commit message still describes exp057
-%      as current. Any line number cited from those files may move.
+%      as current. Any line number in the implementation index may move.
 %   8. Facts block lists 10 "missing" items covering board / solver / cost / part
 %      parameters; every one is still marked with a \fillin rather than written from
-%      background knowledge. The PDN-physics item is now written from literature only
+%      background knowledge. The PDN-physics material is written from literature only
 %      (bogatin2018signal, smith1999target) and is explicitly NOT sourced from the repo;
-%      the repo's physics_loss.py term remains framed as a training regularizer with a
-%      physical motivation, not as a derived circuit relation.
-%  13. The Bogatin section numbers cited in prose (13.12-13.17, 13.22) come from the
-%      publisher's table of contents, not from the pages themselves. The physics written
-%      around them (series RLC, SRF, parallel resonance, loop inductance) is standard, but
-%      the section-to-claim mapping should be checked once against the book.
+%      the anti-resonance term remains framed as a training regularizer with a physical
+%      motivation, not as a derived circuit relation.
 %   9. No experimental outcome is stated anywhere in this chapter, by design.
-%  10. Equation eq:feasibility is a SURROGATE-PREDICTED test. The chapter now states after
-%      it that a candidate flagged feasible has not been simulated and that ground-truth
+%  10. Equation eq:feasibility is a SURROGATE-PREDICTED test. The chapter states after it
+%      that a candidate flagged feasible has not been simulated and that ground-truth
 %      confirmation needs a PEB export plus an ECADSTAR PI re-simulation. Any later chapter
 %      reusing the word "feasible" must carry the same caveat.
 %  11. Known audit finding left UNFIXED (minor, out of evidence scope): the Stage-2 gate
@@ -1382,4 +1256,12 @@ corresponding chapter for each.}
 %      pipelines/latent/optimize.py:69,414 and amend subsec:latent_space_opt.
 %  12. Known audit finding left UNFIXED (bibliography, not this file): placeholder author
 %      fields in refs.bib -- see the citation verification queue above.
+%  13. The Bogatin section numbers cited in prose (13.12-13.17, 13.22) come from the
+%      publisher's table of contents, not from the pages themselves. The physics written
+%      around them (series RLC, SRF, parallel resonance, loop inductance) is standard, but
+%      the section-to-claim mapping should be checked once against the book.
+%  14. Academic-register pass: 69 file:line / artifact-path references were removed from the
+%      body and preserved in ch2-impl-index.json. Numbers, equations, equation labels,
+%      \fillin markers and all \cite keys were carried over unchanged; only starred
+%      subsubsection headings were renamed (5 of them), per instruction.
 % ---------------------------------------------------------------

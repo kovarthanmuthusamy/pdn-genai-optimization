@@ -1,5 +1,6 @@
 % ch1-introduction.tex -- part of thesis_v3.tex; do not add \documentclass here.
-% Draft with the thesis-chapter workflow. Unsupported claims must use \fillin{...}.
+% Academic-register pass. Source-file references live in Appendix D (Implementation Index).
+% Unsupported claims must use \fillin{...}.
 
 \chapter{Introduction}
 \label{ch:introduction}
@@ -8,41 +9,30 @@
 \label{sec:motivation_problem}
 
 A printed circuit board's power delivery network (PDN) has to supply the integrated circuits on
-the board with a stable voltage while they draw current that changes quickly. The usual way to
-express this requirement in the frequency domain is the target impedance rule: the impedance
-$Z(f)$ seen looking into the PDN from the load must stay below a frequency-dependent limit
-$Z_{\mathrm{target}}(f)$ across the band of interest \cite{smith1999target}. Decoupling
-capacitors (decaps) are the main tool the designer has for shaping $Z(f)$, and the design task is
-to decide how many of them to place and where.
+the board with a stable voltage while they draw current that changes quickly. In the frequency
+domain this requirement is usually written as the target impedance rule: the impedance $Z(f)$ seen
+looking into the PDN from the load must stay below a frequency-dependent limit
+$Z_{\mathrm{target}}(f)$ across the band of interest \cite{smith1999target}. Decoupling capacitors,
+commonly shortened to decaps, are the main tool the designer has for shaping $Z(f)$, and the design
+task is to decide how many of them to place and where to put them.
 
-In this thesis the band of interest is $1$--$600$\,MHz, sampled at $231$ discrete frequency bins.
-The bin locations are fixed by the file \texttt{configs/Frequency\_data\_hz.npy}, which holds
-$231$ values running from $1000000.0$\,Hz to $600000000.0$\,Hz. The grid is not uniformly spaced:
-the spacing between successive bins takes the three values $0.1$\,MHz, $1$\,MHz and $10$\,MHz.
-\fillin{state why the frequency grid uses three different step sizes and who chose the
-breakpoints -- the ECADSTAR sweep setup or export script that produced Frequency\_data\_hz.npy
-would settle it}
+The band of interest in this work is $1$--$600$\,MHz, sampled at $231$ discrete frequency bins
+running from $1$\,MHz to $600$\,MHz. The grid is not uniformly spaced: the step between successive
+bins takes the three values $0.1$\,MHz, $1$\,MHz and $10$\,MHz, so the low end of the band is
+resolved more finely than the high end. The impedance requirement is a mask over the same $231$
+bins, one limit per bin. It is not a constant. It rises from $0.8$ at the low end to $50$ at the
+high end and varies with frequency in between; the values are read as ohms throughout this thesis.
+\fillin{specify the impedance requirement and the frequency grid properly: (i) the provenance of
+the mask -- who specified it and from which load-current or ripple budget it was derived; (ii)
+confirmation of its unit, since the ohms reading is inferred from the naming used in the
+optimization code rather than from a unit recorded with the mask itself; and (iii) why the
+frequency sweep uses three different step sizes and who chose the breakpoints. The solver sweep
+setup used to export the grid, together with a design note on the mask, would settle all three.}
 
-The impedance limit itself is stored as an array of shape $(231,1)$ in
-\texttt{configs/target\_impedance.npy}, so there is one limit per bin. It is not a constant: the
-first element is $0.8$ and the last is $50$ (stored as $49.99999999999999$ in \texttt{float64}),
-and the values vary with frequency in between. Stage~2 of the framework loads this file, casts it
-to \texttt{float32} and squeezes it to a length-$231$ vector before use.
-\fillin{confirm the unit of configs/target\_impedance.npy. The rest of this thesis reads the mask
-as ohms because the Stage-2 code compares it against a tensor named \texttt{imp\_ohm} and its
-default selection metric is named \texttt{max\_ohm}, but that is an inference from variable
-naming, not a unit recorded with the array; a design note or the ECADSTAR export settings would
-settle it}
-\fillin{record the provenance of configs/target\_impedance.npy -- who specified this mask, and
-from which load-current or ripple budget it was derived}
-
-\subsection*{The placement problem}
-
-The board studied here exposes a fixed set of $52$ candidate decap sites. These are the valid
-cells of a $7\times 8$ physical grid: the code sets \texttt{OCC\_GRID\_H}, \texttt{OCC\_GRID\_W}
-$= 7, 8$ and marks four cells invalid, namely $(0,3)$, $(0,4)$, $(6,3)$ and $(6,4)$, leaving $52$
-slots labelled \texttt{C1}--\texttt{C52}. A design decision is therefore a binary placement
-vector
+The design under study exposes a fixed set of $52$ candidate decap sites. These are the valid cells
+of a $7 \times 8$ physical grid, four of whose cells are marked invalid, at grid positions
+$(0,3)$, $(0,4)$, $(6,3)$ and $(6,4)$; the remaining $52$ slots are labelled C1 to C52. A design
+decision is therefore a binary placement vector
 %
 \begin{equation}
   \mathbf{b} \in \{0,1\}^{52},
@@ -51,88 +41,64 @@ vector
   \label{eq:placement_vector}
 \end{equation}
 %
-where $b_i = 1$ means a decap is mounted in slot $i$ and the budget $K$ is the number of decaps
-used. $K$ matters because decaps cost money and board area, so a placement that meets the mask
-with fewer parts is preferable to one that needs more.
+where $b_i = 1$ means that a decap is mounted in slot $i$, and the budget $K$ is the number of
+decaps used. $K$ matters because decaps cost money and board area, so a placement that meets the
+mask with fewer parts is preferable to one that needs more.
 
-Two properties make this problem hard. First, the map $\mathbf{b} \mapsto Z(\cdot)$ is only
-available through an expensive field solver, so every candidate placement that is to be judged
-exactly has to be simulated. Second, the discrete space has $2^{52}$ elements, which is stated in
-the project documentation as intractable to enumerate. The combination means that neither
-exhaustive search nor a simulation-in-the-loop search that evaluates a large number of candidates
-is practical.
+Two properties make the problem hard. The map $\mathbf{b} \mapsto Z(\cdot)$ is available only
+through an expensive field solver, so every candidate placement that is to be judged exactly has
+to be simulated. And the discrete space has $2^{52}$ elements, far beyond what can be enumerated.
+Neither exhaustive search nor a simulation-in-the-loop search that evaluates a large number of
+candidates is practical.
 
-\subsection*{The conventional design loop}
-
-The conventional workflow this thesis targets is iterative. The engineer places a set of decaps,
-simulates the resulting impedance spectrum, and checks it against the mask. If peaks violate the
-mask, a spatial power-integrity distribution is computed at the offending frequency, decaps are
-moved towards the hotspots that this distribution reveals, and the cycle repeats. Every turn of
-that loop contains at least one full solver run.
-
-\fillin{quantify the cost of this loop for the board under study -- engineer hours per iteration
-and the number of iterations typically needed to converge; nothing in the repository records
-this, and the literature search found no freestanding paper that measures it}
-The claim that iterative and manual decap tuning is slow enough to motivate a learned replacement
-is asserted in the motivation sections of the machine-learning and genetic-algorithm decap
-literature rather than measured in a dedicated study
+The conventional workflow that this thesis targets is iterative. The engineer places a set of
+decaps, simulates the resulting impedance spectrum, and checks it against the mask. If peaks
+violate the mask, a spatial power-integrity distribution is computed at the offending frequency,
+decaps are moved towards the hotspots that this distribution reveals, and the cycle repeats. Every
+turn of that loop contains at least one full solver run.
+\fillin{quantify the cost of this loop for the design under study -- engineer hours per iteration
+and the number of iterations typically needed to converge. This has not been measured here, and no
+freestanding study measuring it was found.}
+That iterative and manual decap tuning is slow enough to motivate a learned replacement is asserted
+in the motivation sections of the machine-learning and genetic-algorithm decap literature rather
+than established by a dedicated measurement study
 \cite{swaminathan2020demystifying,zhang2020enhanced,ars2023ai,convga2024gcn}.
 
-Ground-truth impedance data for this thesis is produced with ECADSTAR, which runs on a Windows
-host addressed from WSL; the active-learning configuration carries absolute Windows paths for the
-ERF, EMC and PEB locations, for example
-\texttt{C:\textbackslash Users\textbackslash muthusamy\textbackslash Desktop\textbackslash
-design\textbackslash H-shape.emc\textbackslash H-shape.erf}. The configuration allocates a wait
-timeout of $18000$ seconds for a simulation batch and $900$ seconds for batch start, polled every
-$40$ seconds. These are configured timeouts and not measurements.
-\fillin{measure and report the wall-clock time of one ECADSTAR PI simulation, per layout and per
-batch; a timing log from an AL cycle's simulate step would settle it}
-\fillin{report surrogate inference time on the same hardware and the resulting speed-up factor
-over simulation -- no artifact in the repository contains this comparison}
-
-\subsection*{Learned approaches to decap placement}
+Ground-truth impedance data for this work is produced with the ECADSTAR power-integrity flow, which
+runs on a Windows host driven remotely from a Linux environment.
+\fillin{report the measured cost of the ground-truth flow and of its learned replacement: the
+wall-clock time of one power-integrity simulation, per layout and per simulation batch, and the
+surrogate's inference time on the same hardware, from which the speed-up factor follows. A timing
+log from a simulation batch and a benchmark run of the trained surrogate would settle both.}
 
 Learning-based decap placement is not new. Deep reinforcement learning was applied to decap
 selection from 2019 onwards \cite{zhang2019decoupling}, extended with an impedance-matrix
 reduction method and double Q-learning to cut optimisation time \cite{zhang2020enhanced}, and
-applied to silicon-interposer 2.5-D/3-D IC decap design in the same period
+applied to silicon-interposer 2.5-D and 3-D IC decap design in the same period
 \cite{park2020drldecap}. The same line later moved to transformer-based policies
-\cite{park2022transformer,kim2023devformer}, and separate strands combine graph neural networks
+\cite{park2022transformer,kim2023devformer}, while separate strands combine graph neural networks
 with genetic algorithms \cite{convga2024gcn} or use learned models purely as fast impedance
-predictors \cite{zhang2021fast}. Chapter~\ref{ch:theory_background} treats this work in detail
-and states where the present framework differs.
+predictors \cite{zhang2021fast}. Chapter~\ref{ch:theory_background} treats this body of work in
+detail and states where the framework presented here differs from it.
 
-\subsection*{Approach taken in this thesis}
-
-The framework documented in this repository replaces the conventional loop with four elements.
-A learned differentiable surrogate of one fixed board, built as a multi-input variational
+The framework developed in this thesis replaces the conventional loop with four elements. A
+learned, differentiable surrogate of one fixed board, built as a multi-input variational
 autoencoder, stands in for the field solver. Gradient-based inverse design in the latent space of
-that surrogate searches for placements under a budget $K$. An active-learning loop optionally
-refines the surrogate on layouts where its error or uncertainty is high, simulating only a
-selected batch rather than every candidate. Finally, a performance-analysis layer decodes a
-frequency-conditioned spatial heatmap at the peak frequencies of a predicted spectrum. The
-project documentation gives the purpose of that layer as hotspot interpretation, that is, the
-intent is to inspect a predicted violation spatially instead of only in the spectrum. Whether the
-decoded heatmaps are accurate enough for that use is evaluated in
-Section~\ref{subsec:val_pi_heatmaps}; nothing in this chapter asserts that they are.
+that surrogate searches for placements under a budget $K$. An active-learning loop refines the
+surrogate on layouts where its error or uncertainty is high, simulating only a selected batch
+rather than every candidate. A performance-analysis layer then decodes a frequency-conditioned
+spatial heatmap at the peak frequencies of a predicted spectrum, so that a predicted violation can
+be inspected spatially and not only in the spectrum. Whether the decoded heatmaps are accurate
+enough for that purpose is a question for Section~\ref{subsec:val_pi_heatmaps}; nothing in this
+chapter asserts that they are.
 
-The surrogate models three modalities jointly for a single board: decap occupancy as the binary
-vector of Equation~\eqref{eq:placement_vector}, the PI spectrum magnitude over the $231$
-frequency bins, and a $64\times 64$ spatial PI heatmap at selected MHz anchors. Conditioning
-inputs are the budget $K$ and the inspection frequency. In the current model track,
-\texttt{exp059\_capacity\_freq}, the three modalities carry the shapes $(B,1,64,64)$ for the
-heatmap, $(B,52)$ for occupancy and $(B,1,231)$ for the impedance vector, where $B$ is the batch
-size. These shapes are the ones documented in the docstring of the model's \texttt{encode}
-method in \texttt{experiments/exp059\_capacity\_freq/codes/vae\_multi\_input\_simple.py}, which
-lists the encoder's three modality inputs. $K$ is defined in code as the number of ones in the
-occupancy vector, so $K \in \{0,\dots,52\}$.
-\fillin{state the exact return signature of the exp059 \texttt{forward} pass and the form of its
-occupancy output -- in particular whether that output is decoder logits that are thresholded
-before use, or an already-binarised vector. The shapes above come from the \texttt{encode}
-docstring and are input shapes; the \texttt{forward} and \texttt{decode} definitions in the same
-file would settle what is returned}
+The surrogate models three modalities of a single board jointly: the decap occupancy as the binary
+vector of Equation~\eqref{eq:placement_vector}, the power-integrity spectrum magnitude over the
+$231$ frequency bins, and a $64 \times 64$ spatial power-integrity heatmap at selected frequency
+anchors in the megahertz range. The budget $K$ and the inspection frequency enter as conditioning
+inputs. $K$ is the number of ones in the occupancy vector, so $K \in \{0,\dots,52\}$.
 
-The inverse-design objective is stated per budget. For each $K$, a placement is feasible if the
+The inverse-design objective is stated per budget. For a given $K$, a placement is feasible if the
 predicted spectrum stays below the mask with a safety margin $m$,
 %
 \begin{equation}
@@ -141,44 +107,39 @@ predicted spectrum stays below the mask with a safety margin $m$,
   \label{eq:feasibility_intro}
 \end{equation}
 %
-where $\hat{Z}$ denotes the surrogate's predicted impedance as opposed to the simulated $Z$.
-Among feasible candidates the one with the lowest peak impedance $\max_f \hat{Z}(f;\mathbf{b})$
-is selected; the implementation's default selection metric is \texttt{max\_ohm}, the maximum of
-\texttt{imp\_ohm} over the frequency bins. If no candidate for a given $K$ is feasible, the
-procedure records an explicit \texttt{no\_solution.json} for that $K$ instead of returning a
-best-effort placement. As the code stands, the Stage-2 script
-\texttt{pipelines/latent/optimize.py} loads its occupancy decoder and impedance surrogate from
-the legacy experiment \texttt{exp038\_true\_multi} rather than from
-\texttt{exp059\_capacity\_freq}, so the objective above is stated as method only and no
-inverse-design outcome is attributed to the current surrogate anywhere in this thesis.
+where $\hat{Z}$ denotes the surrogate's predicted impedance as opposed to the simulated $Z$. Among
+the feasible candidates, the one with the lowest peak impedance $\max_f \hat{Z}(f;\mathbf{b})$ is
+selected. If no candidate for a given $K$ is feasible, the procedure records that outcome
+explicitly rather than returning a best-effort placement. The latent search is implemented against
+an earlier surrogate, from experiment \texttt{exp038\_true\_multi}, and not against the current one,
+\texttt{exp059\_capacity\_freq}. It has therefore not been run end to end on the surrogate described
+in this thesis, and no inverse-design outcome is attributed to that surrogate anywhere in what
+follows.
 
-One implementation detail of the search is load-bearing and is introduced here because it shapes
-the whole formulation. Reading a placement out of the decoder requires a hard top-$K$ selection,
-which is a discrete operation with no useful gradient. The straight-through operator used in
-Stage~2 returns the hard top-$K$ binary vector in the forward pass but passes the gradient of the
-soft occupancy probabilities backwards; its docstring states that without this, the top-$K$
-argsort severs the gradient and the latent vector never moves in response to the spectrum target.
-
-\subsection*{Scope and validity boundary}
+One detail of the search is load-bearing enough to introduce here, because it shapes the whole
+formulation. Reading a placement out of the decoder requires a hard top-$K$ selection, which is a
+discrete operation with no useful gradient. The straight-through operator used in the search
+returns the hard top-$K$ binary vector in the forward pass but passes the gradient of the soft
+occupancy probabilities backwards. Without it, the top-$K$ sort severs the gradient and the latent
+vector never moves in response to the spectrum target.
 
 The scope is deliberately narrow. The surrogate is trained for a single board and one design
-family, with no cross-board generalisation claimed; the decap type and the $52$-slot set are
-fixed, so no multi-value or multi-type catalogue is covered; and the current training filter
-keeps layouts with $K \le 30$. The normalised training dataset records $24979$ unique layouts and
-$582997$ manifest rows.
+family, and no cross-board generalisation is claimed. The decap type and the $52$-slot set are
+fixed, so no multi-value or multi-type capacitor catalogue is covered, and the training data is
+filtered to layouts with $K \le 30$. The normalised training dataset comprises $24979$ unique
+layouts and $582997$ manifest rows.
 
 Surrogate spectra and heatmaps are predictions, not sign-off. A proposed design has to be
-re-simulated with the ground-truth PI flow before it can be accepted. This boundary is stated
-explicitly in the project's own validity notes and is repeated here because it constrains every
-result claim made later in the thesis.
+re-simulated with the ground-truth power-integrity flow before it can be accepted. This boundary
+is repeated here because it constrains every result claim made later in the thesis.
 
-\fillin{describe the board under study -- layer stack, physical dimensions, IC port location and
-the power bus being decoupled; the AL configuration references an ERF named H-shape and a
-powerbus named Power\_GND, but no board specification document exists in the repository}
-\fillin{state the capacitance value and part type assumed for the 52 slots in exp059; the only
-decap-profile artifact found belongs to a legacy experiment note and not to the exp059 track}
-\fillin{personal and industrial motivation for choosing this topic -- not recorded anywhere in
-the repository, must be written by hand}
+\fillin{describe the design under study -- layer stack, physical dimensions, IC port location and
+the power bus being decoupled -- and state the capacitance value and part type assumed for the $52$
+slots. The board is identified in the simulation setup only by a project name and a power-bus name,
+and the one decap-profile artifact that exists belongs to a legacy experiment rather than to the
+current surrogate; the original ECAD project and a board specification note would settle both.}
+
+\fillin{personal and industrial motivation for choosing this topic -- to be written by hand.}
 
 \figplace{Board slot map: the $7\times 8$ grid with the four invalid cells removed, slots labelled C1--C52.}
 
@@ -191,45 +152,42 @@ The overall aim follows from Section~\ref{sec:motivation_problem}: to replace th
 simulate-in-the-loop decap placement search on one fixed board with a learned differentiable
 surrogate, to perform the search by gradient descent in that surrogate's latent space under a
 budget constraint, and to add an analysis layer that localises impedance violations spatially.
-Active learning is included as a mechanism for spending a limited simulation budget on the
-layouts where the surrogate is least reliable.
+Active learning is included as a mechanism for spending a limited simulation budget on the layouts
+where the surrogate is least reliable.
 
-Beyond that aim, the research questions and the contribution list are not fixed yet. No research
-questions and no enumerated contributions exist in the repository, in the documentation, or in
-the thesis vault, and they require supervisor agreement before they are written down.
+Beyond that aim, the research questions and the contribution list are not yet fixed, and both
+require agreement with the supervisor before they are written down.
 
-\fillin{RQ1--RQn: formulate the research questions with the supervisor. Candidate themes visible
-in the artifacts are (i) whether a multi-modal VAE surrogate of one board is accurate enough to
-drive placement decisions, (ii) whether latent-space gradient search through a straight-through
-top-$K$ read-out finds feasible placements at smaller $K$ than the alternatives, and (iii)
-whether active learning improves the surrogate where it matters under a fixed simulation budget.
-These are candidates only and must not be treated as agreed.}
+\fillin{RQ1--RQn: formulate the research questions with the supervisor. Candidate themes arising
+from the work are (i) whether a multi-modal VAE surrogate of one board is accurate enough to drive
+placement decisions, (ii) whether latent-space gradient search through a straight-through top-$K$
+read-out finds feasible placements at smaller $K$ than the alternatives, and (iii) whether active
+learning improves the surrogate where it matters under a fixed simulation budget. These are
+candidates only and must not be treated as agreed.}
 
 \fillin{Contribution list: enumerate the claimed contributions once the experiments in
 Chapter~\ref{ch:results_evaluations} are complete and agreed with the supervisor. This list must
-match Section~\ref{sec:summary_contributions} in the conclusion. Nothing in the repository
-currently enumerates contributions.}
+match Section~\ref{sec:summary_contributions} in the conclusion.}
 
-\fillin{State explicitly which of the objectives are demonstrated end-to-end and which are not.
-As the code stands, the Stage-2 inverse-design script loads occupancy-decoder and
-impedance-surrogate checkpoints from the legacy experiment exp038\_true\_multi, while the current
-surrogate track is exp059\_capacity\_freq -- so no end-to-end inverse-design result may be
-attributed to exp059 until Stage 2 is rewired. Resolve before claiming any objective as met.}
+\fillin{State explicitly which of the objectives are demonstrated end to end and which are not. The
+latent search currently runs against an earlier surrogate rather than the one this thesis
+documents, so no end-to-end inverse-design result may be claimed for the current surrogate until
+the two stages are rewired. Resolve before claiming any objective as met.}
 
-\fillin{Confirm the delimitation sentence: what this thesis does not attempt (signal integrity
-sign-off, EM/EMC field solving, emissions, cross-board transfer). Wording to be agreed.}
+\fillin{Confirm the delimitation sentence: what this thesis does not attempt -- signal-integrity
+sign-off, electromagnetic field solving and emissions, and transfer to other boards. Wording to be
+agreed.}
 
 \section{Structure of the Thesis}
 \label{sec:thesis_structure}
 
-The thesis has five chapters. Front matter provides a table of contents, a list of figures, a
-list of tables, an unnumbered chapter on mathematical notation and an unnumbered list of
-acronyms.
+The thesis has five chapters. The front matter provides a table of contents, a list of figures, a
+list of tables, an unnumbered chapter on mathematical notation and an unnumbered list of acronyms.
 
-Chapter~\ref{ch:theory_background}, \emph{Theoretical Background}, sets out the theory the rest
-of the work rests on. Section~\ref{sec:pdn_optimization} covers power delivery networks and the
+Chapter~\ref{ch:theory_background}, \emph{Theoretical Background}, sets out the theory the rest of
+the work rests on. Section~\ref{sec:pdn_optimization} covers power delivery networks and the
 optimisation problem, with subsections on impedance and decoupling
-(\ref{subsec:impedance_decoupling}), PI simulation and its multimodal outputs
+(\ref{subsec:impedance_decoupling}), power-integrity simulation and its multimodal outputs
 (\ref{subsec:pi_simulation_multimodal}), and the formal decap placement formulation
 (\ref{subsec:decap_placement_formulation}). Section~\ref{sec:generative_latent_opt} covers
 generative modelling and latent-space optimisation, with subsections on multimodal variational
@@ -240,29 +198,25 @@ Section~\ref{sec:related_work} reviews related work on PDN optimisation methods
 (\ref{subsec:generative_learning_approaches}) and closes with the research gap
 (\ref{subsec:research_gap}).
 
-Chapter~\ref{ch:design_implementation}, \emph{Design and Implementation}, describes what was
-built. Section~\ref{sec:data_prep_reprocessing} covers data preparation and reprocessing: the raw
-PI outputs (\ref{subsec:raw_pi_outputs}), the multi-frequency dataset
+Chapter~\ref{ch:design_implementation}, \emph{Design and Implementation}, describes what was built.
+Section~\ref{sec:data_prep_reprocessing} covers data preparation and reprocessing: the raw
+power-integrity outputs (\ref{subsec:raw_pi_outputs}), the multi-frequency dataset
 (\ref{subsec:multifreq_dataset}) and the splitting and sampling strategy
 (\ref{subsec:data_splitting_sampling}). Section~\ref{sec:multimodal_vae_surrogate} describes the
 multi-modal variational autoencoder used as the generative surrogate, covering the architectural
 design (\ref{subsec:architectural_design}), the training objective and physics regularisation
-(\ref{subsec:objective_physics_reg}), training and inference (\ref{subsec:training_inference})
-and the auxiliary guidance network (\ref{subsec:aux_guidance_network}).
+(\ref{subsec:objective_physics_reg}), training and inference (\ref{subsec:training_inference}) and
+the auxiliary guidance network (\ref{subsec:aux_guidance_network}).
 Section~\ref{sec:latent_opt_decap} formulates the latent-space optimisation of decap placement
 (\ref{subsec:opt_problem_formulation}) and the optimisation procedure with its feasibility test
 (\ref{subsec:opt_procedure_feasibility}). Section~\ref{sec:experimental_setup} states the
-experimental setup and Section~\ref{sec:active_learning} the active-learning loop used to scale
-the model.
-\fillin{state the per-cycle active-learning budget in Chapter 3 and resolve the conflict between
-active\_learning\_pi/config/exp059\_gp\_error.json (candidates\_per\_k 1600, worst\_per\_k 80,
-total\_ecad\_per\_cycle 640, K = 3..10) and docs/active-learning.md:110--112, which documents
-8 x 400 candidates and 8 x 10 = 80 ECAD simulations for the older exp057 loop}
+experimental setup and Section~\ref{sec:active_learning} the active-learning loop used to scale the
+model.
 
 Chapter~\ref{ch:results_evaluations}, \emph{Results and Evaluations}, reports the measurements.
 Section~\ref{sec:surrogate_performance} evaluates the generative surrogate through reconstruction
-performance (\ref{subsec:reconstruction_perf}), validation of predicted PI heatmaps
-(\ref{subsec:val_pi_heatmaps}) and evaluation of the auxiliary guidance network
+performance (\ref{subsec:reconstruction_perf}), validation of the predicted power-integrity
+heatmaps (\ref{subsec:val_pi_heatmaps}) and evaluation of the auxiliary guidance network
 (\ref{subsec:eval_aux_guidance}). Section~\ref{sec:latent_design_opt_results} reports the
 latent-space design optimisation results, covering scalability and efficiency
 (\ref{subsec:eval_scalability_efficiency}) and the spatial and capacitor-type evaluation
@@ -273,98 +227,90 @@ Chapter~\ref{ch:conclusion_outlook}, \emph{Conclusion and Outlook}, summarises t
 (\ref{sec:summary_contributions}) and gives directions for future research
 (\ref{sec:future_research}).
 
-Three appendices follow the bibliography. Appendix~\ref{ch:appendix_simulation_dataset}
-documents the power integrity simulation environment and the dataset specification.
-Appendix~\ref{ch:appendix_hyperparameters} lists the hyperparameter configuration used for
-training and optimisation. Appendix~\ref{ch:appendix_supp_results} collects supplementary
-experimental results.
-\fillin{confirm what Appendix C will contain; it is still declared inline in thesis\_v3.tex with
-the note that it depends on experiments not yet run}
+Four appendices follow the bibliography. Appendix~\ref{ch:appendix_simulation_dataset} documents
+the power-integrity simulation environment and the dataset specification.
+Appendix~\ref{ch:appendix_hyperparameters} lists the hyperparameter configuration used for training
+and optimisation. Appendix~\ref{ch:appendix_supp_results} collects supplementary experimental
+results. Appendix~\ref{ch:appendix_implementation_index} is an implementation index: it records,
+section by section, the mapping from statements in the running text to the project artifacts they
+were taken from, so that the chapters can be read as continuous prose without losing traceability.
+\fillin{confirm what Appendix C will contain; its scope depends on experiments not yet run.}
 
 % ---------------------------------------------------------------
 % FILL IN checklist:
-%   1. Frequency-grid design rationale (three step sizes 0.1/1/10 MHz) -- resolved by the ECADSTAR
-%      sweep setup or the export script that produced configs/Frequency_data_hz.npy.
-%   2. Provenance of configs/target_impedance.npy (who specified the mask, from which current or
-%      ripple budget) -- resolved by a design note or supervisor statement.
-%   2b. Unit of configs/target_impedance.npy -- the ohms reading is an inference from the names
-%      imp_ohm / SELECT_METRIC = "max_ohm" in pipelines/latent/optimize.py, not a unit stored with
-%      the array. Now marked in the body as a \fillin rather than asserted.
-%   3. Cost of the conventional place-simulate-inspect-adjust loop (engineer hours, iteration
-%      count) -- no repository artifact and no freestanding paper measures it; needs either an
-%      industrial source or removal of the quantitative framing.
-%   4. Measured ECADSTAR wall-clock per layout and per batch -- resolved by a timing log from an
-%      AL simulate step. Only configured timeouts (18000 s / 900 s / 40 s poll) exist today.
-%   5. Surrogate inference time and speed-up factor vs simulation -- no artifact located; needs a
-%      benchmark run on stated hardware.
-%   6. Board specification (layer stack, dimensions, IC port, power bus) -- only "H-shape.erf" and
-%      powerbus "Power_GND" appear, in the AL config; needs the ECADSTAR project or a board note.
-%   7. Decap value/part type for the 52 slots in exp059 -- configs/decap_profiles.npy is referenced
-%      only from a legacy experiment note (exp031), not the exp059 track.
-%   8. Personal/industrial motivation -- not recorded anywhere; hand-written by Kovarthanam.
-%   9. RQ1--RQn -- require supervisor agreement; no research questions exist in docs/,
-%      thesis_vault/00-Thesis/ or the chapter files. Candidate themes listed in the marker are
-%      suggestions only.
-%  10. Contribution list -- no artifact enumerates contributions; ch5-conclusion.tex
-%      sec:summary_contributions is empty. Must match once written.
-%  11. Which objectives are demonstrated end-to-end -- blocked by the exp038/exp059 Stage-2 wiring
-%      issue (item 2 of the evidence warnings).
-%  12. Delimitation sentence wording (what the thesis does not attempt).
-%  13. Per-cycle AL budget in Ch.3 -- conflict between exp059_gp_error.json and
-%      docs/active-learning.md:110-112 named in the text.
-%  14. Appendix C contents -- depends on experiments not yet run.
-%  15. exp059 forward-pass return signature and the form of the occupancy output (logits vs.
-%      binarised). The (B,1,64,64)/(B,52)/(B,1,231) shapes in the body are taken from the encode()
-%      docstring, i.e. encoder INPUT shapes; forward() and decode() in
-%      experiments/exp059_capacity_freq/codes/vae_multi_input_simple.py would settle what is
-%      returned. Sourcing corrected in this revision; the numbers themselves were not changed.
+%   1. Impedance requirement and frequency grid (MERGED marker, was three separate markers in the
+%      pre-register draft: mask provenance, mask unit, grid step sizes). Resolved by (a) a design
+%      note stating who specified the mask and from which current/ripple budget, (b) a unit recorded
+%      with the mask -- the ohms reading is inferred from the identifiers imp_ohm / max_ohm in the
+%      optimization script, (c) the solver sweep setup that produced the 231-bin grid.
+%   2. Cost of the conventional place-simulate-inspect-adjust loop (engineer hours, iteration
+%      count). Not measured here; no freestanding paper measures it. Needs an industrial source or
+%      removal of the quantitative framing.
+%   3. Timing (MERGED, was two markers: solver wall-clock, surrogate inference time). Resolved by a
+%      timing log from a simulation batch plus a benchmark run of the trained surrogate on stated
+%      hardware. Only configured timeouts exist today (18000 s batch wait, 900 s batch start, 40 s
+%      poll) -- deliberately dropped from the body, since they are configuration, not measurement.
+%   4. Board specification and decap part (MERGED, was two markers). Board is identified in the
+%      simulation configuration only by an ERF project name and the powerbus name; the decap-profile
+%      artifact belongs to a legacy experiment, not the current track.
+%   5. Personal/industrial motivation -- hand-written by Kovarthanam.
+%   6. RQ1--RQn -- require supervisor agreement. Candidate themes in the marker are suggestions only.
+%   7. Contribution list -- must match sec:summary_contributions once written.
+%   8. Which objectives are demonstrated end to end -- blocked by the Stage-2 wiring issue
+%      (evidence warning 2 below).
+%   9. Delimitation sentence wording.
+%  10. Appendix C contents -- depends on experiments not yet run.
+%
+%   Markers retired in this pass, with where the gap now lives:
+%   - Per-cycle active-learning budget conflict (config vs docs/active-learning.md): removed from
+%     Section 1.3, which should describe chapter contents rather than carry a Chapter 3 evidence
+%     conflict. The conflict is recorded in the implementation index and must be resolved in
+%     Chapter 3 before either number is quoted. See evidence warning 4.
+%   - Return signature of the current surrogate's forward pass and the form of its occupancy output
+%     (logits vs. binarised): dissolved here because Chapter 1 no longer quotes encoder tensor
+%     shapes. It is a Chapter 3 question and is recorded in the implementation index.
 %
 % Citation verification queue:
-%   - smith1999target : used here for the target-impedance rule. A prior audit found the stored DOI
+%   - smith1999target : used for the target-impedance rule. A prior audit found the stored DOI
 %     pointed at a different 1999 paper; the refs.bib entry was repaired in a separate pass to DOI
-%     10.1109/6040.784476, pages 284--291, checked against Crossref. The citation key is unchanged.
-%     Re-read refs.bib before submission to confirm the repair is present and the VERIFY note there
-%     reflects the current state. A number of other refs.bib entries still carry the generic
-%     "VERIFY: bibliographic fields not confirmed from source page" note; count them against the
-%     current file rather than trusting any figure quoted here.
-%   - zhang2019decoupling : literature block records verified = "partial"; IEEE Xplore returned 403,
-%     title/authors/venue confirmed from a co-author's publication list, page numbers unconfirmed.
-%   - zhang2020enhanced, park2020drldecap : verified = "yes" in the literature block.
+%     10.1109/6040.784476, pages 284--291, checked against Crossref. The key is unchanged. Re-read
+%     refs.bib before submission to confirm the repair is present. Other entries still carry the
+%     generic "VERIFY: bibliographic fields not confirmed from source page" note; count them against
+%     the current file rather than trusting any figure quoted here.
+%   - zhang2019decoupling : verified = "partial". IEEE Xplore returned 403; title/authors/venue
+%     confirmed from a co-author's publication list, page numbers unconfirmed.
+%   - zhang2020enhanced, park2020drldecap : verified = "yes".
 %   - swaminathan2020demystifying, ars2023ai, convga2024gcn, park2022transformer, kim2023devformer,
-%     zhang2021fast : taken from the literature block's "known" list; bibliographic fields not
-%     re-verified in this pass.
-%   - The cited group {swaminathan2020demystifying, zhang2020enhanced, ars2023ai, convga2024gcn}
-%     supports only the assertion that iterative decap tuning is slow, made in those papers'
-%     motivation sections. It is NOT a measured benchmark and must not be paraphrased as one.
-%   - Unit of configs/target_impedance.npy: no longer asserted in the body. See FILL IN item 2b.
+%     zhang2021fast : bibliographic fields not re-verified in this pass.
+%   - The group {swaminathan2020demystifying, zhang2020enhanced, ars2023ai, convga2024gcn} supports
+%     only the assertion that iterative decap tuning is slow, made in those papers' motivation
+%     sections. It is NOT a measured benchmark and must not be paraphrased as one.
 %
 % Evidence warnings:
-%   1. Current model track: docs/cursor-handoff.md:6,:19 and docs/README.md:7-8 name
-%      exp059_capacity_freq as current, while docs/framework-overview.md:40 and
-%      docs/model-architecture.md:5 still name exp057_structured_graph. The chapter follows
-%      exp059 per the constitution's project traps; the exp057 statements are stale. Root
-%      README.md was not used as a source.
-%   2. Stage 2 (pipelines/latent/optimize.py:45-47) sets EXPERIMENT = "exp038_true_multi" and loads
-%      that experiment's checkpoints. No end-to-end inverse-design result may be attributed to
-%      exp059. This chapter therefore describes the Stage-2 objective and the straight-through
-%      top-K operator as method only, never as a demonstrated outcome. Since the audit this is
-%      also stated in the RENDERED body, at the end of the Stage-2 objective paragraph in
-%      Section 1.1, not only in Section 1.2's \fillin and in this comment.
-%   2c. The performance-analysis (heatmap) layer is described as intent taken from
-%      docs/framework-overview.md:25-30, not as a working capability; heatmap accuracy is deferred
-%      to subsec:val_pi_heatmaps, which is currently a heading only.
-%   3. exp059 capacity-phase modality probabilities conflict: docs/cursor-handoff.md:37 says
-%      layout_train_prob = 0 and occ_only_encode_prob = 0; config.yaml holds 0.65 and 0.4.
-%      Deliberately not used in Chapter 1; must be resolved before Chapter 3 quotes either.
-%   4. AL per-cycle budget conflict (config vs docs/active-learning.md) -- named in the text as
-%      a \fillin rather than resolved.
-%   5. Chapter count conflict: thesis_vault/00-Thesis/Thesis Outline.md organises the material into
-%      at least 7 chapters; Thesis_report/thesis_v3.tex has 5 and is authoritative per the source
-%      hierarchy. Section 1.3 follows thesis_v3.tex.
-%   6. Dataset anomaly not mentioned in this chapter but relevant later: dataset_meta.json records
-%      samples_per_mhz = 8480 for the 80 MHz anchor while all other anchors have 24979.
-%   7. No experimental outcome is stated anywhere in this chapter, by design -- it is written
-%      before the remaining experiments.
-%   8. Parameter count for exp059 is unknown; the ~10.7M figure in docs/model-architecture.md:5
+%   1. Current model track: the handoff notes and docs/README.md name exp059_capacity_freq as
+%      current, while framework-overview.md and model-architecture.md still name
+%      exp057_structured_graph. This chapter follows exp059 per the constitution. The root README
+%      was not used as a source.
+%   2. The latent optimization script loads exp038_true_multi checkpoints. No end-to-end
+%      inverse-design result may be attributed to exp059. This chapter states the Stage-2 objective
+%      and the straight-through top-K operator as method only, and says so in the rendered body at
+%      the end of the objective paragraph in Section 1.1.
+%   3. The performance-analysis (heatmap) layer is described as intent, not as demonstrated
+%      capability; heatmap accuracy is deferred to subsec:val_pi_heatmaps.
+%   4. AL per-cycle budget conflict between exp059_gp_error.json and docs/active-learning.md
+%      remains unresolved; it is no longer surfaced in Chapter 1 (see retired markers above).
+%   5. exp059 capacity-phase modality probabilities conflict (handoff notes say
+%      layout_train_prob = 0 and occ_only_encode_prob = 0; config.yaml holds 0.65 and 0.4). Not used
+%      in Chapter 1; must be resolved before Chapter 3 quotes either.
+%   6. Chapter count conflict: the vault outline organises the material into at least 7 chapters;
+%      thesis_v3.tex has 5 and is authoritative. Section 1.3 follows thesis_v3.tex.
+%   7. Dataset anomaly, relevant later but not mentioned here: samples_per_mhz = 8480 for the
+%      80 MHz anchor while all other anchors have 24979.
+%   8. No experimental outcome is stated anywhere in this chapter, by design.
+%   9. Parameter count for exp059 is unknown; the ~10.7M figure in the architecture documentation
 %      belongs to exp057 and was deliberately not carried over.
+%  10. Section 1.3 now names four appendices, matching thesis_v3.tex after Appendix D
+%      (Implementation Index) was added. All source-file references removed from this chapter in
+%      the register pass are listed in scratchpad thesis_phase1/ch1-impl-index.json and belong in
+%      Appendix D.
 % ---------------------------------------------------------------

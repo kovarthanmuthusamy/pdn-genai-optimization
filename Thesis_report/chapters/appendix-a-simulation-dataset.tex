@@ -24,7 +24,7 @@ models for the binary dataset --- are marked as gaps rather than reconstructed.
 All power-integrity labels are produced by the eCADSTAR PI/EMI analysis engine, driven in batch
 mode from WSL. There is no GUI automation path: the AutoHotkey driver was removed and the headless
 CLI is the only route to the engine, with no fallback and no toggle to switch back
-(\texttt{docs/ecadstar\_headless\_cli.md}; \texttt{active\_learning\_pi/al/ecadstar.py}). One
+(\texttt{docs/ecadstar\_headless\_cli.md}; \texttt{active\_\allowbreak{}learning\_\allowbreak{}pi/\allowbreak{}al/\allowbreak{}ecadstar.py}). One
 residual key remains in the primary active-learning configuration, a null \texttt{ahk\_exe} entry
 under \texttt{ecadstar}, which is no longer read by any driver.
 
@@ -50,7 +50,7 @@ Positional argument & the design riffile (\texttt{.erf} / \texttt{.rif}) \\
 \end{tabular}
 \end{table}
 
-The launcher (\texttt{pipelines/dataset\_sim/ecadstar.py}, function
+The launcher (\texttt{pipelines/\allowbreak{}dataset\_\allowbreak{}sim/\allowbreak{}ecadstar.py}, function
 \texttt{run\_ecadstar\_batch\_headless}) starts the engine through PowerShell
 \texttt{Start-Process -PassThru -NoNewWindow} and then blocks on \texttt{WaitForExit(timeout\_ms)}.
 Return codes are \texttt{0} for a clean self-exit, \texttt{124} when the timeout expires and the
@@ -127,7 +127,7 @@ Board outline dimensions &
 Decap C / ESR / ESL for the single-type (binary) dataset &
 \fillin{record the capacitor model attached to slots \texttt{C1}--\texttt{C52} in the binary
 campaign; the \texttt{TYPE\_CATALOG} in
-\texttt{scrap/generation/generate\_peb\_multitype.py} covers only the multi-type pipeline} \\
+\texttt{scrap/\allowbreak{}generation/\allowbreak{}generate\_\allowbreak{}peb\_\allowbreak{}multitype.py} covers only the multi-type pipeline} \\
 \hline
 \end{tabular}
 \end{table}
@@ -216,14 +216,14 @@ actually simulated; \texttt{logs/append\_queue/done.jsonl} records the bands tha
 \begin{table}[htbp]
 \centering
 \caption{Single-type combinations simulation pipeline
-(\texttt{pipelines/dataset\_sim/run\_combinations\_sim\_pipeline.py}).}
+(\texttt{pipelines/\allowbreak{}dataset\_\allowbreak{}sim/\allowbreak{}run\_\allowbreak{}combinations\_\allowbreak{}sim\_\allowbreak{}pipeline.py}).}
 \label{tab:appA_comb_pipeline}
 \begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
 \hline
 Constant & Value \\
 \hline
 \texttt{SWEEP\_MHZ} & \texttt{[170, 180, 280, 430, 470, 490, 550, 590]} \\
-Input CSV & \texttt{data/heatmaps/peb\_with\_29k/all\_combinations\_merged.csv} \\
+Input CSV & \texttt{data/\allowbreak{}heatmaps/\allowbreak{}peb\_\allowbreak{}with\_\allowbreak{}29k/\allowbreak{}all\_\allowbreak{}combinations\_\allowbreak{}merged.csv} \\
 \texttt{ECADSTAR\_WAIT\_TIMEOUT\_SEC} & \texttt{172\_800} \\
 \texttt{ECADSTAR\_WAIT\_POLL\_SEC} & \texttt{120} \\
 \hline
@@ -232,23 +232,23 @@ Input CSV & \texttt{data/heatmaps/peb\_with\_29k/all\_combinations\_merged.csv} 
 
 \fillin{note whether the 490, 550 and 590\,MHz bands in \texttt{SWEEP\_MHZ} ever reached the
 dataset --- they are absent from the 24 anchors in
-\texttt{datasets/data\_multifreq\_train/dataset\_meta.json}; the append queue in
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}dataset\_\allowbreak{}meta.json}; the append queue in
 \texttt{logs/append\_queue/done.jsonl} would settle it}
 
 \subsection{Active-learning batches}
 \label{subsec:appA_al_batches}
 
 The active-learning loop exports all selected candidates of a cycle into one combined PEB
-(\texttt{active\_learning\_pi/al/peb\_batch.py}, \texttt{build\_peb\_from\_selection}), carrying a
+(\texttt{active\_\allowbreak{}learning\_\allowbreak{}pi/\allowbreak{}al/\allowbreak{}peb\_\allowbreak{}batch.py}, \texttt{build\_peb\_from\_selection}), carrying a
 per-sample frequency formatted as \texttt{"\{int(round(mhz))\}e6"}. The builder sets
-\texttt{include\_distribution=True} and \texttt{include\_spectrum = not heatmap\_only}. In the
+\texttt{include\_distribution=True} and \texttt{include\_\allowbreak{}spectrum = not heatmap\_\allowbreak{}only}. In the
 primary configuration both \texttt{heatmap\_only\_peb} and \texttt{heatmap\_only\_labels} are
 \texttt{true}, so AL batches request PI-Distribution output only.
 
 \begin{table}[htbp]
 \centering
 \caption{eCADSTAR settings in the primary AL configuration
-(\texttt{active\_learning\_pi/config/exp059\_gp\_error.json}, key \texttt{ecadstar}).}
+(\texttt{active\_\allowbreak{}learning\_\allowbreak{}pi/\allowbreak{}config/\allowbreak{}exp059\_\allowbreak{}gp\_\allowbreak{}error.json}, key \texttt{ecadstar}).}
 \label{tab:appA_al_ecadstar}
 \begin{tabular}{p{0.45\textwidth} p{0.30\textwidth}}
 \hline
@@ -263,7 +263,7 @@ Key & Value \\
 \end{tabular}
 \end{table}
 
-Label ingestion (\texttt{active\_learning\_pi/al/ingest\_labels.py}) reads \texttt{PI-1} through
+Label ingestion (\texttt{active\_\allowbreak{}learning\_\allowbreak{}pi/\allowbreak{}al/\allowbreak{}ingest\_\allowbreak{}labels.py}) reads \texttt{PI-1} through
 \texttt{PI-N} from the EMC directory, copies the \texttt{.map} file for each candidate's frequency
 into \texttt{labels\_dir/sample\_\{i:03d\}/}, and writes \texttt{occupancy.npy},
 \texttt{pi\_freq\_mhz.npy} and \texttt{heatmap.npy}, the last produced by
@@ -336,7 +336,7 @@ Interpolation & \texttt{RBFInterpolator}, kernel \texttt{thin\_plate\_spline},
 \texttt{smoothing=0} \\
 Fallback & cubic \texttt{griddata} with nearest-neighbour NaN fill \\
 Grid size & \texttt{64} \\
-Stored tensor & \texttt{np.stack([Zi * mask\_board, mask\_board], axis=0)}: channel 0 is the masked
+Stored tensor & \texttt{np.stack([Zi * mask\_\allowbreak{}board, mask\_\allowbreak{}board], axis=0)}: channel 0 is the masked
 interpolated impedance, channel 1 is the mask \\
 Board mask & \texttt{configs/binary\_mask.npy}, \texttt{(64, 64)} boolean, \texttt{3432} True
 pixels \\
@@ -418,8 +418,8 @@ Field & Notes \\
 \texttt{.gitignore} ignores \texttt{datasets/}, \texttt{data\_multi\_norm\_robust/},
 \texttt{checkpoints/}, \texttt{**/checkpoints/}, \texttt{*.pt} and \texttt{*.pth};
 \texttt{git check-ignore} confirms that
-\texttt{datasets/data\_multifreq\_train/manifest.csv} and
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json} are matched by
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}manifest.csv} and
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded/\allowbreak{}normalization\_\allowbreak{}stats.json} are matched by
 \texttt{.gitignore} line 20 (\texttt{datasets/}). Reproducing any result in this thesis therefore
 requires rebuilding the datasets from the raw eCADSTAR output on the Windows host, or obtaining the
 directories separately.
@@ -432,31 +432,31 @@ directories separately.
 \hline
 Path & Role \\
 \hline
-\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train} & raw training set \\
-\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train\_norm\_unbounded} & normalized set;
+\texttt{datasets/data\_multifreq\_train} & raw training set \\
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded} & normalized set;
 training input for exp059 \\
-\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train\_norm\_robust} & bounded robust
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}robust} & bounded robust
 normalization, earlier experiments \\
-\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_train\_K5} & $K\le5$ subset \\
-\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_al\_overlay\_exp057} & AL overlay
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}K5} & $K\le5$ subset \\
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}al\_\allowbreak{}overlay\_\allowbreak{}exp057} & AL overlay
 (legacy) \\
-\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_al\_overlay\_exp058} & AL overlay
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}al\_\allowbreak{}overlay\_\allowbreak{}exp058} & AL overlay
 (legacy) \\
-\texttt{/home/ubuntu/genai\_pdn/datasets/data\_multifreq\_al\_overlay\_exp059} & AL overlay
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}al\_\allowbreak{}overlay\_\allowbreak{}exp059} & AL overlay
 (current track) \\
-\texttt{/home/ubuntu/genai\_pdn/data\_multi\_norm\_robust} & older backup at the repository root \\
+\texttt{data\_multi\_norm\_robust} & older backup at the repository root \\
 \hline
 \end{tabular}
 \end{table}
 
-\texttt{datasets/data\_multifreq\_al\_overlay\_exp060} is referenced by
-\texttt{experiments/exp060\_multitype\_occ/config.yaml} line 23 but does not exist on disk.
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}al\_\allowbreak{}overlay\_\allowbreak{}exp060} is referenced by
+\texttt{experiments/\allowbreak{}exp060\_\allowbreak{}multitype\_\allowbreak{}occ/\allowbreak{}config.yaml} line 23 but does not exist on disk.
 
 The current model track, \texttt{exp059\_capacity\_freq}, trains from \texttt{data\_dir}
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded}. The primary AL configuration uses the
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded}. The primary AL configuration uses the
 same \texttt{data\_dir}, \texttt{normalization\_stats\_json}
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json} and
-\texttt{overlay\_data\_dir} \texttt{datasets/data\_multifreq\_al\_overlay\_exp059}.
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded/\allowbreak{}normalization\_\allowbreak{}stats.json} and
+\texttt{overlay\_data\_dir} \texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}al\_\allowbreak{}overlay\_\allowbreak{}exp059}.
 
 \fillin{state the train/validation/test split definition for the normalized dataset --- no split
 artifact was located in the dataset directories read for this appendix; the split logic in the
@@ -469,13 +469,13 @@ exp059 dataloader would settle it}
 \label{subsec:appA_layout_pool}
 
 The layout pool is a merged combination list. The merge report
-(\texttt{data/heatmaps/merged\_combinations\_report.json}, generated
+(\texttt{data/\allowbreak{}heatmaps/\allowbreak{}merged\_\allowbreak{}combinations\_\allowbreak{}report.json}, generated
 \texttt{2026-07-01T13:13:39.245630+00:00}) records \texttt{n\_old} 19499 rows from
 \texttt{all\_combinations.csv}, \texttt{n\_new} 10000 rows from \texttt{combinations.csv},
 \texttt{overlap\_rows} 0, giving 29499 merged rows. The merged CSV read by the simulation pipeline
-is \texttt{data/heatmaps/peb\_with\_29k/all\_combinations\_merged.csv}, which has 29499 lines.
+is \texttt{data/\allowbreak{}heatmaps/\allowbreak{}peb\_\allowbreak{}with\_\allowbreak{}29k/\allowbreak{}all\_\allowbreak{}combinations\_\allowbreak{}merged.csv}, which has 29499 lines.
 The output path recorded in the merge report itself
-(\texttt{data/heatmaps/all\_combinations\_merged.csv}) no longer exists at that location; see
+(\texttt{data/\allowbreak{}heatmaps/\allowbreak{}all\_\allowbreak{}combinations\_\allowbreak{}merged.csv}) no longer exists at that location; see
 Section~\ref{sec:appA_inconsistencies}.
 
 \subsection{Raw training set}
@@ -497,9 +497,9 @@ Field & Value \\
 \texttt{schema\_version} & 1 \\
 \texttt{stage} & \texttt{raw} \\
 \texttt{source\_script} &
-\texttt{pipelines/data/append\_merged\_combinations\_multifreq.py} \\
+\texttt{pipelines/\allowbreak{}data/\allowbreak{}append\_\allowbreak{}merged\_\allowbreak{}combinations\_\allowbreak{}multifreq.py} \\
 \texttt{generated\_at\_utc} & \texttt{2026-08-05T19:28:42.489387+00:00} \\
-\texttt{dataset\_root} & \texttt{/home/ubuntu/genai\_pdn/\allowbreak datasets/data\_multifreq\_train} \\
+\texttt{dataset\_root} & \texttt{\allowbreak datasets/data\_multifreq\_train} \\
 \texttt{storage} & \texttt{layout\_store} \\
 \texttt{manifest\_rows} & 688477 \\
 \texttt{unique\_layouts} & 29499 \\
@@ -523,15 +523,15 @@ and the 80\,MHz raw folder count would settle it}
 \label{subsec:appA_anchors}
 
 The anchor list is the set of inspection frequencies at which PI-Distribution heatmaps exist.
-\texttt{datasets/data\_multifreq\_train/dataset\_meta.json} lists 24 anchors, in MHz:
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}dataset\_\allowbreak{}meta.json} lists 24 anchors, in MHz:
 10.0, 63.0, 80.0, 100.0, 120.0, 150.0, 170.0, 180.0, 200.0, 230.0, 250.0, 270.0, 280.0, 300.0,
 330.0, 350.0, 370.0, 390.0, 400.0, 420.0, 430.0, 450.0, 470.0, 500.0.
 
 Anchor resolution at load time follows a four-step order, per \texttt{docs/dataset.md}:
 \texttt{dataset\_meta.json} \texttt{pi\_frequencies\_mhz}, then \texttt{manifest.csv}
-\texttt{freq\_mhz}, then \texttt{datasets/data\_multifreq\_train/dataset\_meta.json}, then the
+\texttt{freq\_mhz}, then \texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}dataset\_\allowbreak{}meta.json}, then the
 legacy YAML defaults. That documentation statement was not verified against the implementation in
-\texttt{src\_vae/others/multifreq\_anchors.py} line by line.
+\texttt{src\_\allowbreak{}vae/\allowbreak{}others/\allowbreak{}multifreq\_\allowbreak{}anchors.py} line by line.
 
 Three sources give three different anchor counts. \texttt{docs/dataset.md} lines 96--101 describe a
 ``Full 16-MHz set'' and ``Same 16 MHz in combinations sim batches''; the legacy fallback
@@ -543,7 +543,7 @@ loaded, and \texttt{configs/multifreq\_anchors.yaml} is declared a fallback used
 metadata or manifest is present.
 \fillin{resolve the conflict between the ``16-MHz set'' description in \texttt{docs/dataset.md}
 lines 96--101, the 20-anchor list in \texttt{configs/multifreq\_anchors.yaml}, and the 24-anchor
-list in \texttt{datasets/data\_multifreq\_train/dataset\_meta.json}; decide which is stale and
+list in \texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}dataset\_\allowbreak{}meta.json}; decide which is stale and
 correct the documentation}
 
 \fillin{document the provenance of the 24-anchor selection --- no artifact was located that records
@@ -554,7 +554,7 @@ why these particular frequencies were chosen}
 
 \begin{table}[htbp]
 \centering
-\caption{\texttt{datasets/data\_multifreq\_train\_norm\_unbounded} (normalized; the exp059 training
+\caption{\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded} (normalized; the exp059 training
 input).}
 \label{tab:appA_norm}
 \begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
@@ -565,8 +565,8 @@ Field & Value \\
 \texttt{source\_script} & \texttt{pipelines/normalize/multifreq.py} \\
 \texttt{generated\_at\_utc} & \texttt{2026-07-06T13:39:03.768907+00:00} \\
 \texttt{mode} & \texttt{full} \\
-\texttt{source\_dataset} & \texttt{/home/ubuntu/genai\_pdn/\allowbreak datasets/data\_multifreq\_train} \\
-\texttt{heatmap\_norm} & \texttt{robust\_log1p\_per\_mhz\_unbounded} \\
+\texttt{source\_dataset} & \texttt{\allowbreak datasets/data\_multifreq\_train} \\
+\texttt{heatmap\_norm} & \texttt{robust\_\allowbreak{}log1p\_\allowbreak{}per\_\allowbreak{}mhz\_\allowbreak{}unbounded} \\
 \texttt{max\_k\_filter} & 30 \\
 \texttt{manifest\_rows} & 582997 \\
 \texttt{unique\_layouts} & 24979 \\
@@ -583,9 +583,9 @@ Field & Value \\
 \end{tabular}
 \end{table}
 
-The budget filter is applied by \texttt{pipelines/normalize/build\_train\_norm\_unbounded.py},
+The budget filter is applied by \texttt{pipelines/\allowbreak{}normalize/\allowbreak{}build\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded.py},
 which sets \texttt{DATA\_DIR} to \texttt{datasets/data\_multifreq\_train}, \texttt{OUTPUT\_DIR} to
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded} and \texttt{MAX\_K} to 30, so only layouts
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded} and \texttt{MAX\_K} to 30, so only layouts
 with $K \le 30$ enter the normalized set. Note that this normalized set was generated on
 2026-07-06, whereas the raw set it names as its source was last refreshed on 2026-08-05; the two
 artifacts are not snapshots of the same moment, and the $K\le30$ filter accounts for only part of
@@ -596,13 +596,13 @@ the difference in counts.
 
 \begin{table}[htbp]
 \centering
-\caption{\texttt{datasets/data\_multifreq\_train\_K5} and its dry-run report.}
+\caption{\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}K5} and its dry-run report.}
 \label{tab:appA_k5}
 \begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
 \hline
 Field & Value \\
 \hline
-\texttt{source\_script} & \texttt{pipelines/data/copy\_multifreq\_k\_subset.py} \\
+\texttt{source\_script} & \texttt{pipelines/\allowbreak{}data/\allowbreak{}copy\_\allowbreak{}multifreq\_\allowbreak{}k\_\allowbreak{}subset.py} \\
 \texttt{generated\_at\_utc} & \texttt{2026-08-02T17:03:40.514745+00:00} \\
 \texttt{manifest\_rows} & 131766 \\
 \texttt{unique\_layouts} & 5650 \\
@@ -611,7 +611,7 @@ Field & Value \\
 \texttt{samples\_per\_mhz} & 5650 at every anchor except 80\,MHz, which has 1816 \\
 \hline
 \multicolumn{2}{l}{\emph{Dry-run report
-(\texttt{datasets/data\_multifreq\_train\_K5\_dry\_run\_report.json},
+(\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}K5\_\allowbreak{}dry\_\allowbreak{}run\_\allowbreak{}report.json},
 \texttt{2026-08-02T17:01:03.238318+00:00}):}} \\
 \texttt{max\_k} & 5 \\
 \texttt{designs\_total} / \texttt{designs\_kept} & 29499 / 5650 \\
@@ -624,7 +624,7 @@ The same report carries \texttt{k\_hist\_all}, the budget histogram of the full 
 entries: $K=2$: 1326; $K=3$: 1483; $K=4$: 1440; $K=5$: 1401; $K=20$: 912; $K=21$: 319; and 226 each
 for $K=26$ through $K=50$.
 \fillin{reproduce the complete \texttt{k\_hist\_all} histogram as a table or bar chart from
-\texttt{datasets/data\_multifreq\_train\_K5\_dry\_run\_report.json} if the budget distribution is
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}K5\_\allowbreak{}dry\_\allowbreak{}run\_\allowbreak{}report.json} if the budget distribution is
 discussed in the main text}
 
 \subsection{Active-learning overlay (exp059)}
@@ -632,7 +632,7 @@ discussed in the main text}
 
 \begin{table}[htbp]
 \centering
-\caption{\texttt{datasets/data\_multifreq\_al\_overlay\_exp059}, read from disk on 2026-08-05.}
+\caption{\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}al\_\allowbreak{}overlay\_\allowbreak{}exp059}, read from disk on 2026-08-05.}
 \label{tab:appA_overlay}
 \begin{tabular}{p{0.40\textwidth} p{0.50\textwidth}}
 \hline
@@ -642,10 +642,10 @@ Item & Value \\
 Layout directories & 2000 \\
 Subdirectories & \texttt{PI\_freq/}, \texttt{heatmap/}, \texttt{layouts/} \\
 Other files & \texttt{normalization\_stats.json},
-\texttt{al\_heatmap\_only\_design\_ids.json} \\
+\texttt{al\_\allowbreak{}heatmap\_\allowbreak{}only\_\allowbreak{}design\_\allowbreak{}ids.json} \\
 \texttt{dataset\_meta.json} & absent \\
 \texttt{design\_id} form &
-e.g.\ \texttt{al\_al\_exp059\_gp\_error\_001\_i0001\_c009} \\
+e.g.\ \texttt{al\_\allowbreak{}al\_\allowbreak{}exp059\_\allowbreak{}gp\_\allowbreak{}error\_\allowbreak{}001\_\allowbreak{}i0001\_\allowbreak{}c009} \\
 \texttt{source\_folder} & \texttt{active\_learning} \\
 Overlay \texttt{normalization\_stats.json} &
 same key structure as the training set; \texttt{background\_value} \texttt{-3.1792},
@@ -683,14 +683,14 @@ mode is not unbounded. The stored statistics still record the clip bounds.
 \begin{table}[htbp]
 \centering
 \caption{Global heatmap statistics,
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json}, key
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded/\allowbreak{}normalization\_\allowbreak{}stats.json}, key
 \texttt{Heatmap}.}
 \label{tab:appA_heatmap_stats}
 \begin{tabular}{p{0.36\textwidth} p{0.50\textwidth}}
 \hline
 Key & Value \\
 \hline
-\texttt{norm\_mode} & \texttt{robust\_log1p\_per\_mhz\_unbounded} \\
+\texttt{norm\_mode} & \texttt{robust\_\allowbreak{}log1p\_\allowbreak{}per\_\allowbreak{}mhz\_\allowbreak{}unbounded} \\
 \texttt{unbounded} & \texttt{true} \\
 \texttt{clip\_min} & \texttt{-1.6791870594024658} \\
 \texttt{clip\_max} & \texttt{6.275787830352783} \\
@@ -727,7 +727,7 @@ MHz & median & iqr & clip\_min & clip\_max \\
 \end{table}
 
 \fillin{if the full per-band table is wanted in the thesis, extract all 24 \texttt{by\_mhz} entries
-from \texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json}}
+from \texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded/\allowbreak{}normalization\_\allowbreak{}stats.json}}
 
 \subsection{Impedance and frequency normalization}
 \label{subsec:appA_imp_norm}
@@ -758,8 +758,8 @@ Key & Value \\
 \texttt{PI\_freq.unique\_mhz\_rounded} & length 24 \\
 \texttt{PI\_freq.expected\_anchors\_mhz} & length 24 \\
 \texttt{multifreq\_manifest.rows} & 582997 \\
-\texttt{multifreq\_manifest.unique\_design\_id} & 24979 \\
-\texttt{multifreq\_manifest.max\_k\_filter} & 30 \\
+\texttt{multifreq\_\allowbreak{}manifest.unique\_\allowbreak{}design\_\allowbreak{}id} & 24979 \\
+\texttt{multifreq\_\allowbreak{}manifest.max\_\allowbreak{}k\_\allowbreak{}filter} & 30 \\
 \texttt{multifreq\_manifest} per-MHz counts & 24979 at every anchor except 80.0\,MHz with 8480 \\
 \hline
 \end{tabular}
@@ -786,7 +786,7 @@ has no training input of its own.
 \begin{table}[htbp]
 \centering
 \caption{Multi-type decap catalog
-(\texttt{scrap/generation/generate\_peb\_multitype.py}, \texttt{TYPE\_CATALOG}).}
+(\texttt{scrap/\allowbreak{}generation/\allowbreak{}generate\_\allowbreak{}peb\_\allowbreak{}multitype.py}, \texttt{TYPE\_CATALOG}).}
 \label{tab:appA_type_catalog}
 \begin{tabular}{l r r r}
 \hline
@@ -799,9 +799,9 @@ empty & \texttt{false} and \texttt{0} & --- & --- \\
 \end{tabular}
 \end{table}
 
-The combination list \texttt{data/heatmaps/combinations\_multitype\_combined\_15000.csv} holds
+The combination list \texttt{data/\allowbreak{}heatmaps/\allowbreak{}combinations\_\allowbreak{}multitype\_\allowbreak{}combined\_\allowbreak{}15000.csv} holds
 15000 rows of 52 integer type codes (0 empty, 1 type-1, 2 type-2). Its sampler report
-(\texttt{data/heatmaps/combinations\_multitype\_sample\_report.json}, seed 42, generated
+(\texttt{data/\allowbreak{}heatmaps/\allowbreak{}combinations\_\allowbreak{}multitype\_\allowbreak{}sample\_\allowbreak{}report.json}, seed 42, generated
 \texttt{2026-08-02T18:07:25.393879+00:00}) records \texttt{per\_k}
 $\{1{:}104,\ 2{:}5304,\ 3{:}4797,\ 4{:}3197,\ 5{:}1598\}$, families \texttt{type1\_only} 4576 /
 \texttt{type2\_only} 4576 / \texttt{mixed} 5848, and \texttt{nonzero\_type\_counts}
@@ -811,14 +811,14 @@ numbers; see Section~\ref{sec:appA_inconsistencies}.
 \subsection{Simulation pipeline configuration}
 \label{subsec:appA_multitype_pipeline}
 
-\texttt{pipelines/dataset\_sim/run\_multitype\_sim\_pipeline.py} reads the 15000-row CSV from row 0
+\texttt{pipelines/\allowbreak{}dataset\_\allowbreak{}sim/\allowbreak{}run\_\allowbreak{}multitype\_\allowbreak{}sim\_\allowbreak{}pipeline.py} reads the 15000-row CSV from row 0
 with \texttt{MAX\_LAYOUTS} \texttt{None}, \texttt{USE\_ANCHOR\_MHZ} \texttt{False} and an explicit
 \texttt{SWEEP\_MHZ} list of the same 24 anchors (10\ldots500\,MHz). \texttt{TRIGGER\_APPEND\_AFTER\_MOVE}
 is \texttt{True}.
 
 The append worker started by that pipeline
-(\texttt{pipelines/dataset\_sim/run\_append\_worker.py}) runs
-\texttt{pipelines/data/append\_merged\_combinations\_multifreq.py} with \texttt{OUTPUT\_ROOT} set to
+(\texttt{pipelines/\allowbreak{}dataset\_\allowbreak{}sim/\allowbreak{}run\_\allowbreak{}append\_\allowbreak{}worker.py}) runs
+\texttt{pipelines/\allowbreak{}data/\allowbreak{}append\_\allowbreak{}merged\_\allowbreak{}combinations\_\allowbreak{}multifreq.py} with \texttt{OUTPUT\_ROOT} set to
 \texttt{datasets/data\_multifreq\_train}, i.e.\ the single-type dataset root; that is the worker's
 only output root. The worker log for the most recent jobs reports ``Tasks to run: 0'' and ``Nothing
 to append''. This is stated as observed configuration, with no interpretation of intent.
@@ -844,20 +844,20 @@ Three timestamps sit close together and are recorded here without an inference a
 wrote what: \texttt{merged\_500} was enqueued at \texttt{2026-08-05T19:27:53.160450+00:00}, the
 multi-type progress file was last updated at \texttt{2026-08-05T19:27:53.164372+00:00}
 (\autoref{tab:appA_multitype_state}), and
-\texttt{datasets/data\_multifreq\_train/dataset\_meta.json} carries \texttt{generated\_at\_utc}
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}dataset\_\allowbreak{}meta.json} carries \texttt{generated\_at\_utc}
 \texttt{2026-08-05T19:28:42.489387+00:00} (\autoref{tab:appA_raw}).
 \fillin{establish whether any multi-type raw output was appended into
 \texttt{datasets/data\_multifreq\_train} by the append jobs of 2026-08-03 to 2026-08-05. The counts
 in \autoref{tab:appA_raw} are unchanged from the earlier read, which does not by itself settle it;
 the append worker's per-job log for \texttt{merged\_500}, and the \texttt{append\_tag} values in
-\texttt{datasets/data\_multifreq\_train/manifest.csv}, would.}
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}manifest.csv}, would.}
 
 \subsection{Campaign state}
 \label{subsec:appA_multitype_state}
 
 An earlier read of these artifacts caught the pipeline mid-run, with 23 of 24 bands complete. The
 values below replace that snapshot: the simulation process
-(\texttt{python -u pipelines/dataset\_sim/run\_multitype\_sim\_pipeline.py}) is no longer running,
+(\texttt{python -u pipelines/\allowbreak{}dataset\_\allowbreak{}sim/\allowbreak{}run\_\allowbreak{}multitype\_\allowbreak{}sim\_\allowbreak{}pipeline.py}) is no longer running,
 and the progress file records all 24 bands as done. This is the state of the \emph{raw simulation
 output on the Windows host}, not of a dataset.
 
@@ -895,9 +895,9 @@ exp060 has no dataset specification and no result from it can be reported}
 \subsection{exp060 configuration}
 \label{subsec:appA_exp060_config}
 
-\texttt{experiments/exp060\_multitype\_occ/config.yaml} sets \texttt{n\_decap\_types} to 2 (line
+\texttt{experiments/\allowbreak{}exp060\_\allowbreak{}multitype\_\allowbreak{}occ/\allowbreak{}config.yaml} sets \texttt{n\_decap\_types} to 2 (line
 193) while still pointing \texttt{data\_dir} at
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded} (line 134), which is the single-type
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded} (line 134), which is the single-type
 normalized dataset. No multi-type normalized dataset directory was found under \texttt{datasets/}
 at the read times given in \autoref{tab:appA_multitype_state}, so the completion of the simulation
 campaign has not yet produced a training input for exp060.
@@ -922,12 +922,12 @@ Subject & Source A & Source B \\
 Anchor count &
 \texttt{docs/dataset.md}:96--101, ``Full 16-MHz set''; \texttt{configs/multifreq\_anchors.yaml}, 20
 anchors &
-\texttt{datasets/data\_multifreq\_train/dataset\_meta.json}, 24 anchors (the list actually loaded,
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train/\allowbreak{}dataset\_\allowbreak{}meta.json}, 24 anchors (the list actually loaded,
 per the resolution order in \texttt{docs/dataset.md}:42--51) \\
 \texttt{PI\_freq.count} &
 \texttt{PI\_freq.count} = 688477, the raw manifest row count &
 \texttt{multifreq\_manifest.rows} = 582997 in the same file,
-\texttt{datasets/data\_multifreq\_train\_norm\_unbounded/normalization\_stats.json} \\
+\texttt{datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train\_\allowbreak{}norm\_\allowbreak{}unbounded/\allowbreak{}normalization\_\allowbreak{}stats.json} \\
 Artifact staleness &
 normalized meta generated \texttt{2026-07-06T13:39:03}; 24979 layouts / 582997 rows &
 raw meta generated \texttt{2026-08-05T19:28:42}; 29499 layouts / 688477 rows. The $K\le30$ filter
@@ -935,22 +935,22 @@ explains part of the gap, but the two are not from the same moment \\
 Multi-type sampler &
 \texttt{docs/multitype\_peb\_pipeline.md}:75--77: per-$K$ $\{2{:}3750, 3{:}3750, 4{:}3750,
 5{:}3750\}$, families 5000 each, nonzero type counts $\{1{:}26258, 2{:}26242\}$ &
-\texttt{data/heatmaps/combinations\_multitype\_sample\_report.json} and the CSV on disk: per-$K$
+\texttt{data/\allowbreak{}heatmaps/\allowbreak{}combinations\_\allowbreak{}multitype\_\allowbreak{}sample\_\allowbreak{}report.json} and the CSV on disk: per-$K$
 $\{1{:}104, 2{:}5304, 3{:}4797, 4{:}3197, 5{:}1598\}$, families 4576/4576/5848, nonzero
 $\{1{:}23015, 2{:}22866\}$. The same doc at lines 66--68 quotes the report's numbers, so it
 contradicts itself \\
 Merged CSV path &
 \texttt{merged\_combinations\_report.json} key \texttt{output\_csv} and
 \texttt{docs/dataset.md}:78--81 point to
-\texttt{data/heatmaps/all\_combinations\_merged.csv}, which is not present there &
+\texttt{data/\allowbreak{}heatmaps/\allowbreak{}all\_\allowbreak{}combinations\_\allowbreak{}merged.csv}, which is not present there &
 the 29499-row merged CSV on disk is
-\texttt{data/heatmaps/peb\_with\_29k/all\_combinations\_merged.csv}, which is what
-\texttt{run\_combinations\_sim\_pipeline.py}:50 reads \\
+\texttt{data/\allowbreak{}heatmaps/\allowbreak{}peb\_\allowbreak{}with\_\allowbreak{}29k/\allowbreak{}all\_\allowbreak{}combinations\_\allowbreak{}merged.csv}, which is what
+\texttt{run\_\allowbreak{}combinations\_\allowbreak{}sim\_\allowbreak{}pipeline.py}:50 reads \\
 Append worker root &
 \texttt{run\_multitype\_sim\_pipeline.py}:120 sets
 \texttt{TRIGGER\_APPEND\_AFTER\_MOVE=True} for the multi-type campaign &
-\texttt{run\_append\_worker.py}:44--46 has \texttt{OUTPUT\_ROOT =
-REPO\_ROOT/datasets/data\_multifreq\_train}, the single-type dataset, as its only output root \\
+\texttt{run\_append\_worker.py}:44--46 has \texttt{OUTPUT\_\allowbreak{}ROOT =
+REPO\_\allowbreak{}ROOT/\allowbreak{}datasets/\allowbreak{}data\_\allowbreak{}multifreq\_\allowbreak{}train}, the single-type dataset, as its only output root \\
 \hline
 \end{tabular}
 \end{table}

@@ -8,9 +8,21 @@ import os
 import shutil
 import sys
 import time
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+import mlflow
+
+from experiments.exp059_capacity_freq.codes.config_schema import (
+    Config,
+    TrainConfig,
+    _ALL_SCHEDULE_FRAC_PAIRS,
+    apply_curriculum_epochs,
+    clamp_curriculum_for_resume_epoch,
+    load_experiment_config_dict,
+    print_curriculum_summary,
+    restore_curriculum_epochs_from_checkpoint,
+)
 
 import torch
 import torch.nn.functional as F
@@ -38,219 +50,9 @@ from experiments.exp059_capacity_freq.codes.distributed_train import (
 )
 from src_vae.others.vae_logger import VAETrainingLogger
 
-# ── Config ────────────────────────────────────────────────────────────────────
-
-_FRAC_FIELDS = (
-    ("beta_end_epoch", "beta_end_frac"),
-    ("beta_phase2_end_epoch", "beta_phase2_end_frac"),
-    ("modality_dropout_anneal_epochs", "modality_dropout_anneal_frac"),
-    ("physics_critic_warmup_epochs", "physics_critic_warmup_frac"),
-    ("physics_slope_anneal_epochs", "physics_slope_anneal_frac"),
-    ("penalty_warmup_epochs", "penalty_warmup_frac"),
-    ("focal_gamma_warmup_epochs", "focal_gamma_warmup_frac"),
-)
-
-_CURRICULUM_FRAC_FIELDS = (
-    ("cross_freq_start_epoch", "cross_freq_start_frac"),
-    ("modality_dropout_protect_heatmap_epoch", "modality_dropout_protect_heatmap_frac"),
-    ("heatmap_focus_start_epoch", "heatmap_focus_start_frac"),
-    ("impedance_peak_start_epoch", "impedance_peak_start_frac"),
-    ("impedance_peak_ramp_epochs", "impedance_peak_ramp_frac"),
-    ("impedance_peak_focus_epoch", "impedance_peak_focus_frac"),
-)
-
-_ALL_SCHEDULE_FRAC_PAIRS = _FRAC_FIELDS + _CURRICULUM_FRAC_FIELDS
-
-
-@dataclass
-class Config:
-    latent_dim: int = 42
-    heatmap_private_dim: int = 8
-    cond_dim: int = 8
-
-    num_epochs: int = 850
-    batch_size: int = 96   # reduce to 64 if CUDA OOM
-    val_batch_size: int = 0  # 0 = same as batch_size; larger val batch speeds checkpoint val
-    learning_rate: float = 2e-5
-    lr_min: float = 3e-6
-    lr_patience: int = 25
-    lr_factor: float = 0.5
-    train_split: float = 0.9
-    num_workers: int = 8
-    reset_lr_on_resume: bool = True
-
-    balance_k: bool = True
-    k_balance_power: float = 0.5
-    k_balance_smoothing: float = 1e-3
-    stratify_by_k: bool = True
-
-    # Multifreq PI heatmap (1–600 MHz via PI_freq conditioning on heatmap only)
-    split_by_design: bool = True
-    balance_freq: bool = True
-    freq_balance_power: float = 1.0
-    train_samples_per_epoch: int = 50_000  # random train draws/epoch (full pool on disk)
-    al_overlay_data_dir: str | None = None  # AL heatmap-only overlay (Option B)
-    al_overlay_sample_weight: float = 25.0
-    val_on_checkpoint_only: bool = True  # skip full val between checkpoint epochs (LR uses last val)
-    epoch_print_interval: int = 2  # stdout Ep summary every N epochs (ep 1 + final always); does not affect CSV logs
-    epoch_log_interval: int = 2  # deprecated alias for epoch_print_interval
-
-    heatmap_weight: float = 2.75
-    cross_freq_weight: float = 1.0
-    cross_freq_start_frac: float = 0.05
-    cross_freq_start_epoch: int = 0
-    modality_dropout_protect_heatmap_frac: float = 0.5
-    modality_dropout_protect_heatmap_epoch: int = 0
-    freq_fourier_features: int = 8
-    use_heatmap_film: bool = True
-    # Decode-time PI_freq jitter (native path): decode at perturbed MHz, target stays true map.
-    freq_jitter_prob: float = 0.3
-    freq_jitter_log10_sigma: float = 0.08
-    # Physical-space FG percentile amplitude (denormed Ω).
-    heatmap_phys_p99_weight: float = 0.5
-    heatmap_phys_p99_percentile: float = 99.0
-    # Heatmap + freq fine-tune phase (second half of training by default).
-    heatmap_focus_start_frac: float = 0.5
-    heatmap_focus_start_epoch: int = 0
-    heatmap_focus_heatmap_weight: float = 3.5
-    heatmap_focus_impedance_weight: float = 1.5
-    heatmap_focus_cross_freq_weight: float = 1.0
-    heatmap_focus_dynrange_weight: float = 3.0
-    heatmap_focus_modality_dropout: float = 0.05
-    # Match inference: train with occ+imp layout latent part of the time.
-    layout_train_prob: float = 0.4
-    # When layout branch is taken, use occupancy-only encode (imp → prior) with this prob.
-    occ_only_encode_prob: float = 0.0
-    eval_use_occ_only_layout: bool = False
-    # Cross-freq loss always uses layout z (matches sweep / layout_cross eval).
-    cross_freq_layout_z_only: bool = False
-    # Log cross-freq / layout metrics at these MHz during checkpoint val.
-    eval_off_anchor_mhz: tuple[float, ...] = (80.0, 250.0)
-    eval_off_anchor_mhz_weights: dict | None = None  # optional per-MHz weights, e.g. {"90": 2.0}
-    eval_off_anchor_max_batches: int = 30
-    # AL fine-tune: stop when weighted off-anchor FG MSE stops improving.
-    al_finetune_early_stop: bool = False
-    al_finetune_early_stop_patience: int = 2  # consecutive off-anchor evals without gain
-    al_finetune_early_stop_min_delta: float = 0.01
-    al_finetune_early_stop_kind: str = "layout_cross"
-    occupancy_weight: float = 8.0   # val occ ~0.35 still dominates recon
-    impedance_weight: float = 3.0
-    impedance_deriv_weight: float = 1.5
-    impedance_topk_k: int = 20
-    impedance_topk_weight: float = 7.0  # peaks: prefer topk_weight over raising impedance_weight
-    impedance_under_penalty: float = 2.8
-    impedance_concavity_weight: float = 2.5
-    impedance_freq_weight_alpha: float = 2.0
-    impedance_dual_topk_weight: float = 0.75
-    impedance_peak_index_weight: float = 2.5
-    impedance_peak_mag_weight: float = 2.0
-    impedance_num_peaks: int = 8
-    impedance_peak_start_frac: float = 0.5
-    impedance_peak_ramp_frac: float = 0.11
-    impedance_peak_focus_frac: float = 0.5
-    impedance_peak_start_epoch: int = 0
-    impedance_peak_ramp_epochs: int = 0
-    impedance_peak_focus_epoch: int = 0
-    impedance_decoder_lr_mult: float = 4.0
-    heatmap_peak_weight: float = 3.0
-    heatmap_grad_weight: float = 1.5
-    heatmap_lap_weight: float = 2.0
-    heatmap_contrast_weight: float = 1.5
-    heatmap_contrast_margin: float = 0.5
-    heatmap_bg_weight: float = 0.5
-    heatmap_dynrange_weight: float = 2.0
-    occupancy_focal_gamma: float = 1.5
-    focal_gamma_warmup_frac: float = 0.0
-    focal_gamma_warmup_epochs: int = 0
-    occ_k_consistency_weight: float = 2.0
-    use_k_weighting: bool = True
-    occ_mid_k_center: float = 25.0
-    occ_mid_k_sigma: float = 8.0
-    occ_mid_k_boost: float = 0.75
-    hm_low_k_threshold: int = 3
-    hm_low_k_multiplier: float = 2.0
-
-    free_bits: float = 0.05
-    mu_hinge_threshold: float = 4.0
-    mu_hinge_weight: float = 0.10
-    mu_bias_weight: float = 0.05
-    per_expert_kl_weight: float = 0.02
-    sigma_reg_weight: float = 1.5
-    sigma_reg_target: float = 0.45
-
-    use_beta_annealing: bool = True
-    beta_start_epoch: int = 0
-    beta_end_frac: float = 0.40
-    beta_initial: float = 0.0
-    beta_final: float = 0.1
-    beta_phase2_final: float = 0.15  # slightly lower KL late — frees recon (β=0.2 was not helping val)
-    beta_phase2_end_frac: float = 0.80
-    beta_end_epoch: int = 0
-    beta_phase2_end_epoch: int = 0
-
-    modality_dropout: float = 0.12
-    modality_dropout_start: float = 0.08
-    modality_dropout_anneal_frac: float = 0.08
-    modality_dropout_anneal_epochs: int = 0
-
-    cross_modal_weight: float = 0.85
-    cross_modal_update_freq: int = 4
-
-    physics_ri_weight: float = 1.0
-    physics_critic_sup_weight: float = 2.0
-    physics_ar_weight: float = 0.5
-    physics_fg_clip_min: float = -1.04
-    physics_critic_warmup_frac: float = 0.05
-    physics_slope_anneal_frac: float = 0.10
-    physics_critic_warmup_epochs: int = 0
-    physics_slope_anneal_epochs: int = 0
-
-    penalty_warmup_frac: float = 0.05
-    penalty_warmup_epochs: int = 0
-
-    # Allow starting new experiments without copying this code.
-    # Use env vars to override where outputs are written/read.
-    data_dir: str = field(
-        default_factory=lambda: os.environ.get("VAE_DATA_DIR", "datasets/data_multifreq_norm"),
-    )
-    experiment_dir: str = field(
-        default_factory=lambda: os.environ.get("VAE_EXPERIMENT_DIR", "experiments/exp059_capacity_freq"),
-    )
-    checkpoint_interval: int = 25   # CSV, plots, latent stats, and checkpoint_epoch_{N}.pt
-    keep_last_n_checkpoints: int = 0  # 0 = keep every interval checkpoint (no pruning)
-    resume_checkpoint: int | str | None = None  # None = fresh; "latest" / "last" / epoch int
-    # If False (default), resume restores *_epoch schedule from checkpoint config (not num_epochs * frac).
-    recalculate_curriculum_on_resume: bool = False
-    background_value: float = -3.6228
-    heatmap_z_clip_min: float | None = None
-    heatmap_z_clip_max: float | None = None
-    heatmap_clip_recon: bool = True
-
-    amp: str = "bf16"   # Ampere+ (CC≥8); auto-downgraded to fp16 on Volta/Turing (e.g. GV100)
-    tf32: bool = True   # Ampere+ only; disabled automatically on older GPUs
-    compile: bool = True
-    compile_mode: str = "reduce-overhead"
-    cache_in_ram: bool = True
-    use_ddp: bool = True
-    ddp_base_batch_size: int = 160
-    ddp_linear_lr_scale: bool = True
-    persistent_workers: bool = True
-    prefetch_factor: int = 4
-    empty_cache_interval: int = 25  # 0 = never; avoid per-epoch cuda sync
-
-    kan_spline_l1_weight: float = 1e-4
-    device: str = field(default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu")
-
-    def __post_init__(self) -> None:
-        apply_curriculum_epochs(self)
-
-    @property
-    def log_interval(self) -> int:
-        """Alias for checkpoint_interval (external tools / config.yaml)."""
-        return self.checkpoint_interval
-
-    def is_cuda(self) -> bool:
-        return "cuda" in self.device
+# ── Config (pydantic) ─────────────────────────────────────────────────────────
+# Canonical schema: experiments.exp059_capacity_freq.codes.config_schema.TrainConfig
+# Re-exported names: Config, apply_curriculum_epochs, ...
 
 
 # ── Schedules ─────────────────────────────────────────────────────────────────
@@ -794,73 +596,104 @@ def _clean_previous_run(exp: Path) -> None:
         print(f"Fresh run — no prior training artifacts in {exp}")
 
 
-def apply_curriculum_epochs(c: Config, *, skip_epoch_keys: set[str] | None = None) -> None:
-    """Map ``*_frac`` → absolute ``*_epoch`` = round(num_epochs * frac).
 
-    Keys listed in ``skip_epoch_keys`` are left unchanged (set explicit ``*_epoch`` in yaml).
-    """
-    skip = skip_epoch_keys or set()
-    n = int(c.num_epochs)
-    for attr_epoch, attr_frac in _ALL_SCHEDULE_FRAC_PAIRS:
-        if attr_epoch in skip:
+def _csv_epoch_col(row: list[str] | dict) -> int | None:
+    try:
+        if isinstance(row, dict):
+            return int(float(row.get("epoch", "")))
+        return int(float(row[0]))
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _truncate_csv_keep_epochs_le(path: Path, max_epoch: int, *, epoch_key: str = "epoch") -> int:
+    """Keep rows with epoch <= max_epoch (resume-safe). Returns dropped count."""
+    if not path.is_file() or max_epoch < 0:
+        return 0
+    text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        return 0
+    import io
+    buf = io.StringIO(text)
+    reader = csv.reader(buf)
+    rows = list(reader)
+    if not rows:
+        return 0
+    header, body = rows[0], rows[1:]
+    # dict-style if header has epoch name
+    kept: list[list[str]] = []
+    dropped = 0
+    ep_idx = header.index(epoch_key) if epoch_key in header else 0
+    for r in body:
+        if not r:
             continue
-        frac = getattr(c, attr_frac)
-        setattr(c, attr_epoch, round(n * frac))
+        try:
+            ep = int(float(r[ep_idx]))
+        except (ValueError, IndexError):
+            kept.append(r)
+            continue
+        if ep <= max_epoch:
+            kept.append(r)
+        else:
+            dropped += 1
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(header)
+        w.writerows(kept)
+    tmp.replace(path)
+    return dropped
 
 
-def restore_curriculum_epochs_from_checkpoint(c: Config, ckpt_cfg: dict) -> bool:
-    """Keep phase boundaries from the run that wrote the checkpoint (resume-safe)."""
-    restored: list[str] = []
-    for attr_epoch, _ in _ALL_SCHEDULE_FRAC_PAIRS:
-        if attr_epoch in ckpt_cfg and ckpt_cfg[attr_epoch] is not None:
-            setattr(c, attr_epoch, int(ckpt_cfg[attr_epoch]))
-            restored.append(f"{attr_epoch}={int(ckpt_cfg[attr_epoch])}")
-    if restored:
-        print("  Curriculum restored from checkpoint (not re-scaled to new num_epochs):")
-        print("    " + ", ".join(restored))
-        return True
-    return False
+def _append_epoch_csv(
+    path: Path,
+    epoch: int,
+    header: list[str],
+    row: list,
+) -> None:
+    """Append one epoch row, replacing any existing rows at the same epoch."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing: list[list[str]] = []
+    if path.is_file():
+        with path.open(newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            old_header = next(reader, None)
+            if old_header is None:
+                old_header = header
+            # if schema drifted, keep file as-is aside from epoch filter on col0
+            for r in reader:
+                ep = _csv_epoch_col(r)
+                if ep is None or ep == epoch:
+                    continue
+                existing.append(r)
+    else:
+        old_header = header
+    # Prefer the caller header when rewriting
+    use_header = header if header else old_header
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(use_header)
+        w.writerows(existing)
+        w.writerow(row)
+    tmp.replace(path)
 
 
-def clamp_curriculum_for_resume_epoch(c: Config, resume_epoch: int) -> None:
-    """If resume is already past a phase start, do not push that start into the future."""
-    if resume_epoch <= 0:
-        return
-    for attr_epoch, _ in _ALL_SCHEDULE_FRAC_PAIRS:
-        val = int(getattr(c, attr_epoch))
-        if val > resume_epoch:
-            setattr(c, attr_epoch, resume_epoch)
 
 
-def print_curriculum_summary(c: Config) -> None:
-    print(
-        f"  Curriculum (of {c.num_epochs} epochs): "
-        f"cross_freq@{c.cross_freq_start_epoch}, "
-        f"protect_hm@{c.modality_dropout_protect_heatmap_epoch}, "
-        f"heatmap_focus@{c.heatmap_focus_start_epoch}, "
-        f"imp_peak@{c.impedance_peak_start_epoch}→{c.impedance_peak_focus_epoch} "
-        f"(ramp {c.impedance_peak_ramp_epochs}), "
-        f"layout_train_prob={c.layout_train_prob}, "
-        f"occ_only_encode_prob={c.occ_only_encode_prob}, "
-        f"eval_use_occ_only_layout={c.eval_use_occ_only_layout}, "
-        f"cross_freq_layout_z_only={c.cross_freq_layout_z_only}",
-    )
+
+
+
 
 
 def load_experiment_config(path: Path) -> dict:
     """Parse config.yaml: JSON object with optional full-line ``#`` comments."""
-    lines = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
-            continue
-        lines.append(line)
-    return json.loads("\n".join(lines))
+    return load_experiment_config_dict(path)
 
 
 def _merge_yaml_into_config(c: Config, path: Path) -> set[str]:
     data = load_experiment_config(path)
-    fields = {f.name for f in Config.__dataclass_fields__.values()}
+    fields = set(Config.model_fields)
     explicit_epochs: set[str] = set()
     for key, val in data.items():
         if key not in fields:
@@ -957,23 +790,20 @@ def _build_optimizer(
 
 def _append_impedance_split_csv(metrics_dir: Path, epoch: int, tr: dict, val: dict | None) -> None:
     path = metrics_dir / "impedance_split.csv"
-    write_header = not path.exists()
-    with path.open("a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        if write_header:
-            w.writerow([
-                "epoch", "train_impedance_loss", "train_impedance_legacy", "train_impedance_peak",
-                "val_impedance_loss", "val_impedance_legacy", "val_impedance_peak",
-            ])
-        w.writerow([
-            epoch,
-            tr.get("impedance_loss", ""),
-            tr.get("impedance_legacy_loss", ""),
-            tr.get("impedance_peak_loss", ""),
-            val.get("impedance_loss", "") if val else "",
-            val.get("impedance_legacy_loss", "") if val else "",
-            val.get("impedance_peak_loss", "") if val else "",
-        ])
+    header = [
+        "epoch", "train_impedance_loss", "train_impedance_legacy", "train_impedance_peak",
+        "val_impedance_loss", "val_impedance_legacy", "val_impedance_peak",
+    ]
+    row = [
+        epoch,
+        tr.get("impedance_loss", ""),
+        tr.get("impedance_legacy_loss", ""),
+        tr.get("impedance_peak_loss", ""),
+        val.get("impedance_loss", "") if val else "",
+        val.get("impedance_legacy_loss", "") if val else "",
+        val.get("impedance_peak_loss", "") if val else "",
+    ]
+    _append_epoch_csv(path, epoch, header, row)
 
 
 def _resolve_resume(c: Config) -> None:
@@ -1024,7 +854,7 @@ def _ckpt_dict(epoch, model, opt, tr_loss, val, c, latent_stats, per_k, physics,
     d = {
         "epoch": epoch, "train_loss": tr_loss, "val_loss": val["total_loss"],
         "val_metrics": {k: float(val[k]) for k in LOSS_KEYS if k in val},
-        "config": asdict(c), "latent_stats": latent_stats, "per_K_latent_stats": per_k,
+        "config": c.to_checkpoint_dict(), "latent_stats": latent_stats, "per_K_latent_stats": per_k,
         "model_state_dict": model_state_dict(model), "optimizer_state_dict": opt.state_dict(),
         "mu_mean": val["mu_mean"], "mu_std": val["mu_std"], "mu_min": val["mu_min"], "mu_max": val["mu_max"],
     }
@@ -1287,18 +1117,24 @@ def train_vae() -> None:
     _resolve_resume(c)
 
     exp = Path(c.experiment_dir)
+    # metrics/: all training CSVs + plots; logs/: optional process stdout only
     ckpt_dir, log_dir, metrics_dir = exp / "checkpoints", exp / "logs", exp / "metrics"
     plots_dir = metrics_dir / "plots"
+    evals_dir = exp / "evals"
 
     if is_main_process():
         if not c.resume_checkpoint:
             _clean_previous_run(exp)
     barrier()
-    for p in (exp, ckpt_dir, log_dir, metrics_dir, plots_dir):
+    for p in (exp, ckpt_dir, log_dir, metrics_dir, plots_dir, evals_dir):
         p.mkdir(parents=True, exist_ok=True)
 
+    if is_main_process():
+        mlflow.start_run(run_name=f"exp059_epoch{start}")
+        mlflow.log_params(c.model_dump())
+
     logger = VAETrainingLogger(
-        str(log_dir), str(ckpt_dir), str(metrics_dir / "loss.csv"),
+        str(metrics_dir), str(ckpt_dir), str(metrics_dir / "loss.csv"),
         checkpoint_interval=c.checkpoint_interval,
     )
     from src_vae.others.heatmap_z_clip import describe_clip_bounds
@@ -1475,11 +1311,28 @@ def train_vae() -> None:
     val: dict[str, Any] = {}
     last_val_loss = float("inf")
     epoch_timing_path = metrics_dir / "epoch_timing.csv"
-    if start == 0 and is_main_process():
-        with epoch_timing_path.open("w", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(
-                ["epoch", "train_sec", "val_sec", "total_sec", "val_ran", "train_loss", "val_loss"],
-            )
+    metric_csvs = (
+        metrics_dir / "loss.csv",
+        metrics_dir / "epoch_timing.csv",
+        metrics_dir / "impedance_split.csv",
+        metrics_dir / "heatmap_peak_split.csv",
+        metrics_dir / "off_anchor_eval.csv",
+        metrics_dir / "latent_stats.csv",
+        # legacy path (pre-layout cleanup)
+        log_dir / "latent_stats.csv",
+    )
+    if is_main_process():
+        if start > 0:
+            for p in metric_csvs:
+                dropped = _truncate_csv_keep_epochs_le(p, start)
+                if dropped:
+                    print(f"  Truncated {dropped} post-resume rows in {p.relative_to(exp)}")
+        elif not epoch_timing_path.is_file():
+            with epoch_timing_path.open("w", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow(
+                    ["epoch", "train_sec", "val_sec", "total_sec", "val_ran", "train_loss", "val_loss"],
+                )
+    barrier()
     train_times: list[float] = []
     val_times: list[float] = []
     best_oa_score = float("inf")
@@ -1548,19 +1401,24 @@ def train_vae() -> None:
         train_times.append(t_train)
         val_loss_str = f"{last_val_loss:.4f}" if run_val else ""
         if is_main_process():
-            with epoch_timing_path.open("a", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow(
-                    [ep, f"{t_train:.2f}", f"{t_val:.2f}", f"{t_total:.2f}", int(run_val),
-                     f"{tr['total_loss']:.6f}", val_loss_str],
-                )
+            _append_epoch_csv(
+                epoch_timing_path,
+                ep,
+                ["epoch", "train_sec", "val_sec", "total_sec", "val_ran", "train_loss", "val_loss"],
+                [ep, f"{t_train:.2f}", f"{t_val:.2f}", f"{t_total:.2f}", int(run_val),
+                 f"{tr['total_loss']:.6f}", val_loss_str],
+            )
 
         if log_metrics and is_main_process():
             tr_ld = {k: tr[k] for k in ("total_loss", "recon_loss", "kl_loss", "kl_gaussian",
                                         "heatmap_loss", "occupancy_loss", "impedance_loss",
                                         "impedance_legacy_loss", "impedance_peak_loss")}
             logger.log_dict(ep, loss_dict=tr_ld, val_loss_dict={k: val[k] for k in LOSS_KEYS} if run_val else None)
+            mlflow.log_metrics({f"train/{k}": float(v) for k, v in tr_ld.items()}, step=ep)
+            if run_val:
+                mlflow.log_metrics({f"val/{k}": float(val[k]) for k in LOSS_KEYS}, step=ep)
             _append_impedance_split_csv(metrics_dir, ep, tr, val if run_val else None)
-            logger.log_latent_stats(log_dir / "latent_stats.csv", ep, beta, val)
+            logger.log_latent_stats(metrics_dir / "latent_stats.csv", ep, beta, val)
         hm_w = _phase_weights(epoch, c)["heatmap_weight"]
         cf = float(tr.get("cross_freq_heatmap_loss", 0.0))
         occ = float(tr["occupancy_loss"])
@@ -1675,7 +1533,12 @@ def train_vae() -> None:
     avg_epoch = avg_train + avg_val * val_frac
     timing_summary = {
         "training_time_seconds": total_s,
-        "epochs_in_run": n_ep,
+        "training_time_seconds_cumulative": total_s,
+        "segment_epochs": n_ep,
+        "epochs_in_run": n_ep,  # alias of segment_epochs (backward compat)
+        "resume_start_epoch": int(start),
+        "last_completed_epoch": int(start + n_ep),
+        "num_epochs_target": int(c.num_epochs),
         "avg_train_sec": round(avg_train, 2),
         "avg_val_sec": round(avg_val, 2),
         "avg_epoch_sec_est": round(avg_epoch, 2),
@@ -1693,13 +1556,17 @@ def train_vae() -> None:
 
     # If num_epochs is not a multiple of checkpoint_interval, still log final metrics.
     if val and c.num_epochs % c.checkpoint_interval != 0:
+        final_tr_ld = {k: tr[k] for k in ("total_loss", "recon_loss", "kl_loss", "kl_gaussian",
+                                          "heatmap_loss", "occupancy_loss", "impedance_loss")}
         logger.log_dict(
             c.num_epochs,
-            loss_dict={k: tr[k] for k in ("total_loss", "recon_loss", "kl_loss", "kl_gaussian",
-                                          "heatmap_loss", "occupancy_loss", "impedance_loss")},
+            loss_dict=final_tr_ld,
             val_loss_dict={k: val[k] for k in LOSS_KEYS},
         )
-        logger.log_latent_stats(log_dir / "latent_stats.csv", c.num_epochs, compute_beta(c.num_epochs - 1, c), val)
+        if is_main_process():
+            mlflow.log_metrics({f"train/{k}": float(v) for k, v in final_tr_ld.items()}, step=c.num_epochs)
+            mlflow.log_metrics({f"val/{k}": float(val[k]) for k in LOSS_KEYS}, step=c.num_epochs)
+        logger.log_latent_stats(metrics_dir / "latent_stats.csv", c.num_epochs, compute_beta(c.num_epochs - 1, c), val)
 
     if is_main_process():
         best_oa_path = ckpt_dir / "best_off_anchor_model.pt"
@@ -1723,6 +1590,7 @@ def train_vae() -> None:
             )
     if is_main_process():
         logger.log_complete(val.get("total_loss", float("nan")), ckpt_dir, f"{total_s // 60}m")
+        mlflow.end_run()
 
     barrier()
     cleanup_distributed()
@@ -1732,8 +1600,12 @@ def train_vae() -> None:
     if physics:
         logger.plot_physics(save_path=str(plots_dir / "physics_losses_final.png"))
     logger.print_statistics()
-    (exp / "config.yaml").write_text(json.dumps(asdict(c), indent=2), encoding="utf-8")
+    (exp / "config.yaml").write_text(json.dumps(c.to_checkpoint_dict(), indent=2), encoding="utf-8")
 
 
 if __name__ == "__main__":
-    train_vae()
+    raise SystemExit(
+        "Use the experiment entrypoint:\n"
+        "  python -m experiments.exp059_capacity_freq.codes.train_vae_simple\n"
+        "(train_core alone skips exp059 loss/epoch patches.)"
+    )

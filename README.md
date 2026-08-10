@@ -40,10 +40,11 @@ gradient descents.
 5. [Stage 2 — Latent Optimization](#5-stage-2--latent-optimization)
 6. [Performance Analysis Layer](#6-performance-analysis-layer)
 7. [Repository Structure](#7-repository-structure)
-8. [Dataset](#8-dataset)
-9. [Installation & Usage](#9-installation--usage)
-10. [Limitations & Future Work](#10-limitations--future-work)
-11. [What is Tracked in This Repository](#11-what-is-tracked-in-this-repository)
+8. [Tier-1 MLOps Stack](#8-tier-1-mlops-stack)
+9. [Dataset](#9-dataset)
+10. [Installation & Usage](#10-installation--usage)
+11. [Limitations & Future Work](#11-limitations--future-work)
+12. [What is Tracked in This Repository](#12-what-is-tracked-in-this-repository)
 
 **Current version:** `exp059_capacity_freq` (Aug 2026) — 128-d structured latent, occupancy + spectrum GNNs,
 multi-scale FiLM heatmap decoder, residual-GP active learning. `exp057`/`exp058` are legacy;
@@ -407,7 +408,62 @@ All pipeline scripts use a **CONFIG block** at the top of the file — edit cons
 
 ---
 
-## 8. Dataset
+## 8. Tier-1 MLOps Stack
+
+This repository includes a **production-ready MLOps stack** built around `exp059_capacity_freq`:
+
+| Module | Purpose | Files |
+|--------|---------|-------|
+| **1. Pydantic** | Config validation (catch typos immediately) | `experiments/exp059_capacity_freq/codes/config_schema.py` |
+| **2. pytest** | 7 focused tests on critical math | `tests/test_*.py` (153 lines) |
+| **3. Docker** | Reproducible training env (CUDA 11.8, Python 3.10, pinned deps) | `Dockerfile`, `pyproject.toml`, `.dockerignore` |
+| **4. MLflow** | Experiment tracking + metrics UI | Modified `train_core.py`, `finetune_run.py` |
+| **5. FastAPI** | HTTP inference service (`/predict` endpoint) | `serving/app.py`, `serving/schemas.py` |
+| **6. GitHub Actions** | Automated CI (lint, test, docker build on every PR) | `.github/workflows/ci.yml` |
+
+### Quick Start
+
+**Train with Docker (reproducible environment):**
+```bash
+docker build -t genai-pdn:exp059 .
+docker run --gpus all \
+  -v /path/to/datasets:/app/datasets \
+  -v /path/to/checkpoints:/app/experiments/exp059_capacity_freq/checkpoints \
+  genai-pdn:exp059
+```
+
+**Run tests (safety net):**
+```bash
+pip install -e . --no-deps && pip install pytest pydantic torch numpy
+pytest tests/ -v
+```
+
+**Track experiments:**
+```bash
+mlflow server --backend-store-uri sqlite:///mlflow.db &
+# Run training, then browse http://localhost:5000
+```
+
+**Serve the surrogate:**
+```bash
+docker build -t genai-pdn-serve -f serving/Dockerfile .
+docker run -p 8000:8000 genai-pdn-serve
+curl -X POST http://localhost:8000/predict -H "Content-Type: application/json" \
+  -d '{"occupancy": [...], "K": 26, "frequency_mhz": 200.0}'
+```
+
+### Full Documentation
+
+See **[`docs/MLOPS-TIER1-BUILD.md`](docs/MLOPS-TIER1-BUILD.md)** for:
+- Detailed technical explanations of each module
+- Integration examples
+- Common workflows
+- Portfolio value (what employers see)
+- Tier-2 tools (future: DVC, Hydra, Prefect, Evidently)
+
+---
+
+## 9. Dataset
 
 Training data is **not committed** (size). Expected layout under `datasets/`:
 
@@ -444,18 +500,34 @@ specification in full.
 
 ---
 
-## 9. Installation & Usage
+## 10. Installation & Usage
 
+**Option 1: Local environment (pip)**
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install torch numpy pyyaml matplotlib pandas pillow tqdm
+pip install -e .  # Install from pyproject.toml
+```
+
+**Option 2: Docker (recommended for reproducibility)**
+```bash
+docker build -t genai-pdn:exp059 .
+docker run --gpus all genai-pdn:exp059
 ```
 
 Tested with **PyTorch 2.7 (CUDA 11.8)**; a GPU is recommended for training.
+Exact versions are pinned in `pyproject.toml` for reproducibility.
 
 ### Running scripts
 
 Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `# CONFIGURATION` block, then run `python path/to/script.py`. Module docstrings explain **What** each script does, **Usage**, and **Config keys**.
+
+### Testing
+
+Run the pytest suite (7 tests on config validation + critical math):
+```bash
+pytest tests/ -v
+```
+
+Runs: Pydantic config validation, STE top-K gradient flow, normalization round-trips. See `tests/` and `[docs/MLOPS-TIER1-BUILD.md](docs/MLOPS-TIER1-BUILD.md)` for details.
 
 ### Stage 1 — train the surrogate
 

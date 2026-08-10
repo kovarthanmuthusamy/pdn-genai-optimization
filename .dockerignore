@@ -1,0 +1,63 @@
+# Large data directories (mounted at runtime, not baked in)
+datasets/
+data_multi_norm_robust/
+data/
+
+# Checkpoints (mounted at runtime)
+experiments/*/checkpoints/
+experiments/**/*.pt
+experiments/**/*.pth
+experiments/**/*.ckpt
+
+# Build artifacts
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.venv-cgan/
+*.egg-info/
+
+# Git & version control
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large plots/visualizations
+experiments/**/plots/
+experiments/**/metrics/*.png
+evaluation/
+
+# Untracked experiment folders (legacy)
+experiments/exp001/
+experiments/exp002/
+experiments/exp003/
+experiments/exp004/
+experiments/exp005/
+experiments/exp007/
+experiments/exp008/
+experiments/exp009/
+experiments/exp010/
+experiments/exp011/
+experiments/exp012/
+experiments/exp013/
+experiments/exp014/
+experiments/exp015/
+experiments/exp016/
+experiments/exp017/
+experiments/exp019_rm_maxval&mask/
+experiments/exp020_with_bernoulli/
+experiments/exp021_removed_occ_pri/
+experiments/exp022_single_latent/
+experiments/exp024_sigma_reg_loss/
+experiments/exp026_change_with_latent/
+experiments/exp027_sigma_reg_tuning/
+experiments/exp028_eval_improvement/

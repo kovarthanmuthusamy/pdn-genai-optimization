@@ -20,6 +20,7 @@ ppt/
 datasets/
 data_multi_norm_robust/
 .github/
+!.github/workflows/
 .cursor/
 
 # ── Active-learning runs: decision reports and evals are tracked, the ──

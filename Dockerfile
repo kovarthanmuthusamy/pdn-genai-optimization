@@ -1,5 +1,8 @@
 FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
+# Production training image with GPU support (CUDA 11.8)
+# For CI/lightweight builds, use Dockerfile.ci instead
+
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 \

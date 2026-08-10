@@ -39,9 +39,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t genai-pdn:ci .
-        timeout-minutes: 30
+      - name: Build Docker image (CI-optimized, CPU-only)
+        run: docker build -t genai-pdn:ci -f Dockerfile.ci .
+        timeout-minutes: 15
       - name: Smoke test image
         run: |
           docker run --rm genai-pdn:ci python --version

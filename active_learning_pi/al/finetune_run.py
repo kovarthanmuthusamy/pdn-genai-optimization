@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -145,8 +147,6 @@ def write_runtime_finetune_config(cfg: dict, groot: Path) -> Path:
 
 
 def finetune_env(cfg: dict, groot: Path, *, use_overlay: bool) -> dict[str, str]:
-    import os
-
     ft = cfg.get("finetune", {})
     exp_rel = ft.get("experiment_dir", cfg.get("experiment_dir"))
     exp_dir = groot / exp_rel
@@ -162,4 +162,5 @@ def finetune_env(cfg: dict, groot: Path, *, use_overlay: bool) -> dict[str, str]
         env.pop("VAE_SKIP_AL_OVERLAY", None)
     else:
         env["VAE_SKIP_AL_OVERLAY"] = "1"
+    env["MLFLOW_CYCLE_ID"] = os.environ.get("MLFLOW_CYCLE_ID", str(uuid.uuid4()))
     return env

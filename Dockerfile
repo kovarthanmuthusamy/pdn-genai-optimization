@@ -14,14 +14,11 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1
 
 WORKDIR /app
 
-# Copy only pyproject.toml (for layer caching)
-COPY pyproject.toml .
-
-# Install dependencies
-RUN pip install --no-cache-dir -e .
-
 # Copy repo (excluding large artifacts via .dockerignore)
 COPY . .
+
+# Install dependencies
+RUN pip install --no-cache-dir --no-build-isolation .
 
 # Default entrypoint: training on a single GPU
 ENTRYPOINT ["python", "-m", "experiments.exp059_capacity_freq.codes.train_vae_simple"]

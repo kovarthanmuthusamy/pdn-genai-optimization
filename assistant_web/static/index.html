@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PDN Design Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/plotly-basic.min.js"></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="title">PDN Design Assistant</span></div>
+    <label class="ctl">Target
+      <select id="target" title="Target spectrum; the safe margin of each target was measured on the test placements"></select>
+    </label>
+    <div class="ctl palette" id="palette" role="group" aria-label="Part to place"></div>
+    <div class="ctl kbox" title="Number of decaps (the model is trained for 1–10)"><span id="kval">K = 0</span><span class="kmax"> / 10</span></div>
+    <select id="examples" class="ctl" title="Prepared examples"><option value="">Examples…</option></select>
+    <div class="ctl buttons">
+      <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+      <button id="clear" title="Remove all decaps">Clear</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main class="layout">
+    <section class="panel board-panel">
+      <div class="board-wrap">
+        <svg id="board" xmlns="http://www.w3.org/2000/svg" aria-label="Board"></svg>
+      </div>
+      <div class="map-ctl">
+        <span id="freqlabel" class="freqlabel none">Click the curve to show a map</span>
+        <button id="clearmap" class="small hidden" title="Remove the map from the board">✕ clear</button>
+        <span id="hotlabel" class="hotlabel"></span>
+        <div class="seg" id="scalemode" role="group" aria-label="Map colour scale">
+          <button data-v="fixed" class="on" title="Same colour scale for every placement at this frequency">fixed</button>
+          <button data-v="own" title="Colour scale from this map's own lowest to highest value">auto</button>
+        </div>
+        <div class="cbar"><canvas id="cbar" width="160" height="12"></canvas>
+          <div class="cbar-ticks"><span id="cb-lo"></span><span id="cb-mid"></span><span id="cb-hi"></span></div>
+        </div>
+      </div>
+      <div id="example-note" class="note hidden"></div>
+    </section>
+
+    <section class="right">
+      <div class="panel verdict" id="verdict">
+        <div class="badge-row">
+          <div id="badge" class="badge neutral">–</div>
+          <div class="vtext">
+            <div id="vline1" class="vline1">Place decaps or pick an example.</div>
+            <div id="vline2" class="vline2"></div>
+          </div>
+          <div class="vrow">
+          <span id="direct" class="chip neutral" title="Direct: no margin. Closer to the true call, but some failing placements are called a pass. Safe (badge): |Z| ≤ (1 − m) × target everywhere, with m set on the test placements so that none of their failing placements passed.">direct –</span>
+          <span id="rho" class="rho" title="Predicted worst-case ratio: the largest |Z(f)| / target(f) over 1–600 MHz. Pass needs ρ̂ ≤ 1 (direct) or ρ̂ ≤ 1 − m (safe)."></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel plot-panel">
+        <div id="spectrum" class="spectrum"></div>
+        <div class="hint">Click the curve to show that frequency's map.</div>
+      </div>
+
+      <div class="panel suggest">
+        <div class="col">
+          <div class="col-head">
+            <span class="h" title="Nearest placements that pass, same K, up to 3 changed decaps">Nearest pass</span>
+            <div class="seg" id="mode" role="group" aria-label="Verdict mode for fixes">
+              <button data-v="safe" class="on" title="Proposals that pass with the safety margin">safe</button>
+              <button data-v="direct" title="Proposals that pass without margin">direct</button>
+            </div>
+          </div>
+          <div id="fixstatus" class="status"></div>
+          <ol id="fixlist" class="slist"></ol>
+        </div>
+        <div class="col">
+          <div class="col-head"><span class="h" title="Every empty slot × 3 parts, lowest predicted ρ̂ first">Add one decap</span></div>
+          <div id="addstatus" class="status"></div>
+          <ol id="addlist" class="slist"></ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot" id="foot"></footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -14,7 +14,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_
     PYTHONPATH=/app MPLBACKEND=Agg
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install torch==2.7.1 --index-url "${TORCH_INDEX_URL}" && pip install -r requirements.txt
+# The base image's pip 23.0 rejects typing_extensions 4.16 from the PyTorch index (name check) and then fails
+# to build it from source, so upgrade pip first (26.2.2 = the pip of the tested environment).
+RUN python -m pip install pip==26.2.2 \
+    && pip install torch==2.7.1 --index-url "${TORCH_INDEX_URL}" && pip install -r requirements.txt
 COPY thesis_code/ thesis_code/
 COPY assistant_web/ assistant_web/
 RUN useradd --create-home --uid 1000 app \

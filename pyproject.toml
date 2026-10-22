@@ -39,6 +39,7 @@ assistant_web = ["examples.json", "static/*", "static/vendor/*"]
 # A bare `pytest` runs the data-free suite (as CI does). The full suites need the trained weights and GPUs:
 #   pytest tests/thesis_code tests/assistant_web
 testpaths = ["tests/ci"]
+pythonpath = ["."]          # the repo root, so tests/conftest.py finds repo_paths with the plain `pytest` command
 python_files = "test_*.py"
 python_functions = "test_*"
 filterwarnings = ["ignore::DeprecationWarning"]

@@ -122,11 +122,17 @@ boundaries, so results are bit-identical to a single GPU and a 3-change search t
 
 ## Tech stack
 
-**ML** PyTorch · graph networks · VAE / product of experts · FiLM conditioning · DDP ·
-**Serving** FastAPI · Uvicorn · Plotly.js · vanilla JS/SVG ·
-**MLOps** Docker · GitHub Actions · MLflow · pytest · Ruff · Pydantic ·
-**Simulation** eCADSTAR (Zuken) PI solver, driven headless from WSL ·
-**Data** NumPy · SciPy · pandas
+| Area | Tools |
+|---|---|
+| **ML** | PyTorch 2.7 · graph networks · VAE / product of experts · FiLM conditioning · DDP (multi-GPU training) |
+| **Serving** | FastAPI · Uvicorn · Pydantic · Plotly.js · vanilla JS/SVG |
+| **MLOps** | Docker (multi-stage) · Docker Compose · GitHub Actions · MLflow · pytest · Ruff · Make |
+| **Data & plots** | NumPy · SciPy · pandas · matplotlib |
+| **Simulation** | eCADSTAR (Zuken) PI solver, driven headless from WSL |
+| **Research code** | scikit-learn (Gaussian-process error model for active learning) · seaborn · tqdm · PyYAML — earlier experiments only, not needed by `thesis_code/` |
+| **Docs** | LaTeX (thesis) · Obsidian knowledge graph generated from the code ([`tools/build_vault.py`](tools/build_vault.py)) · Mermaid diagrams |
+| **Dev workflow** | Claude Code (custom evidence-extraction and fact-review agents) · Cursor |
+| **Hardware** | 2× NVIDIA Quadro GV100 (CUDA 11.8) · WSL2 on Windows, next to the solver host |
 
 ## Repository layout
 
@@ -199,3 +205,7 @@ inverse-design path); the first MLOps stack is in [`legacy/exp059_mlops/`](legac
 *A Generative AI Framework for the Design Optimization and Performance Analysis of PCB Power Delivery
 Networks* — Kovarthanam Muthusamy, 2026. The LaTeX sources are in [`Thesis_report/`](Thesis_report/);
 Appendix D maps every file of `thesis_code/` to the section it implements.
+
+## License
+
+All rights reserved — this repository is shown for portfolio and thesis review.

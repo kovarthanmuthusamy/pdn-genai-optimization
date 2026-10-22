@@ -5,7 +5,7 @@
 **A multi-modal generative surrogate for PCB power-delivery-network design — trained on 30,000 circuit simulations,
 served as an interactive design tool with simulator-in-the-loop verification.**
 
-[![CI](https://github.com/kovarthanmuthusamy/pdn-genai-optimization/actions/workflows/ci.yml/badge.svg?branch=assistant-web)](https://github.com/kovarthanmuthusamy/pdn-genai-optimization/actions/workflows/ci.yml)
+[![CI](https://github.com/kovarthanmuthusamy/pdn-genai-optimization/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kovarthanmuthusamy/pdn-genai-optimization/actions/workflows/ci.yml?query=branch%3Amain)
 ![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.7-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-11.8-76B900?logo=nvidia&logoColor=white)

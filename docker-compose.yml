@@ -1,0 +1,27 @@
+# The design-assistant web app on a GPU host:  docker compose up --build   ->  http://localhost:8050
+# WEIGHTS_DIR: folder with last_model.pt, occ_to_z_distill.pt and vae_route_finetune/ (default: this repo's).
+services:
+  assistant:
+    build:
+      context: .
+      target: serve
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu118
+    image: pdn-assistant:latest
+    ports:
+      - "8050:8050"
+    environment:
+      ASSIST_WEB_GPUS: "0,1"
+    volumes:
+      - ${WEIGHTS_DIR:-./experiments/exp096_k1k10_balanced30k_ep700/checkpoints}:/app/experiments/exp096_k1k10_balanced30k_ep700/checkpoints:ro
+      - assistant-cache:/app/assistant_web/cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  assistant-cache:

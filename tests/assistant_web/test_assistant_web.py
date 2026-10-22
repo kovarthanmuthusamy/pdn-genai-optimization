@@ -258,6 +258,22 @@ def test_server_routes(eng):
     assert e.value.status_code == 400
 
 
+def test_predict_batch(eng):
+    """/api/predict: the placement-only encoder's spectra, ratios and verdicts for a batch."""
+    codes = _random_codes(300, seed=7)
+    r = eng.predict(codes.tolist(), "0.6")
+    z = eng.heads[0].predict_ohm(codes)
+    assert r["n"] == 300 and len(r["freqs_mhz"]) == 231
+    assert np.allclose(np.array(r["spectra"]), z, rtol=1e-5, atol=1e-6)
+    ratio = worst_ratios(z, eng.targets["0.6"], eng.band)
+    assert np.allclose(r["worst_ratio"], ratio, rtol=1e-6)
+    assert r["safe_pass"] == (ratio <= 1 - eng.margins["0.6"]).tolist() and r["direct_pass"] == (ratio <= 1).tolist()
+    assert "worst_ratio" not in eng.predict(codes[:2].tolist())
+    for bad in ([[0] * 52], [[1] * 52], [[0] * 51], [[5] + [0] * 51]):
+        with pytest.raises(ValueError):
+            eng.predict(bad)
+
+
 def test_improve_lists_lowest_ratio(eng):
     """improve = every same-K placement 1 or 2 changes away (thesis neighbours_at), judged on one GPU, those
     below the placement's own ratio, lowest first (ties: fewer changes, type changes before moves)."""

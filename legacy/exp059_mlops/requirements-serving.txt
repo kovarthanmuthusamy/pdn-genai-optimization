@@ -1,0 +1,7 @@
+# Minimal dependencies for FastAPI inference server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+torch>=2.7.0
+numpy>=1.24.0
+matplotlib>=3.7.0

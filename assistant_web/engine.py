@@ -8,6 +8,8 @@ What: loads the thesis model through ``thesis_code`` (``settings.WEIGHTS_DIR / C
                  with the predicted spectrum and the worst frequency (``suggest.verdict``);
       additions  every empty slot with every part (K + 1), ranked by the predicted worst-case ratio;
       improve    same-K placements up to 2 changes away with a lower worst-case ratio, lowest first;
+      predict    batch prediction for the REST API: spectra of many placements (and, with a target,
+                 their worst-case ratios and verdicts);
       map        the predicted map at one of the 231 frequencies, with the hot spot;
       fixes      the nearest passing placements (``suggest.find_fixes``, the thesis assistant, with
                  REMOVE on: fewer changes first, then fewer decaps; for a passing placement, the nearest
@@ -52,6 +54,7 @@ PREDICT_BATCH = 8192        # the batch of VAEImpedance.predict_ohm; splits fall
                             # GPU sees the same batches as the one-GPU thesis judge (identical numbers)
 SPLIT_MIN = 4 * PREDICT_BATCH   # smaller blocks stay on the first GPU
 SPLIT_CHUNK = 8 * PREDICT_BATCH  # rows per split block; a cancelled search stops between blocks
+PREDICT_MAX = 4096          # placements per /api/predict request
 IMPROVE_RADIUS = 2          # improve search: every placement up to this many changes (author, 2026-10-22)
 MAP_REF_K = (3, 8)          # colour scale of the maps: reference placements with these budgets ...
 MAP_REF_PER_K = 25          # ... this many per budget ...
@@ -389,6 +392,29 @@ class Engine:
                 parts.append(val)
             out.append(np.concatenate(parts))
         return np.concatenate(out) if out else np.zeros(0)
+
+    # ---- batch prediction (REST API) -------------------------------------------------------
+    def predict(self, placements, target: str | None = None) -> dict:
+        """Predicted spectra (ohm, 231 points) of up to PREDICT_MAX placements of 1..10 decaps; with a
+        target also the worst-case ratio and the safe (thesis margin) and direct verdicts."""
+        c = np.asarray(placements, dtype=np.int64)
+        if c.ndim != 2 or c.shape[1] != N_SLOTS:
+            raise ValueError(f"placements must be a list of {N_SLOTS}-code lists")
+        if not 1 <= len(c) <= PREDICT_MAX:
+            raise ValueError(f"1..{PREDICT_MAX} placements per request")
+        if c.min() < 0 or c.max() > N_TYPES:
+            raise ValueError(f"part codes are 0 (empty) or 1..{N_TYPES}")
+        k = (c != 0).sum(1)
+        if not ((k >= self.k_range[0]) & (k <= self.k_range[1])).all():
+            raise ValueError(f"every placement needs {self.k_range[0]}..{self.k_range[1]} decaps")
+        z = self.heads[0].predict_ohm(c, batch=PREDICT_BATCH)
+        out = {"n": int(len(c)), "freqs_mhz": self.f.tolist(), "spectra": np.round(z, 7).tolist()}
+        if target is not None:
+            tgt, mg = self._target(target)
+            r = worst_ratios(z, tgt, self.band)
+            out.update(target=target, margin=mg, worst_ratio=r.tolist(),
+                       safe_pass=(r <= 1.0 - mg).tolist(), direct_pass=(r <= 1.0).tolist())
+        return out
 
     # ---- check ----------------------------------------------------------------------------
     def check(self, codes, target: str, n_additions: int = 5, margin: float | None = None) -> dict:

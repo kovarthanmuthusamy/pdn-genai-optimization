@@ -1,676 +1,201 @@
-# A Generative AI Framework for the Design Optimization and Performance Analysis of PCB Power Delivery Networks
+<div align="center">
 
-## A surrogate-driven inverse-design approach to decoupling-capacitor placement
+# PDN Design Assistant
 
----
+**A multi-modal generative surrogate for PCB power-delivery-network design — trained on 30,000 circuit simulations,
+served as an interactive design tool with simulator-in-the-loop verification.**
 
-## Abstract
+[![CI](https://github.com/kovarthanmuthusamy/pdn-genai-optimization/actions/workflows/ci.yml/badge.svg?branch=assistant-web)](https://github.com/kovarthanmuthusamy/pdn-genai-optimization/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.7-EE4C2C?logo=pytorch&logoColor=white)
+![CUDA](https://img.shields.io/badge/CUDA-11.8-76B900?logo=nvidia&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-REST%20API-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-multi--stage-2496ED?logo=docker&logoColor=white)
+![MLflow](https://img.shields.io/badge/MLflow-tracking-0194E2?logo=mlflow&logoColor=white)
+![pytest](https://img.shields.io/badge/tests-pytest-0A9EDC?logo=pytest&logoColor=white)
+![Ruff](https://img.shields.io/badge/lint-ruff-D7FF64?logo=ruff&logoColor=black)
 
-The design of a Printed Circuit Board (PCB) **Power Delivery Network (PDN)** requires placing
-**decoupling capacitors (decaps)** so that the power-rail impedance seen by an integrated circuit
-stays below a frequency-dependent target across the operating band. With dozens of candidate slots,
-the configuration space is combinatorial — for a board with 52 slots there are $2^{52}\approx
-4.5\times10^{15}$ possibilities — and there is no closed-form mapping from a placement to its
-impedance response. In practice, engineers converge on a solution through a slow, manual
-loop of *place → simulate → inspect spectrum → locate spatial hotspots → adjust*.
+<img src="docs/images/assistant-design-view.png" alt="The design assistant: board with a predicted impedance map, spectrum against the target, verdict and ranked fixes" width="100%">
 
-This project develops a **generative-AI framework** that learns this design space from data and
-reformulates the search as a continuous inverse-design problem. A multi-input, **product-of-experts
-Variational Autoencoder (VAE)** with **graph encoders** and a **structured latent space** is trained
-as a differentiable **surrogate** of a single board, jointly modelling (i) the decap occupancy vector,
-(ii) the PI-spectrum (impedance magnitude vs. frequency), and (iii) the spatial **PI-distribution**
-hotspot maps at a set of frequency anchors, conditioned on the decap budget $K$ and the inspection
-frequency. The current model is **`exp059_capacity_freq`** (128-d structured latent, multi-scale FiLM).
-With the decoder frozen, **gradient-based latent optimization** then searches the learned latent space
-for configurations whose predicted spectrum meets a target, returning — for each decap budget $K$ —
-the feasible placement with the lowest peak impedance, or reporting that no feasible solution exists.
-An **active-learning loop** can fine-tune the surrogate on newly simulated high-uncertainty layouts.
-The result is a **decision-support tool** that proposes physically meaningful starting points for the
-engineer's iterative process, collapsing an intractable combinatorial search into a handful of
-gradient descents.
+<sub>Master's thesis project · Kovarthanam Muthusamy · 2026</sub>
+
+</div>
 
 ---
 
-## Table of Contents
+## The problem
 
-1. [Motivation & Problem Statement](#1-motivation--problem-statement)
-2. [The Conventional Engineering Loop](#2-the-conventional-engineering-loop)
-3. [Proposed Framework](#3-proposed-framework)
-4. [Stage 1 — Generative Surrogate (VAE)](#4-stage-1--generative-surrogate-vae)
-5. [Stage 2 — Latent Optimization](#5-stage-2--latent-optimization)
-6. [Performance Analysis Layer](#6-performance-analysis-layer)
-7. [Repository Structure](#7-repository-structure)
-8. [Tier-1 MLOps Stack](#8-tier-1-mlops-stack)
-9. [Dataset](#9-dataset)
-10. [Installation & Usage](#10-installation--usage)
-11. [Limitations & Future Work](#11-limitations--future-work)
-12. [What is Tracked in This Repository](#12-what-is-tracked-in-this-repository)
+Every chip on a printed circuit board needs a clean supply voltage. Engineers keep the supply's
+impedance under a frequency-dependent **target** by placing **decoupling capacitors (decaps)** — but
+which capacitor goes into which of the board's 52 slots has no closed-form answer. The usual loop is
+*place → run a field solver → inspect the spectrum → move parts → simulate again*, with a solver run for
+every candidate. The design space is combinatorial — over 600 million layouts with five decaps alone — so
+the loop is slow and depends on experience.
 
-**Current version:** `exp059_capacity_freq` (Aug 2026) — 128-d structured latent, occupancy + spectrum GNNs,
-multi-scale FiLM heatmap decoder, residual-GP active learning. `exp057`/`exp058` are legacy;
-`exp060_multitype_occ` is an exploratory fork for multi-type (one-hot) occupancy.
+## What I built
 
-> **Accompanying thesis.** The written thesis lives in [`Thesis_report/`](Thesis_report/)
-> (`thesis_v3.tex` + `chapters/`). Chapters 1–3 and Appendices A–B are drafted; Chapter 4
-> (Results), Chapter 5 (Conclusion) and Appendix C depend on experiments not yet run.
+| | |
+|---|---|
+| **A generative surrogate of the board** | A product-of-experts **variational autoencoder** (10.2 M parameters) with graph encoders over the 52-slot board, a spectrum encoder and a CNN map decoder conditioned on frequency (FiLM). It learns placement ↔ impedance spectrum (231 points, 1–600 MHz) ↔ spatial impedance map (64 × 64). A second, placement-only encoder predicts both from the layout alone — the path available at design time. |
+| **Inverse design** | With the decoder frozen, a guided search in the latent space proposes placements, with a part type per slot, that meet a target spectrum with as few decaps as possible. |
+| **A design assistant** | Checks a layout against the target with a calibrated safety margin, and ranks the nearest passing layouts (type changes, moves, removals), cheaper layouts with fewer decaps, or improvements within the same budget. |
+| **A web app with the simulator in the loop** | A FastAPI service and browser UI for the live demo: click slots, see the verdict, spectrum and map instantly, and send any layout to the field solver (eCADSTAR) to compare prediction and simulation side by side. |
+| **The ML system around it** | A 13-stage, config-driven pipeline from sampling plan to evaluation, resumable simulation orchestration, multi-GPU training and inference, CI, Docker images, experiment tracking and three test suites. |
 
----
+## Highlights
 
-## 1. Motivation & Problem Statement
+- **30,000 simulated layouts** (1–10 decaps, three part types, 330,000 maps) generated with a batched,
+  resumable eCADSTAR pipeline — about 100 h of solver time *(thesis Sec. 3.1, 4.3.7)*.
+- **2.9 % typical error** per frequency point of the predicted spectrum on the test layouts *(Sec. 4.2)*.
+- **≈ 25,000 layouts per second** judged by the surrogate, against ≈ 12 s per layout in the field
+  solver *(Sec. 4.3.4, 4.3.7)*.
+- The inverse-design search reaches the **smallest feasible budgets** (3, 3 and 4 decaps for the three
+  targets; for the hardest one as far as the simulated sample shows), confirmed by simulation in every run;
+  **87–98 %** of all its proposals pass *(Sec. 4.3)*.
 
-A PDN must keep the impedance $Z(f)$ seen at the IC below a **target impedance mask** $Z_\text{target}(f)$
-over the band of interest (here **1 MHz – 600 MHz**, sampled at 231 points). Decaps lower impedance
-locally in frequency and space, but their effect is coupled and non-linear. The designer's lever is a
-binary placement vector
+## Demo
 
-$$
-\mathbf{b}\in0,1^{52},\qquad \mathbf{b}_0 = K,
-$$
+<table>
+<tr>
+<td width="50%"><img src="docs/images/assistant-improve.png" alt="A passing layout: same-budget changes that lower the worst-case ratio"></td>
+<td width="50%"><img src="docs/images/assistant-ecadstar-comparison.png" alt="Model against eCADSTAR: spectra, table and maps"></td>
+</tr>
+<tr>
+<td><b>Improve within the budget.</b> For a passing layout the assistant ranks same-budget changes by how much they lower the worst-case ratio; hovering previews the change on the board and in the plot.</td>
+<td><b>Simulator in the loop.</b> One click simulates the layout in eCADSTAR (≈ 20 s, cached) and compares spectrum, verdict and hot spot with the model.</td>
+</tr>
+</table>
 
-where each entry selects whether a slot is populated and $K$ is the **decap budget** (a cost/area
-constraint). The goal is to find a placement that is *feasible*,
+## Architecture
 
-$$
-Z(f;\mathbf{b}) \le Z_\text{target}(f)\quad\forall f,
-$$
-
-while keeping $K$ small. Because the forward map $\mathbf{b}\mapsto Z(\cdot)$ is only available
-through an expensive field solver and the domain $0,1^{52}$ is astronomically large, exhaustive
-or even heuristic search is impractical. **This work replaces the forward solver with a learned,
-differentiable surrogate and the discrete search with continuous optimization.**
-
----
-
-## 2. The Conventional Engineering Loop
+**End-to-end lifecycle** — every box is a stage of [`thesis_code/`](thesis_code/README.md) or the web app:
 
 ```mermaid
-flowchart TD
-    A["Assign decaps to slots<br/>(position + value)"] --> B["Simulate PI-spectrum<br/>Z(f), 1MHz–600MHz"]
-    B --> C{"Z(f) ≤ target<br/>for all f ?"}
-    C -- "Yes" --> D["✅ Design complete"]
-    C -- "No" --> E["Identify peak frequencies<br/>where Z exceeds target"]
-    E --> F["Run PI-distribution<br/>at peak frequencies"]
-    F --> G["Locate spatial hotspots"]
-    G --> H["Enable decaps near hotspots"]
-    H --> B
-    style D fill:#1b5e20,color:#fff
-    style C fill:#33415c,color:#fff
+flowchart TB
+    subgraph DATA["Data · s01–s04"]
+        direction LR
+        A["Sampling plan<br/>30k layouts · K 1–10"] --> B["eCADSTAR field solver<br/>batched · resumable · busy-guarded"]
+        B --> C["Processing<br/>231-pt spectra · 64×64 maps"]
+        C --> D["Per-frequency<br/>normalization"] --> E["Packaged dataset<br/>splits · layout store"]
+    end
+    subgraph TRAIN["Training · s05–s08"]
+        direction LR
+        F["Phase 1: multi-modal<br/>PoE-VAE · 2-GPU DDP"] --> G["Phase 2: placement-only<br/>encoder · distill + fine-tune"]
+        F -. "run record" .-> K[("MLflow")]
+    end
+    subgraph SERVE["Inference & product · s09–s12 · assistant_web"]
+        direction LR
+        H["Calibrated<br/>safety margins"] --> I["Latent search<br/>(inverse design)"]
+        H --> J["Design assistant<br/>FastAPI + web UI"] --> V["eCADSTAR check<br/>simulator in the loop"]
+    end
+    DATA --> TRAIN --> SERVE
 ```
 
-Each pass through this loop costs a full electromagnetic simulation, and the number of passes grows
-with board complexity. The framework below **amortizes** this loop into a one-shot proposal step.
-
----
-
-## 3. Proposed Framework
-
-The framework has two stages plus an analysis layer, all built around a single trained surrogate.
-The full pipeline is summarized below.
+**Serving runtime** of the web app:
 
 ```mermaid
 flowchart LR
-    subgraph S1["Stage 1 — Offline Training"]
-        D[("Dataset of one design<br/>occupancy · spectrum · heatmaps")] --> V["Multi-input PoE VAE<br/>(surrogate)"]
-        V --> CK[["Frozen decoder<br/>+ impedance surrogate"]]
-    end
-    subgraph S2["Stage 2 — Inverse Design"]
-        T["Target impedance<br/>Z_target(f)"] --> O["Latent optimization<br/>∇z per budget K"]
-        CK --> O
-        O --> R["Per-K solution:<br/>placement b, spectrum Z(f)<br/>or 'no solution'"]
-    end
-    subgraph S3["Performance Analysis"]
-        R --> P["PI-distribution at<br/>peak frequencies"]
-        P --> Z["Hotspot interpretation"]
-    end
-    style S1 fill:#0d1b2a,color:#fff
-    style S2 fill:#1b263b,color:#fff
-    style S3 fill:#222e3c,color:#fff
+    U["Browser UI"] -- "REST /api/*" --> S["FastAPI app"]
+    S --> E["Engine"]
+    E --> G0["GPU 0 · surrogate<br/>spectra + maps"]
+    E --> G1["GPU 1 · worker process<br/>batch scoring of candidates"]
+    S --> R["eCADSTAR runner<br/>one job · busy check · result cache"]
+    R --> W[("Windows host<br/>eCADSTAR")]
 ```
 
-| Stage                  | Input                    | Output                           | Code                                                                 |
-| ---------------------- | ------------------------ | -------------------------------- | -------------------------------------------------------------------- |
-| 1. Surrogate training  | dataset (one design)     | frozen VAE + impedance surrogate | `[experiments/exp059_capacity_freq/](experiments/exp059_capacity_freq/)` |
-| 2. Latent optimization | target $Z_\text{target}$ | best placement per $K$           | `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)`       |
-| 3. Analysis            | a solution               | PI-distribution hotspot maps     | VAE heatmap decoder                                                  |
-| 4. Active learning     | surrogate uncertainty    | new sim labels + fine-tuned VAE  | `[pipelines/active_learning/run.py](pipelines/active_learning/run.py)` |
+The fix search scores up to 400k candidate layouts per request. Candidates are split over both GPUs in
+separate **processes** (threads gave only 1.2× because of the GIL); the split falls on the model's batch
+boundaries, so results are bit-identical to a single GPU and a 3-change search takes ≈ 6 s instead of 13 s.
 
----
+## Engineering & MLOps
 
-## 4. Stage 1 — Generative Surrogate (VAE)
+| Area | What is in place |
+|---|---|
+| **Reproducibility** | Every stage is a module with one `CONFIGURATION` block and thesis defaults; seeded sampling and splits; run records with git commit, versions, device and a config fingerprint; pinned environment in `requirements.txt`. |
+| **Data pipeline** | Simulation campaigns in resumable batches with a progress file; a result store so a layout is never simulated twice; a guard that refuses to start while another job uses the shared solver host; a batch-ordering rule that avoids a solver defect affecting slot C1. |
+| **Training** | Two-phase training (VAE, then the placement-only encoder) with PyTorch DDP on two GPUs, curriculum schedule, per-epoch metric files and checkpoints with their configuration. |
+| **Experiment tracking** | [`tools/mlflow_log_run.py`](tools/mlflow_log_run.py) logs a finished run (83 parameters, 55 metric series, plots, checkpoint hash) to MLflow; idempotent, SQLite backend. |
+| **Testing** | `tests/ci` — 115 data-free tests (imports, model on CPU, assistant logic against the thesis code, REST API, tracking); `tests/thesis_code` — equivalence of the packaged pipeline with the research code; `tests/assistant_web` — the web app against the thesis assistant on the trained weights (GPU). |
+| **CI** | GitHub Actions: Ruff, the data-free suite on CPU PyTorch with JUnit report, and Docker builds that run the suite inside the image. |
+| **Packaging & serving** | Multi-stage `Dockerfile` (`serve` / `train` / `test`, CUDA or CPU wheels via a build argument), non-root user, health check; `docker-compose.yml` with GPU reservation; weights and data mounted at run time, never baked in. |
+| **API** | FastAPI with typed request models and OpenAPI docs at `/docs`; batch prediction endpoint for programmatic use. |
 
-The **current model** is **`exp059_capacity_freq`**: a multi-input Variational Autoencoder with a
-**structured latent** $\mathbf z\in\mathbb R^{128}$ (80 shared + 8 peak + 40 spatial), **graph neural
-network (GNN)** encoders for occupancy (52-slot PCB grid) and impedance (231-bin spectrum chain), and a
-**Product-of-Experts (PoE)** posterior. Conditioning signals are the decap budget $K$ and (for the
-spatial head) the inspection **frequency**, injected by **FiLM at every decoder scale**.
+## Tech stack
 
-Decoder inputs differ per head: the occupancy decoder sees the shared latent plus conditioning; the
-impedance decoder additionally sees the peak dimensions and a 64-d occupancy graph context; the
-heatmap decoder sees the full latent.
+**ML** PyTorch · graph networks · VAE / product of experts · FiLM conditioning · DDP ·
+**Serving** FastAPI · Uvicorn · Plotly.js · vanilla JS/SVG ·
+**MLOps** Docker · GitHub Actions · MLflow · pytest · Ruff · Pydantic ·
+**Simulation** eCADSTAR (Zuken) PI solver, driven headless from WSL ·
+**Data** NumPy · SciPy · pandas
 
-Earlier experiments (`exp043` PoE baseline → `exp054` self-contained training → `exp055` binary
-occupancy decode → `exp056` occupancy GNN → `exp057` structured latent + spectrum GNN → `exp058`
-asymmetric KL → `exp059` capacity + frequency FiLM) are kept under `experiments/` for comparison.
-See [`docs/model-architecture.md`](docs/model-architecture.md) for architecture details.
+## Repository layout
 
-> **Two-phase configuration.** `config.yaml` is the *capacity* phase; `config_al_finetune.yaml`
-> holds the active-learning fine-tune overrides. AL scoring needs the occupancy→heatmap path, so a
-> pure capacity checkpoint is not AL-ready without that fine-tune.
-
-### 4.1 Modalities
-
-| Modality                      | Tensor shape    | Role                                                    |
-| ----------------------------- | --------------- | ------------------------------------------------------- |
-| Decap **occupancy**           | `[52]`          | binary placement (which slots are populated)            |
-| **PI-spectrum** (magnitude)   | `[231]`         | impedance vs. frequency, 1–600 MHz                      |
-| **PI-distribution** (heatmap) | `[64 × 64 × 1]` | spatial hotspot map at a frequency anchor (24 anchors) |
-
-### 4.2 Product-of-Experts encoder
-
-Each modality has its own encoder producing a Gaussian "expert" $\mathcal N(\mu_m,\sigma_m^2)$ over
-the latent. A dedicated **frequency expert** writes the heatmap-private latent dimensions from the
-frequency-conditioning vector alone. Experts are fused by multiplication (PoE):
-
-$$
-\mu_\text{PoE}=\frac{\sum_m \mu_m/\sigma_m^2}{\sum_m 1/\sigma_m^2},
-\qquad
-\sigma_\text{PoE}^{2}=\frac{1}{\sum_m 1/\sigma_m^2}.
-$$
-
-**Modality dropout** during training forces any subset of experts to reconstruct the whole, which is
-what makes the *occupancy-only* encoding path usable at inference (we only know the placement, not
-the spectrum, when proposing designs).
-
-```mermaid
-flowchart TD
-    OCC["Occupancy [52]"] --> EO["Occ expert"]
-    IMP["PI-spectrum [231]"] --> EI["Imp expert"]
-    HM["Heatmap [64×64]"] --> EH["Heatmap expert"]
-    F["Frequency cond."] --> EF["Freq expert<br/>(private dims)"]
-    K["Budget K"] -.cond.-> EO & EI & EH
-    EO --> POE(("Product<br/>of Experts"))
-    EI --> POE
-    EH --> POE
-    EF --> POE
-    POE --> Zl["Latent z ∈ ℝ¹²⁸<br/>(80 shared + 8 peak + 40 spatial)"]
-    Zl --> DO["Occupancy decoder"]
-    Zl --> DI["Impedance decoder"]
-    Zl --> DH["Heatmap decoder<br/>(FiLM by frequency)"]
-    style POE fill:#1b5e20,color:#fff
-    style Zl fill:#33415c,color:#fff
+```
+thesis_code/        the final pipeline, by stage: s01 generation … s05 model … s07 training … s11 assistant, s12 evaluation
+assistant_web/      design-assistant web app: engine (multi-GPU), FastAPI server, eCADSTAR runner, static UI
+tests/
+  ci/               data-free suite (CPU, runs in CI)
+  thesis_code/      equivalence tests of the packaged pipeline (needs the dataset)
+  assistant_web/    web app vs. thesis assistant (needs the weights + GPU)
+tools/              mlflow_log_run.py and repository tools
+docs/               design specs, images
+legacy/             the first MLOps stack (earlier exp059 model), kept for reference
+experiments/, pipelines/, active_learning_pi/   research history: earlier model generations and studies
+Thesis_report/      the thesis (LaTeX)
 ```
 
-Architecture: `[vae_poe_freq.py](experiments/exp059_capacity_freq/codes/vae_poe_freq.py)`,
-`[graph_occ.py](experiments/exp059_capacity_freq/codes/graph_occ.py)` (PCB-slot GNN),
-`[graph_imp.py](experiments/exp059_capacity_freq/codes/graph_imp.py)` (spectrum-chain GNN).
-Hyperparameters (`latent_dim=128`, `heatmap_private_dim=40`, `cond_dim=32`,
-`freq_fourier_features=16`, binary occupancy decode, multi-scale FiLM heatmap head) are in
-`[config.yaml](experiments/exp059_capacity_freq/config.yaml)` — 183 keys, all tabulated in
-Appendix B of the thesis. Note the file is **JSON despite the `.yaml` extension**.
-
-> **Configured but not active in exp059.** Two loss terms are implemented and weighted in config yet
-> never reach the objective: the **physics regularizers** (`physics_ri/critic_sup/ar`) — the live
-> epoch function passes `physics=None` — and the **spectral anti-blur loss**, whose weight key is
-> absent so it defaults to `0.0`. Treat exp059 as *not* physics-informed in its training objective.
-
-### 4.3 Impedance surrogate
-
-For Stage 2 we additionally use a small **occupancy → impedance** surrogate network
-(`surrogate_impedance.py`), which maps a *hard binary* placement directly to its predicted spectrum.
-It is the most accurate forward model for the optimizer because it is trained on, and queried with,
-exactly the discrete placements the optimizer reads out.
-
-> **Scope.** `surrogate_impedance.py` exists only in the legacy forks `exp037`–`exp041`, not in
-> exp059. Stage 2 has not been rebuilt against the current model — see §5 and §10.
-
----
-
-## 5. Stage 2 — Latent Optimization
-
-With every network frozen, we optimize the latent vector $\mathbf z$ so that the **decoded
-placement's predicted spectrum** meets the target. The forward chain per step is:
-
-```mermaid
-flowchart LR
-    Z["z (optimized)"] --> OD["Occupancy decoder"]
-    OD --> OP["occ probs [52]"]
-    OP --> STE["Top-K + Straight-Through<br/>(hard fwd, soft grad)"]
-    STE --> SUR["Impedance surrogate"]
-    SUR --> ZH["Ẑ(f) [231]"]
-    ZH --> L["Loss vs. target"]
-    L -. "∇z" .-> Z
-    style STE fill:#7c2d12,color:#fff
-    style L fill:#1b263b,color:#fff
-```
-
-### 5.1 The straight-through estimator (key detail)
-
-Reading out exactly $K$ decaps requires a **hard top-$K$** on the occupancy probabilities — a
-discrete operation with no gradient. A naïve implementation severs the computational graph, so the
-spectrum loss cannot move $\mathbf z$ and the "optimization" degenerates into random seed sampling.
-We restore the gradient with a **straight-through estimator**:
-
-$$
-\text{topK}*\text{STE}(\mathbf p) = \underbrace{\text{hardtopK}(\mathbf p)}*{\text{forward value}}
-
-- \underbrace{\mathbf p - \text{sg}(\mathbf p)}_{\text{identity gradient}},
-$$
-
-where $\text{sg}(\cdot)$ is stop-gradient. The surrogate therefore always sees an in-distribution
-binary vector with exactly $K$ ones, while $\partial \mathcal L/\partial \mathbf z$ flows back through
-the continuous occupancy. (See `_ste_topk` in the optimizer.)
-
-### 5.2 Objective
-
-For each budget $K$, multiple latent seeds are optimized in parallel with Adam. The composite loss
-balances target satisfaction, spectral shape, manifold adherence, and candidate diversity:
-
-$$
-\mathcal L = \underbrace{\lambda_\text{ex}\mathcal L_\text{exceed} - \lambda_\text{gap}\mathcal L_\text{gap}}_{\text{meet the target}}
-
-- \underbrace{\lambda_\text{peak}\mathcal L_\text{peak} + \lambda_\text{track}\mathcal L_\text{track} + \lambda_\text{ar}\mathcal L_\text{anti-res}}_{\text{spectral shape  physics}}
-- \underbrace{\lambda_\text{z}\mathcal L_\text{prior} + \lambda_\text{b}\mathcal L_\text{boundary}}_{\text{stay on manifold}}
-- \lambda_\text{div}\mathcal L_\text{div}.
-$$
-
-- **Exceed / gap** — penalize any frequency above $Z_\text{target}-\text{margin}$; reward headroom below.
-- **Peak / track** — align the largest resonance peaks (index + magnitude, dual top-$K$) with the target.
-- **Anti-resonance** — a physics prior discouraging spurious series-resonance dips.
-- **Prior / boundary** — keep $\mathbf z$ within the aggregate posterior so the surrogate stays trustworthy (guards against adversarial off-manifold solutions).
-- **Diversity** — push parallel seeds toward distinct placements.
-
-### 5.3 Selection rule
-
-```mermaid
-flowchart TD
-    K["Budget K"] --> SEEDS["Optimize N latent seeds"]
-    SEEDS --> FEAS{"Any candidate<br/>feasible across<br/>all 231 freqs?"}
-    FEAS -- "No" --> NS["no_solution.json"]
-    FEAS -- "Yes" --> SEL["Among feasible, pick<br/>lowest peak impedance"]
-    SEL --> OUT["best_latent.npy<br/>best_occupancy_topk.npy<br/>best_metrics.json"]
-    style NS fill:#7c2d12,color:#fff
-    style OUT fill:#1b5e20,color:#fff
-```
-
-For each $K$ the optimizer returns the single feasible latent with the **lowest peak impedance**
-($\min$ over candidates of $\max_f \hat Z(f)$), or an explicit **no-solution** record when no seed
-satisfies the target — exactly the decision an engineer needs when a budget is simply too small.
-
----
-
-## 6. Performance Analysis Layer
-
-Given a proposed placement, the VAE's **frequency-conditioned heatmap decoder** regenerates the
-spatial **PI-distribution** at the spectrum's peak frequencies, reproducing the hotspot view the
-engineer would normally obtain from a separate field simulation. This closes the interpretability
-loop: the framework not only *proposes* a placement but also *explains* where the remaining risk
-concentrates spatially.
-
-> **Validity note.** Both the proposed spectrum and these heatmaps are *surrogate predictions*. A
-> proposed design should be re-verified with the ground-truth PI solver before adoption; the
-> framework's role is to produce high-quality candidates, not to replace final sign-off.
-
----
-
-## 7. Repository Structure
-
-Scripts are grouped under **`pipelines/`** and **`libs/`**. Path helpers live in
-`[repo_paths.py](repo_paths.py)`; see path helpers and migration notes are summarized in
-`[docs/data-pipeline.md](docs/data-pipeline.md)` (archive: `docs/_archive/FOLDER_RENAME_AND_PATHS.md`).
-
-```text
-.
-├── pipelines/                   Runnable workflows (edit CONFIG, then python …)
-│   ├── data/                    Build datasets from raw ECAD exports
-│   ├── dataset/                 Manifest transforms, subsample, gmax
-│   ├── dataset_sim/             ECAD append queue, combination sim, output moves
-│   ├── normalize/               Normalization & stats
-│   ├── analysis/                Latent traversal, QA utilities
-│   ├── visualize/               Heatmap & impedance plotting
-│   ├── latent/                  Stage-2 optimization & reports
-│   ├── heatmaps/                PEB frequency & combination tools
-│   └── active_learning/         Active-learning entry (run.py)
-├── libs/                        Shared import-only modules
-│   ├── data_creation/           heatmap, impedance, occupancy, csv_to_occupancy
-│   ├── dataset_meta.py          dataset_meta.json helpers
-│   └── peb/                     PEB frequency regex helper
-├── experiments/                 Generative surrogate experiments (exp001 … exp060)
-│   ├── exp043/                  PoE VAE baseline (frequency expert, FiLM heatmap)
-│   ├── exp054_K_30/             Self-contained training loop, K≤30 filter
-│   ├── exp055_hard_occ/         Binary top-K occupancy decode
-│   ├── exp056_graph_vae/        Occupancy GNN on 52-slot PCB grid
-│   ├── exp057_structured_graph/ Structured 65-d latent + spectrum GNN (legacy)
-│   ├── exp058_asymmetric_kl/    Asymmetric KL study (legacy)
-│   ├── exp060_multitype_occ/    Multi-type one-hot occupancy 52×T (exploratory)
-│   └── exp059_capacity_freq/    ← current model
-│       ├── codes/
-│       │   ├── vae_poe_freq.py        PoE VAE with structured latent
-│       │   ├── graph_occ.py           occupancy GNN encoder/decoder
-│       │   ├── graph_imp.py           spectrum-chain GNN encoder/decoder
-│       │   ├── train_vae_simple.py    training entry point
-│       │   └── eval_off_anchor.py     off-anchor spatial metrics
-│       ├── config.yaml                hyperparameters (capacity phase)
-│       └── config_al_finetune.yaml    active-learning fine-tune overrides
-├── Thesis_report/               Written thesis (LaTeX)
-│   ├── thesis_v3.tex            master file
-│   ├── chapters/                ch1–ch5 + appendices A–B
-│   └── refs.bib                 bibliography
-├── active_learning_pi/          Active-learning library + run configs
-│   ├── al/                      pipeline, ingest, normalize, finetune, GP surrogate
-│   ├── config/exp059_gp_error.json  primary AL config (residual-GP acquisition)
-│   └── runs/                    per-cycle decision reports and evaluations
-├── scrap/                       Sample generation, comparison, orchestration
-│   ├── generation/
-│   ├── comparison/
-│   └── orchestration/           End-to-end multifreq sweep pipelines
-├── datasets/                    Training data (not committed — see §8)
-├── data_multi_norm_robust/      Robust-normalized cache (not committed)
-├── data/
-│   ├── heatmaps/                PEB files, all_combinations.csv, decap maps
-│   └── latent_runs/             Latent optimization outputs
-├── configs/                     target_impedance.npy, frequency grid, masks
-├── tools/                       Path migration, docstring helpers, ECADSTAR utils
-├── docs/                        Experiment notes, pipeline guides, figures
-├── repo_paths.py                Repo-root path helpers (REPO_ROOT, repo_path)
-├── evaluation/                  Novelty / quality evaluation of generated samples
-├── src_vae/                     Shared VAE training library
-└── viewer/                      Result viewers
-```
-
-### Experiment lineage (selected)
-
-| Experiment | Key change |
-| ---------- | ---------- |
-| `exp043` | PoE multi-input VAE + frequency expert (baseline) |
-| `exp054_K_30` | Self-contained training; K≤30 unbounded dataset |
-| `exp055_hard_occ` | Hard top-K occupancy before heatmap decode |
-| `exp056_graph_vae` | GNN occupancy encoder/decoder on PCB grid |
-| `exp057_structured_graph` | Structured 65-d latent + spectrum GNN + occ↔imp coupling (legacy) |
-| `exp058_asymmetric_kl` | Asymmetric KL weighting study (legacy) |
-| `exp059_capacity_freq` | **Current.** 128-d latent, multi-scale FiLM, residual-GP AL |
-| `exp060_multitype_occ` | Multi-type one-hot occupancy `52×T` (exploratory) |
-
-### Common entry points
-
-| Task                          | Command                                                      |
-| ----------------------------- | ------------------------------------------------------------ |
-| Build multifreq dataset       | `python pipelines/data/processing_multifreq.py`              |
-| Normalize dataset             | `python pipelines/normalize/multifreq.py`                    |
-| Train surrogate (exp059)      | `python -m experiments.exp059_capacity_freq.codes.train_vae_simple` |
-| Latent optimization (Stage 2) | `python pipelines/latent/optimize.py`                        |
-| Feasibility sampling          | `python pipelines/latent/find_feasible.py`                   |
-| Active-learning cycle         | `python pipelines/active_learning/run.py`                    |
-| Acquisition A/B (no new ECAD) | `python active_learning_pi/al/validate_acquisition_ab.py`    |
-| Multifreq sweep               | `python scrap/orchestration/run_multifreq_sweep_pipeline.py` |
-| ECAD append pipeline          | `python pipelines/dataset_sim/run_combinations_sim_pipeline.py` |
-
-All pipeline scripts use a **CONFIG block** at the top of the file — edit constants, then run with `python <path>`. Each script's docstring includes **Agent notes** (What, Usage, Config keys). See `[pipelines/README.md](pipelines/README.md)`.
-
----
-
-## 8. Tier-1 MLOps Stack
-
-This repository includes a **production-ready MLOps stack** built around `exp059_capacity_freq`:
-
-| Module | Purpose | Files |
-|--------|---------|-------|
-| **1. Pydantic** | Config validation (catch typos immediately) | `experiments/exp059_capacity_freq/codes/config_schema.py` |
-| **2. pytest** | 7 focused tests on critical math | `tests/test_*.py` (153 lines) |
-| **3. Docker** | Reproducible training env (CUDA 11.8, Python 3.10, pinned deps) | `Dockerfile`, `pyproject.toml`, `.dockerignore` |
-| **4. MLflow** | Experiment tracking + metrics UI | Modified `train_core.py`, `finetune_run.py` |
-| **5. FastAPI** | HTTP inference service (`/predict` endpoint) | `serving/app.py`, `serving/schemas.py` |
-| **6. GitHub Actions** | Automated CI (lint, test, docker build on every PR) | `.github/workflows/ci.yml` |
-
-### Quick Start
-
-**Train with Docker (reproducible environment):**
-```bash
-docker build -t genai-pdn:exp059 .
-docker run --gpus all \
-  -v /path/to/datasets:/app/datasets \
-  -v /path/to/checkpoints:/app/experiments/exp059_capacity_freq/checkpoints \
-  genai-pdn:exp059
-```
-
-**Run tests (safety net):**
-```bash
-pip install -e . --no-deps && pip install pytest pydantic torch numpy
-pytest tests/ -v
-```
-
-**Track experiments:**
-```bash
-mlflow server --backend-store-uri sqlite:///mlflow.db &
-# Run training, then browse http://localhost:5000
-```
-
-**Serve the surrogate:**
-```bash
-docker build -t genai-pdn-serve -f serving/Dockerfile .
-docker run -p 8000:8000 genai-pdn-serve
-curl -X POST http://localhost:8000/predict -H "Content-Type: application/json" \
-  -d '{"occupancy": [...], "K": 26, "frequency_mhz": 200.0}'
-```
-
-### Full Documentation
-
-See **[`docs/MLOPS-TIER1-BUILD.md`](docs/MLOPS-TIER1-BUILD.md)** for:
-- Detailed technical explanations of each module
-- Integration examples
-- Common workflows
-- Portfolio value (what employers see)
-- Tier-2 tools (future: DVC, Hydra, Prefect, Evidently)
-
----
-
-## 9. Dataset
-
-Training data is **not committed** (size). Expected layout under `datasets/`:
-
-```text
-datasets/
-├── data_multifreq_train/              raw multifreq export (688,477 rows / 29,499 layouts)
-├── data_multifreq_train_norm_robust/    robust per-MHz normalization (median/IQR)
-├── data_multifreq_train_norm_unbounded/ K≤30 filter (582,997 samples / 24,979 layouts) — used by exp054–exp060
-├── data_multifreq_al_overlay_exp059/   active-learning overlay (built per AL cycle)
-└── data_multifreq/                      legacy multifreq layout (if present)
-    ├── dataset_meta.json    summary: layouts, sample count, PI MHz anchors
-    ├── manifest.csv         one row per (layout, frequency) sample
-    ├── layouts/             per-layout decap occupancy vectors
-    ├── Imp/                 PI-spectrum magnitudes      [231]
-    ├── PI_freq/             frequency-conditioning vectors
-    ├── heatmap/             PI-distribution maps         [64×64]
-    └── Occ_map/             occupancy maps
-```
-
-Each normalized tree includes `dataset_meta.json` and `normalization_stats.json`. The optimization
-target is `configs/target_impedance.npy` (shape `[231]`).
-
-Build scripts: `pipelines/data/processing_multifreq.py` → `pipelines/normalize/multifreq.py`.
-PEB / combination assets live in `data/heatmaps/`. A local robust-normalized cache may also exist at
-`data_multi_norm_robust/` (also not committed).
-
-Example `dataset_meta.json` fields: `unique_layouts`, `manifest_rows`, `size.total_mb`,
-`pi_frequencies_mhz`, `samples_per_mhz`. The 24 anchors are
-`[10, 63, 80, 100, 120, 150, 170, 180, 200, 230, 250, 270, 280, 300, 330, 350, 370, 390, 400, 420,
-430, 450, 470, 500]` MHz; every anchor carries 24,979 samples except **80 MHz (8,480)**.
-
-Appendix A of the thesis documents the simulation environment, PEB export format and dataset
-specification in full.
-
----
-
-## 10. Installation & Usage
-
-**Option 1: Local environment (pip)**
-```bash
-pip install -e .  # Install from pyproject.toml
-```
-
-**Option 2: Docker (recommended for reproducibility)**
-```bash
-docker build -t genai-pdn:exp059 .
-docker run --gpus all genai-pdn:exp059
-```
-
-Tested with **PyTorch 2.7 (CUDA 11.8)**; a GPU is recommended for training.
-Exact versions are pinned in `pyproject.toml` for reproducibility.
-
-### Running scripts
-
-Every pipeline and workflow script is **CONFIG-only**: open the file, edit the `# CONFIGURATION` block, then run `python path/to/script.py`. Module docstrings explain **What** each script does, **Usage**, and **Config keys**.
-
-### Testing
-
-Run the pytest suite (7 tests on config validation + critical math):
-```bash
-pytest tests/ -v
-```
-
-Runs: Pydantic config validation, STE top-K gradient flow, normalization round-trips. See `tests/` and `[docs/MLOPS-TIER1-BUILD.md](docs/MLOPS-TIER1-BUILD.md)` for details.
-
-### Stage 1 — train the surrogate
+## Quick start
 
 ```bash
-export CUDA_VISIBLE_DEVICES=0
-export VAE_EXPERIMENT_DIR=$(pwd)/experiments/exp059_capacity_freq
-unset VAE_CONFIG_PATH
-python -m experiments.exp059_capacity_freq.codes.train_vae_simple
-
-# 2-GPU DDP
-export CUDA_VISIBLE_DEVICES=0,1
-torchrun --standalone --nproc_per_node=2 -m experiments.exp059_capacity_freq.codes.train_vae_simple
+git clone git@github.com:kovarthanmuthusamy/pdn-genai-optimization.git && cd pdn-genai-optimization
+python3.10 -m venv .venv && source .venv/bin/activate
+pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu118   # CPU only: .../whl/cpu
+make install        # pinned runtime + dev + tracking extras
+make test           # data-free suite, CPU, ~20 s
 ```
 
-Training must be launched as a **module** (`-m`), not a file path. Resume from
-`experiments/exp059_capacity_freq/checkpoints/last_model.pt` (set `resume_checkpoint` in config).
-Checkpoints are **not** cross-loadable between experiments — architecture keys differ.
-
-### Build & normalize a dataset (if starting from raw ECAD)
+The trained weights (≈ 145 MB: `last_model.pt`, `occ_to_z_distill.pt`, `vae_route_finetune/H1_spec_hm200*`)
+and the dataset are not part of the repository. With the weights in
+`experiments/exp096_k1k10_balanced30k_ep700/checkpoints/`:
 
 ```bash
-python pipelines/data/processing_multifreq.py
-python pipelines/normalize/multifreq.py
+make serve                                  # web app on http://localhost:8050 (uses up to 2 GPUs, falls back to CPU)
+docker compose up --build                   # the same in a container with GPU access
+make test-full                              # all three suites (dataset + weights + GPU)
+make mlflow                                 # log the training run and open the MLflow UI
 ```
 
-### Stage 2 — inverse design
+Each pipeline stage runs as a module, e.g. `python -m thesis_code.s07_training.train` (2 GPUs:
+`torchrun --standalone --nproc_per_node=2 -m thesis_code.s07_training.train`); paths to data, weights
+and the solver live in [`thesis_code/common/settings.py`](thesis_code/common/settings.py).
 
-Edit the **CONFIGURATION** block at the top of `[pipelines/latent/optimize.py](pipelines/latent/optimize.py)`
-(set `EXPERIMENT` and checkpoint paths — defaults to `exp038_true_multi` for the impedance surrogate),
-then:
+## REST API
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/predict` | batch spectra for up to 4,096 layouts; with a target also worst-case ratios and verdicts |
+| `POST /api/check` | verdict of one layout (safe with a calibrated margin, and direct), spectrum, best one-decap additions |
+| `POST /api/map` | predicted impedance map at one of the 231 frequencies, with its hot spot |
+| `POST /api/fixes` | nearest passing layouts — or fewer-decap layouts for a passing one |
+| `POST /api/improve` | same-budget changes that lower the worst-case ratio the most |
+| `POST /api/ecad/run` · `GET /api/ecad/status` · `POST /api/ecad/result` | simulate a layout in eCADSTAR and compare (409 while the solver is busy) |
+| `GET /docs` | interactive OpenAPI documentation |
 
 ```bash
-python pipelines/latent/optimize.py
+curl -s localhost:8050/api/predict -H 'Content-Type: application/json' \
+  -d '{"placements": [[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0]], "target": "0.8"}'
 ```
 
-Results are written to `data/latent_runs/<experiment>/<run-idx>/K##/` as `best_latent.npy`,
-`best_occupancy_topk.npy`, `best_metrics.json`, or `no_solution.json`. A Markdown summary is
-auto-generated via `pipelines/latent/generate_run_report.py`.
+## Research history
 
-Selected knobs (constants in the CONFIG block):
+The model is the last of a series of experiments — from a single-type surrogate with a fixed frequency grid,
+through multi-type layouts and random-frequency training data, to the balanced 30,000-layout dataset and the
+700-epoch model packaged in `thesis_code/`. Earlier generations live in `experiments/`, `pipelines/` and
+`active_learning_pi/` (an active-learning loop that was explored and then dropped in favour of the
+inverse-design path); the first MLOps stack is in [`legacy/exp059_mlops/`](legacy/exp059_mlops/README.md).
 
-| Constant              | Meaning                                  | Default   |
-| --------------------- | ---------------------------------------- | --------- |
-| `NUM_STEPS`           | Adam steps per K                         | 1200      |
-| `LR`                  | learning rate                            | 5e-2      |
-| `NUM_CANDIDATE_SEEDS` | parallel latent seeds per K              | 32        |
-| `K_LIST`              | decap budgets to solve                   | 1 … 25    |
-| `BOUNDARY_MARGIN`     | feasibility safety margin                | 0.1       |
-| `SELECT_METRIC`       | ranking metric (`max_ohm` = lowest peak) | `max_ohm` |
-| `USE_SURROGATE`       | use impedance surrogate vs. VAE decoder  | True      |
+## Thesis
 
-### Stage 2 — export to ECADSTAR & compare
-
-After optimization, export samples and build a batch PEB, run PI simulation, then compare:
-
-```bash
-python pipelines/latent/export_peb.py
-# … run ECADSTAR batch PI on latent_run.peb …
-python pipelines/latent/compare_report.py
-```
-
-### Active learning (exp059 residual-GP loop)
-
-Edit CONFIG in `[pipelines/active_learning/run.py](pipelines/active_learning/run.py)`; `CONFIG_PATH`
-defaults to `active_learning_pi/config/exp059_gp_error.json`. Then:
-
-```bash
-python pipelines/active_learning/run.py
-```
-
-The default `COMMAND = "full"` runs eight steps: generate candidates → inference pool → select-bad
-→ build PEB / simulate → ingest labels → build overlay → fine-tune → post-fine-tune evaluation, and
-writes `DECISION_REPORT.md` + `decision_ledger.json` with PASS/FAIL/UNCERTAIN verdicts. Set
-`PROPOSE_ONLY=True` to dry-run scoring with no ECAD and no fine-tune. Never run
-`active_learning_pi/al/pipeline.py` directly — it delegates to `run.py`.
-
-| AL config | Role |
-| --------- | ---- |
-| `exp059_gp_error.json` | **Primary** — residual-GP acquisition, `score_mode: mu` |
-| `exp059_random.json`   | Equal-budget random control |
-| `exp059.json`          | MC self-uncertainty acquisition |
-
-Acquisition ranks candidates by a **Gaussian process fitted to the surrogate's own error**, not by
-the VAE's self-reported uncertainty. See [`docs/gp-error-surrogate.md`](docs/gp-error-surrogate.md)
-and [`active_learning_pi/GP_ERROR_SURROGATE_FRAMEWORK.md`](active_learning_pi/GP_ERROR_SURROGATE_FRAMEWORK.md).
-
-> ECADSTAR runs on Windows and is driven headlessly from WSL; the simulation steps cannot run
-> without that host.
-
----
-
-## 10. Limitations & Future Work
-
-- **Single design.** The surrogate is trained on one board; cross-design generalization (a
-design-conditioned surrogate) is the natural next step.
-- **Surrogate fidelity.** Feasibility is asserted in surrogate space. Ground-truth re-simulation
-before sign-off remains mandatory; the active-learning loop (`pipelines/active_learning/`) partially
-closes the loop by fine-tuning on newly simulated high-uncertainty layouts.
-- **Stage-2 / Stage-1 alignment.** Latent optimization still defaults to `exp038_true_multi`
-checkpoints; wiring it to exp059 requires matching occupancy decode and surrogate paths in
-`pipelines/latent/optimize.py`. **No end-to-end inverse-design result on exp059 exists.**
-- **Discrete read-out.** The STE relaxation makes the search gradient-guided, but the
-occupancy and impedance decoders are separate heads; tightening their consistency remains an avenue
-for improvement.
-- **Inactive loss terms.** The physics regularizers and the spectral anti-blur loss are configured
-but never enter exp059's objective (see §4). Any "physics-informed" claim applies to the Stage-2
-anti-resonance prior, not to surrogate training.
-- **Off-anchor evaluation is partly contaminated.** `eval_off_anchor_mhz = [155, 250, 265]`, but
-**250 MHz is itself a training anchor** and carries the highest weight (3.0 of 8.0). Since
-`best_off_anchor_model.pt` selects checkpoints on this metric, model selection inherits the overlap.
-Only 155 and 265 MHz are genuinely held out.
-- **Active-learning cycles are not reproducible.** The generated runtime config is overwritten each
-launch and no per-iteration record stores `layout_train_prob`, so the mixing probabilities used by
-the four completed cycles cannot be recovered from the repository.
-- **Acquisition superiority is unproven.** The exp059 equal-budget A/B has not been run;
-`acq_ab_gp_vs_mc` is recorded UNCERTAIN. No claim that GP acquisition beats MC or random is supported.
-
----
-
-## 11. What is Tracked in This Repository
-
-To keep the repository lightweight, the following are intentionally **excluded** (see `.gitignore`):
-
-- `datasets/` — training data (`data_multifreq_train`, normalized variants, AL overlays, …)
-- `data_multi_norm_robust/` — local robust-normalized cache (~7.5 GB)
-- model checkpoints — `*.pt`, `checkpoints/` (regenerated by training)
-- `*.peb` simulation exports — individual files reach 107 MB, above GitHub's 100 MB hard limit
-- generated experiment figures (`experiments/**/*.png`), heatmap-sweep samples, and oversized
-  `comparison_report_*.html` (embedded base64 images, 13–23 MB each)
-- bulk active-learning artifacts under `active_learning_pi/runs/`: raw `.npy`/`.map` arrays
-  (~7.8 GB), candidate pools (~1.6 GB), and per-sample manifests
-- `src_gan/`, `temp_visuals/`, `ppt/`, `.cursor/`, `.github/`, virtual-environment and IDE folders,
-  Python caches
-
-Tracked: source code (`pipelines/`, `libs/`, `experiments/`, `src_vae/`, `active_learning_pi/`,
-`scrap/`), configuration, documentation (`docs/`), the thesis (`Thesis_report/`), `data/` apart from
-its `.peb` exports, and — importantly — the **active-learning decision artifacts**: `DECISION_REPORT.md`,
-`decision_ledger.json`, `acquisition_rank_quality.json`, `eval_cycle_summary.json`,
-`CYCLE_EVAL_REPORT.md` and `selected_for_simulation.csv`. Those are the records the thesis cites;
-the raw arrays behind them are reproducible from the pipeline.
-
-**Remote:** [github.com/kovarthanmuthusamy/pdn-genai-optimization](https://github.com/kovarthanmuthusamy/pdn-genai-optimization)
-
----
-
-Research prototype — decision-support for PDN decap placement. Proposed designs require ground-truth simulation before sign-off.
+*A Generative AI Framework for the Design Optimization and Performance Analysis of PCB Power Delivery
+Networks* — Kovarthanam Muthusamy, 2026. The LaTeX sources are in [`Thesis_report/`](Thesis_report/);
+Appendix D maps every file of `thesis_code/` to the section it implements.

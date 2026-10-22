@@ -15,6 +15,7 @@ dependencies = [
     "torch>=2.4,<2.8",
     "numpy>=1.26",
     "scipy>=1.11",
+    "threadpoolctl>=3.1",
     "pandas>=2.0",
     "matplotlib>=3.8",
     "pydantic>=2.0",

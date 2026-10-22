@@ -67,13 +67,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: docker/setup-buildx-action@v3
+      # `run` echoes a failure as annotations (failed tests + last lines): job logs need admin rights, annotations are public.
       - name: Build the test image (CPU wheels) and run the suite inside it
         run: |
-          docker build --target test --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu -t pdn-assistant:test .
-          docker run --rm pdn-assistant:test
+          run() { "$@" 2>&1 | tee out.log; s=${PIPESTATUS[0]}; [ "$s" -eq 0 ] || { grep -E "^(FAILED|ERROR)" out.log | head -20; tail -n 5 out.log; } | sed 's/^/::error title=docker::/'; return "$s"; }
+          run docker build --target test --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu -t pdn-assistant:test .
+          run docker run --rm pdn-assistant:test
       - name: Build the serving image (CPU wheels) and check the app imports
         run: |
-          docker build --target serve --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu -t pdn-assistant:serve .
-          docker run --rm pdn-assistant:serve python -c "import assistant_web.server, thesis_code.s05_model.vae; print('ok')"
+          run() { "$@" 2>&1 | tee out.log; s=${PIPESTATUS[0]}; [ "$s" -eq 0 ] || { grep -E "^(FAILED|ERROR)" out.log | head -20; tail -n 5 out.log; } | sed 's/^/::error title=docker::/'; return "$s"; }
+          run docker build --target serve --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu -t pdn-assistant:serve .
+          run docker run --rm pdn-assistant:serve python -c "import assistant_web.server, thesis_code.s05_model.vae; print('ok')"
       - name: Validate docker-compose.yml
         run: docker compose config -q

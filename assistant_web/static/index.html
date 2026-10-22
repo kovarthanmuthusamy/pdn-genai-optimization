@@ -9,22 +9,36 @@
 </head>
 <body>
   <header class="bar">
-    <div class="brand"><span class="title">PDN Design Assistant</span></div>
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#1f5fbf"/>
+        <path d="M8 8h5v5h6V8h5v16h-5v-5h-6v5H8z" fill="#fff"/>
+        <circle cx="10.5" cy="10.8" r="1.5" fill="#eb6834"/>
+        <circle cx="16" cy="16" r="1.5" fill="#2a78d6"/>
+        <circle cx="21.5" cy="21.2" r="1.5" fill="#1baf7a"/>
+      </svg>
+      <span class="title">PDN Design Assistant</span>
+    </div>
     <label class="ctl">Target
       <select id="target" title="Target spectrum; the safe margin of each target was measured on the test placements"></select>
     </label>
-    <div class="ctl palette" id="palette" role="group" aria-label="Part to place"></div>
-    <div class="ctl kbox" title="Number of decaps (the model is trained for 1–10)"><span id="kval">K = 0</span><span class="kmax"> / 10</span></div>
-    <select id="examples" class="ctl" title="Prepared examples"><option value="">Examples…</option></select>
-    <div class="ctl buttons">
-      <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
-      <button id="clear" title="Remove all decaps">Clear</button>
+    <select id="examples" title="Prepared examples"><option value="">Examples…</option></select>
+    <div class="palette" id="palette" role="group" aria-label="Part to place"></div>
+    <div class="kbox" title="Number of decaps (the model is trained for 1–10)"><span id="kval">K = 0</span><span class="kmax"> / 10</span></div>
+    <div class="buttons">
+      <button id="undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Undo</button>
+      <button id="clear" title="Remove all decaps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>Clear</button>
     </div>
   </header>
 
+  <nav class="views" id="views" role="tablist">
+    <button data-view="design" class="on" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><circle cx="15.5" cy="8.5" r="1.6"/><circle cx="12" cy="15.5" r="1.6"/></svg>Design</button>
+    <button data-view="ecad" role="tab" title="Simulate the placement in eCADSTAR and compare it with the model"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-6 4 3 6-8 3 4"/><path d="M3 20h18" stroke-dasharray="2 3"/></svg>eCADSTAR comparison</button>
+  </nav>
+
   <div id="banner" class="banner hidden"></div>
 
-  <main class="layout">
+  <main class="layout" id="view-design">
     <section class="panel board-panel">
       <div class="board-wrap">
         <svg id="board" xmlns="http://www.w3.org/2000/svg" aria-label="Board"></svg>
@@ -41,7 +55,6 @@
           <div class="cbar-ticks"><span id="cb-lo"></span><span id="cb-mid"></span><span id="cb-hi"></span></div>
         </div>
       </div>
-      <div id="example-note" class="note hidden"></div>
     </section>
 
     <section class="right">
@@ -50,10 +63,17 @@
           <div id="badge" class="badge neutral">–</div>
           <div class="vtext">
             <div id="vline1" class="vline1">Place decaps or pick an example.</div>
+            <div class="mctl" title="Safe margin m: safe pass needs |Z| ≤ (1 − m) × target everywhere. The thesis value of each target was measured on the test placements (none of their failing placements passed); another value moves the safe bar, the badge, the safe chips and the safe suggestions.">
+              <label for="margin">margin</label>
+              <input type="range" id="margin" min="0" max="60" step="1" list="mticks">
+              <datalist id="mticks"></datalist>
+              <span id="mval" class="mval"></span>
+              <button id="mreset" class="small icon" title="Back to the thesis margin of this target">↺</button>
+            </div>
             <div id="vline2" class="vline2"></div>
           </div>
           <div class="vrow">
-          <span id="direct" class="chip neutral" title="Direct: no margin. Closer to the true call, but some failing placements are called a pass. Safe (badge): |Z| ≤ (1 − m) × target everywhere, with m set on the test placements so that none of their failing placements passed.">direct –</span>
+          <span id="direct" class="chip neutral" title="Direct: no margin. Closer to the true call, but some failing placements are called a pass. Badge: |Z| ≤ (1 − m) × target everywhere, with m from the margin slider (default: the thesis margin, set on the test placements so that none of their failing placements passed).">direct –</span>
           <span id="rho" class="rho" title="Predicted worst-case ratio: the largest |Z(f)| / target(f) over 1–600 MHz. Pass needs ρ̂ ≤ 1 (direct) or ρ̂ ≤ 1 − m (safe)."></span>
           </div>
         </div>
@@ -67,9 +87,13 @@
       <div class="panel suggest">
         <div class="col">
           <div class="col-head">
-            <span class="h" title="Nearest placements that pass, same K, up to 3 changed decaps">Nearest pass</span>
+            <span class="h" title="Nearest placements that pass: up to 3 changes (type change, move, remove); fewer changes first, then fewer decaps. If the placement already passes: the nearest ones with fewer decaps that still pass, or (improve) same-K changes that lower ρ̂ the most.">Nearest pass</span>
+            <div class="seg hidden" id="fixkind" role="group" aria-label="Suggestions for a passing placement">
+              <button data-v="fewer" class="on" title="Nearest placements with fewer decaps that still pass">fewer decaps</button>
+              <button data-v="improve" title="Same K, up to 2 changes (type change or move): the lowest predicted ρ̂ first">improve</button>
+            </div>
             <div class="seg" id="mode" role="group" aria-label="Verdict mode for fixes">
-              <button data-v="safe" class="on" title="Proposals that pass with the safety margin">safe</button>
+              <button data-v="safe" class="on" title="Proposals that pass with the margin of the slider">safe</button>
               <button data-v="direct" title="Proposals that pass without margin">direct</button>
             </div>
           </div>
@@ -85,7 +109,43 @@
     </section>
   </main>
 
-  <footer class="foot" id="foot"></footer>
+  <main class="eview hidden" id="view-ecad">
+    <div class="e-top">
+      <section class="panel e-side">
+        <div class="ecad-run">
+          <button id="ecadrun" class="primary">▶ Simulate in eCADSTAR</button>
+          <span id="ecadstatus" class="status"></span>
+        </div>
+        <table class="ctable">
+          <thead><tr><th></th><th><span class="sw model"></span>model</th><th><span class="sw ecad"></span>eCADSTAR</th></tr></thead>
+          <tbody id="ctbody"></tbody>
+        </table>
+        <div class="e-scale" id="escale">
+          <div class="seg" id="escalemode" role="group" aria-label="Map colour scale">
+            <button data-v="fixed" class="on" title="Same colour scale for every placement at this frequency">fixed</button>
+            <button data-v="own" title="Colour scale from the lowest to the highest value of the two maps">auto</button>
+          </div>
+          <div class="cbar"><canvas id="ecbar" width="160" height="12"></canvas>
+            <div class="cbar-ticks"><span id="ecb-lo"></span><span id="ecb-mid"></span><span id="ecb-hi"></span></div>
+          </div>
+        </div>
+      </section>
+      <section class="panel e-plot">
+        <div id="espectrum" class="espectrum"></div>
+        <div class="hint">Click the curve to pick the map frequency.</div>
+      </section>
+    </div>
+    <div class="e-maps">
+      <section class="panel e-map">
+        <h3><span class="sw model"></span>model <span id="emodlab"></span></h3>
+        <svg id="emapmod" xmlns="http://www.w3.org/2000/svg" aria-label="Model map"></svg>
+      </section>
+      <section class="panel e-map">
+        <h3><span class="sw ecad"></span>eCADSTAR <span id="esimlab"></span></h3>
+        <svg id="emapsim" xmlns="http://www.w3.org/2000/svg" aria-label="eCADSTAR map"></svg>
+      </section>
+    </div>
+  </main>
   <script src="/static/app.js"></script>
 </body>
 </html>

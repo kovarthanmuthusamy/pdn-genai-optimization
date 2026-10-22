@@ -25,7 +25,12 @@ python -m assistant_web.server          # then open http://localhost:8050 in the
 - **Stopping:** Ctrl+C.
 - **Settings:** port and GPUs are in the CONFIG block of `server.py`, or set through `ASSIST_WEB_PORT` and
   `ASSIST_WEB_GPUS=0,1`.
-- **Shared host:** no eCADSTAR is used. The GPUs are used only while the page is in use.
+- **Shared host:** eCADSTAR is used only by the eCADSTAR comparison button (see below). The GPUs are used
+  only while the page is in use.
+- **Container:** `docker compose up --build` from the repo root (GPU), with the weights mounted read-only;
+  see the root README. eCADSTAR cannot run inside the container (the button then reports it as busy).
+- **REST API:** the page's endpoints are documented at `/docs` (OpenAPI). `POST /api/predict` returns the
+  spectra of up to 4,096 placements in one call (with a target also ratios and verdicts).
 
 ## Using it
 
@@ -117,7 +122,7 @@ The eCADSTAR note of an example shows as the hover text of the example list.
 
 | File | What |
 |---|---|
-| `server.py` | FastAPI app, CONFIG block, routes `/api/setup`, `/api/check`, `/api/map`, `/api/fixes` |
+| `server.py` | FastAPI app, CONFIG block, routes `/api/setup`, `/api/check`, `/api/map`, `/api/fixes`, `/api/improve`, `/api/predict`, `/api/ecad/*` |
 | `engine.py` | loads the model once; `check`, `additions`, `map`, `fixes`; GPU worker processes; `SplitJudge`; `neighbours_fast` / `find_fixes_fast` |
 | `board.py` | slot positions, IC port, H-board outline, map grid (mm) |
 | `ecad_check.py` | the eCADSTAR comparison: `EcadRunner` (one job at a time in a thread, busy check, thesis `ecad` store) and `compare` |
@@ -127,7 +132,7 @@ The eCADSTAR note of an example shows as the hover text of the example list.
 ## Tests
 
 ```bash
-pytest tests/assistant_web -q      # 45 tests, about 2.5 min; needs the weights and a GPU (two for the split)
+pytest tests/assistant_web -q      # 46 tests, about 2.5 min; needs the weights and a GPU (two for the split)
 ```
 
 The tests check that:

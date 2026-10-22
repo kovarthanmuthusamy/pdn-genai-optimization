@@ -1,0 +1,11 @@
+# Exact versions of the tested environment (thesis_code/ + assistant_web/, Python 3.10).
+# torch is installed first from the PyTorch index of the machine:
+#   GPU (CUDA 11.8): pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu118
+#   CPU only:        pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cpu
+numpy==2.1.2
+scipy==1.15.3
+pandas==2.3.3
+matplotlib==3.10.8
+pydantic==2.13.4
+fastapi==0.141.1
+uvicorn==0.52.3

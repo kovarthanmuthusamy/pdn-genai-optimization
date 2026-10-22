@@ -1,0 +1,99 @@
+# Training configuration of the thesis model (JSON; lines starting with # are removed before parsing).
+# 700 epochs on the 30,000-placement dataset; the learning rate 4.2e-05 is never reduced.
+# Every key is required (s07_training/config.py); background_value and the map clip bounds come
+# from the dataset's normalization_stats.json and may not be set here.
+{
+  # Model. latent 128, no private split, frequency FiLM at every decoder scale (s05_model/vae.py).
+  "latent_dim": 128,
+  "cond_dim": 32,
+  "freq_fourier_features": 48,
+  "n_decap_types": 3,
+  "k_max": 10,
+  "modality_dropout": 0.06,
+  # Data. The train/val split is by layout, seeded by split_seed (never by seed).
+  "data_dir": "datasets/pdn_k1-10_balanced_v2/normalized",
+  "batch_size": 112,
+  "val_batch_size": 320,
+  "train_split": 0.9,
+  "train_samples_per_epoch": 64000,
+  "num_workers": 8,
+  "persistent_workers": true,
+  "prefetch_factor": 2,
+  # Run. Two GPUs via torchrun: 112 per GPU = global 224; the learning rate is not scaled.
+  "device": "cuda:0",
+  "seed": 1234,
+  "split_seed": 42,
+  # Optimization.
+  "num_epochs": 700,
+  "learning_rate": 4.2e-05,
+  "lr_min": 1e-05,
+  "lr_patience": 20,
+  "lr_factor": 0.5,
+  "reset_lr_on_resume": true,
+  "training_grad_clip_norm": 1.0,
+  "training_skip_nonfinite_batches": true,
+  "training_logvar_clamp_min": -10.0,
+  "training_logvar_clamp_max": 10.0,
+  "training_recon_z_soft_floor": -8.0,
+  "training_recon_z_cap_mult": 1.05,
+  "training_loss_finite_cap": 1000000.0,
+  # Checkpoints and evaluation. crossfreq_eval_* picks best_off_anchor_model.pt (s08_monitoring/crossfreq_eval.py).
+  "checkpoint_interval": 5,
+  "resume_checkpoint": "last",
+  "epoch_print_interval": 1,
+  "crossfreq_eval_interval": 5,
+  "crossfreq_eval_max_batches": 20,
+  # Reconstruction loss weights (formulas: s06_losses/). occupancy_weight 92 = 7.0 x 13.1 keeps the
+  # decap term at the size it had when each placement's decap loss was scaled by
+  # clamp((52-K)/K, 0.5, 10) (13.1 = ratio of the two forms over the balanced K mix).
+  "heatmap_weight": 5.0,
+  "occupancy_weight": 92.0,
+  "impedance_weight": 4.0,
+  "occupancy_focal_gamma": 1.5,
+  "occ_k_consistency_weight": 2.0,
+  "heatmap_pearson_weight": 0.75,
+  "heatmap_level_weight": 2.0,
+  "heatmap_softoverlap_weight": 2.0,
+  "heatmap_softoverlap_temp": 0.5,
+  "heatmap_grad_vector_weight": 2.0,
+  "heatmap_grad_direction_weight": 1.0,
+  "heatmap_grad_direction_min_mag": 0.08,
+  "heatmap_grad_huber_delta": 0.5,
+  "heatmap_peak_loc_weight": 2.5,
+  "heatmap_peak_loc_temperature": 0.035,
+  "impedance_deriv_weight": 1.4,
+  "impedance_topk_k": 20,
+  "impedance_topk_weight": 4.5,
+  "impedance_under_penalty": 2.8,
+  "impedance_freq_weight_alpha": 2.0,
+  "impedance_peak_index_weight": 1.5,
+  "impedance_num_peaks": 8,
+  # Latent regularizers. beta_final is the (constant) KL weight. per_expert_kl_weight 0.015 =
+  # 0.02 x 3/4: the per-expert KL is averaged over the three experts; the value keeps the size of
+  # the term it had as an average over four experts, one of them always zero.
+  "beta_final": 0.03,
+  "free_bits": 0.12,
+  "mu_hinge_threshold": 4.0,
+  "mu_hinge_weight": 0.1,
+  "mu_bias_weight": 0.05,
+  "per_expert_kl_weight": 0.015,
+  "sigma_reg_weight": 1.5,
+  "sigma_reg_target": 0.45,
+  # Cross-frequency, anti-copy and full-encode cycle consistency.
+  "cross_freq_weight": 2.5,
+  "anticopy_weight": 1.5,
+  "full_encode_cycle_consistency_weight": 0.5,
+  # Heatmap-focus phase: these replace the weights above from heatmap_focus_start_epoch.
+  "heatmap_focus_heatmap_weight": 7.0,
+  "heatmap_focus_impedance_weight": 4.0,
+  "heatmap_focus_cross_freq_weight": 2.2,
+  "heatmap_focus_modality_dropout": 0.03,
+  # Curriculum: absolute 0-based epochs.
+  "penalty_warmup_epochs": 10,
+  "cross_freq_start_epoch": 28,
+  "anticopy_start_epoch": 28,
+  "modality_dropout_protect_heatmap_epoch": 32,
+  "heatmap_focus_start_epoch": 32,
+  "impedance_peak_start_epoch": 32,
+  "impedance_peak_ramp_epochs": 20
+}

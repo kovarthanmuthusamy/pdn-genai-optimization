@@ -7,13 +7,15 @@ What: loads the thesis model once (``assistant_web.engine``) and serves the page
       POST /api/map     {codes, index}                             -> predicted map at frequency point `index`
       POST /api/fixes   {codes, target, mode, max_radius, margin, remove}  -> nearest passing placements
     `margin` is optional (the margin slider); left out or null, it is the thesis margin of the target.
+      POST /api/predict      {placements, target?}   -> batch spectra (+ worst-case ratios, verdicts)
       POST /api/improve      {codes, target}         -> same-K changes (up to 2) that lower the worst-case ratio
       POST /api/ecad/run     {codes, index}          -> start an eCADSTAR check (spectrum + map at `index`);
                                                         409 while eCADSTAR is busy
       GET  /api/ecad/status                          -> state of the eCADSTAR check
       POST /api/ecad/result  {codes, target, index}  -> model against the saved eCADSTAR results (no simulation)
 Usage: python -m assistant_web.server            (stop with Ctrl+C)
-Config keys: HOST, PORT, GPUS (env ASSIST_WEB_PORT, ASSIST_WEB_GPUS="0,1" override).
+Config keys: HOST, PORT, GPUS (env ASSIST_WEB_HOST, ASSIST_WEB_PORT, ASSIST_WEB_GPUS="0,1" override).
+API docs: FastAPI serves the OpenAPI schema at /openapi.json and interactive docs at /docs.
 """
 from __future__ import annotations
 
@@ -31,7 +33,7 @@ from pydantic import BaseModel
 # =============================================================================
 # CONFIGURATION — edit these before running
 # =============================================================================
-HOST = "127.0.0.1"
+HOST = os.getenv("ASSIST_WEB_HOST", "127.0.0.1")       # 0.0.0.0 inside a container
 PORT = int(os.getenv("ASSIST_WEB_PORT", "8050"))
 GPUS = tuple(int(g) for g in os.getenv("ASSIST_WEB_GPUS", "0,1").split(",") if g.strip())
 # =============================================================================
@@ -50,6 +52,11 @@ class CheckReq(BaseModel):
 class MapReq(BaseModel):
     codes: list[int]
     index: int
+
+
+class PredictReq(BaseModel):
+    placements: list[list[int]]                # up to 4096 placements of 52 codes (0 empty, 1..3 part type)
+    target: str | None = None                  # "0.8" / "0.6" / "0.5": add ratios and verdicts
 
 
 class ImproveReq(BaseModel):
@@ -138,6 +145,11 @@ def map_(req: MapReq):
 def fixes(req: FixReq):
     return _call(STATE["engine"].fixes, req.codes, req.target, req.mode, max(1, min(3, req.max_radius)),
                  margin=req.margin, remove=req.remove)
+
+
+@app.post("/api/predict")
+def predict(req: PredictReq):
+    return _call(STATE["engine"].predict, req.placements, req.target)
 
 
 @app.post("/api/improve")

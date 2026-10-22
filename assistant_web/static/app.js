@@ -2,6 +2,15 @@
 // PDN design assistant page. All answers come from the server (assistant_web/engine.py).
 
 const COL = { 1: "#2a78d6", 2: "#eb6834", 3: "#1baf7a" };
+const PLOT_FONT = { family: '"Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif', size: 12, color: "#111827" };
+const GRID = "#edf0f4";
+const HOVER = { bgcolor: "#fff", bordercolor: "#cfd5de", font: { family: PLOT_FONT.family, size: 12, color: "#111827" } };
+// 1600 px wide or more (a 1080p projector or monitor, seen from a distance): larger plot text, thicker lines
+const LARGE = window.matchMedia("(min-width: 1600px)");
+const PS = () => (LARGE.matches ? { font: 15, legend: 15, title: 16, lw: 1.35, marker: 14, left: 68 }
+  : { font: 12, legend: 12, title: 13, lw: 1, marker: 11, left: 58 });
+const plotFont = (p) => ({ ...PLOT_FONT, size: p.font });
+const hover = (p) => ({ ...HOVER, font: { ...HOVER.font, size: p.font } });
 const SVGNS = "http://www.w3.org/2000/svg";
 const $ = (id) => document.getElementById(id);
 
@@ -11,9 +20,11 @@ const S = {
   target: "0.8",
   part: 1,                // 0 = eraser
   mode: "safe",
+  fixKind: "fewer",       // passing placement: "fewer" decaps or "improve" (same K, lower ρ̂)
+  margin: null,           // safe margin of the slider; null = the thesis margin of the target
+  marginTimer: null,
   history: [],
   check: null,
-  prevSpectrum: null,
   mapIndex: null,         // frequency point of the map; null = no map until the curve is clicked
   map: null,
   scaleMode: "fixed",
@@ -22,6 +33,11 @@ const S = {
   seq: 0,
   fixSeq: 0,
   fixCache: new Map(),
+  view: "design",         // "design" | "ecad" (the eCADSTAR comparison view)
+  ecad: null,             // saved eCADSTAR results of the current placement (/api/ecad/result)
+  ecadJob: null,          // state of the eCADSTAR check (/api/ecad/status)
+  ecadSeq: 0,
+  ecadTimer: null,
 };
 let el = {};               // svg groups and elements
 
@@ -43,10 +59,12 @@ async function api(path, body) {
 const kOf = (c) => c.reduce((a, v) => a + (v ? 1 : 0), 0);
 const kMax = () => S.setup.model.k_range[1];
 const tgtObj = () => S.setup.targets.find((t) => t.name === S.target);
+const curMargin = () => (S.margin === null ? tgtObj().margin : S.margin);
+const marginBody = () => (S.margin === null ? {} : { margin: S.margin });   // left out = thesis margin
+const pct = (m) => Math.round(m * 100);
 const fmtMHz = (f) => (f < 10 ? f.toFixed(1) : f.toFixed(0));
 const fmtOhm = (v) => (v < 0.1 ? v.toFixed(3) : v.toPrecision(3));
 const fmtInt = (n) => n.toLocaleString("en-US");
-const pct = (m) => `${Math.round(m * 100)} %`;
 const partName = (t) => S.setup.parts[String(t)].name;
 const sameCodes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 function svg(tag, attrs = {}, parent = null) {
@@ -84,7 +102,6 @@ function buildBoard() {
   el.img = svg("image", { x: x0, y: Y(y1), width: x1 - x0, height: y1 - y0, preserveAspectRatio: "none",
     "clip-path": "url(#boardclip)", visibility: "hidden" }, root);
   svg("polygon", { points: pts, fill: "none", stroke: "#1b1b1b", "stroke-width": 1.6 }, root);
-  el.hot = svg("g", {}, root);
   el.prev = svg("g", { "pointer-events": "none" }, root);
   el.slots = svg("g", {}, root);
   el.over = svg("g", { "pointer-events": "none" }, root);
@@ -99,9 +116,9 @@ function buildBoard() {
   el.slotEls = b.slots.map(([x, y], i) => {
     const g = svg("g", { class: "slot", "data-i": i, transform: `translate(${x},${Y(y)})` }, el.slots);
     const title = svg("title", {}, g);
-    const ring = svg("circle", { class: "ring", r: 8.5 }, g);
+    const ring = svg("circle", { class: "ring", r: 9 }, g);
     const lab = svg("text", { "text-anchor": "middle", "dominant-baseline": "central", "paint-order": "stroke" }, g);
-    const sub = svg("text", { y: 14.5, "text-anchor": "middle", "font-size": 5, fill: "#fff", stroke: "#111",
+    const sub = svg("text", { y: 14.8, "text-anchor": "middle", "font-size": 5.8, fill: "#fff", stroke: "#111",
       "stroke-width": 1.6, "paint-order": "stroke" }, g);
     g.addEventListener("click", () => onSlot(i));
     return { g, title, ring, lab, sub };
@@ -117,7 +134,7 @@ function renderSlots() {
       s.ring.setAttribute("stroke", COL[t]);
       s.ring.setAttribute("stroke-width", 2.8);
       s.lab.textContent = partName(t);
-      s.lab.setAttribute("font-size", 7.2);
+      s.lab.setAttribute("font-size", 8);
       s.lab.setAttribute("font-weight", 800);
       s.lab.setAttribute("fill", COL[t]);
       s.lab.setAttribute("stroke", "none");
@@ -129,7 +146,7 @@ function renderSlots() {
       s.ring.setAttribute("stroke", "rgba(255,255,255,0.8)");
       s.ring.setAttribute("stroke-width", 1.1);
       s.lab.textContent = name;
-      s.lab.setAttribute("font-size", 5.4);
+      s.lab.setAttribute("font-size", 6);
       s.lab.setAttribute("font-weight", 600);
       s.lab.setAttribute("fill", "#fff");
       s.lab.setAttribute("stroke", "#111");
@@ -175,6 +192,27 @@ function renderPreview() {
   }
 }
 
+// 64 x 64 map values (row 0 = bottom, null = off board) -> 64 x 64 canvas, jet colours on a log scale
+function mapCanvas(values, lo, hi) {
+  const L0 = Math.log(lo), L1 = Math.log(hi);
+  const cv = document.createElement("canvas");
+  cv.width = 64; cv.height = 64;
+  const ctx = cv.getContext("2d");
+  const img = ctx.createImageData(64, 64);
+  for (let r = 0; r < 64; r++) {
+    for (let q = 0; q < 64; q++) {
+      const v = values[r][q];
+      const o = ((63 - r) * 64 + q) * 4;
+      if (v === null || v <= 0) { img.data[o + 3] = 0; continue; }
+      const t = Math.max(0, Math.min(1, (Math.log(v) - L0) / (L1 - L0 || 1)));
+      const [R, G, B] = jet(t);
+      img.data[o] = R; img.data[o + 1] = G; img.data[o + 2] = B; img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+
 // ---------------------------------------------------------------- map
 function drawMap() {
   const m = S.map;
@@ -183,48 +221,27 @@ function drawMap() {
   const on = S.mapIndex !== null && m && kOf(S.codes) > 0;
   el.img.setAttribute("visibility", on ? "visible" : "hidden");
   el.base.setAttribute("fill", on ? "#222" : "#0f4a24");
-  el.hot.replaceChildren();
   $("scalemode").classList.toggle("hidden", !on);
   document.querySelector(".cbar").classList.toggle("hidden", !on);
-  if (!on) { drawColorbar(null, null); $("hotlabel").textContent = ""; return; }
+  if (!on) { drawColorbar(null, null); $("hotlabel").textContent = ""; renderEcad(); return; }
   const [lo, hi] = S.scaleMode === "fixed" ? [m.lo, m.hi] : [m.board_min, m.board_max];
-  const L0 = Math.log(lo), L1 = Math.log(hi);
-  const cv = document.createElement("canvas");
-  cv.width = 64; cv.height = 64;
-  const ctx = cv.getContext("2d");
-  const img = ctx.createImageData(64, 64);
-  for (let r = 0; r < 64; r++) {
-    for (let q = 0; q < 64; q++) {
-      const v = m.values[r][q];
-      const o = ((63 - r) * 64 + q) * 4;          // row 0 = bottom of the board
-      if (v === null || v <= 0) { img.data[o + 3] = 0; continue; }
-      const t = Math.max(0, Math.min(1, (Math.log(v) - L0) / (L1 - L0 || 1)));
-      const [R, G, B] = jet(t);
-      img.data[o] = R; img.data[o + 1] = G; img.data[o + 2] = B; img.data[o + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  el.img.setAttribute("href", cv.toDataURL());
-  // hot spot
-  const [W, H] = S.setup.board.board_mm;
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const hx = clamp(m.hot.x, 9, W - 9), hy = H - clamp(m.hot.y, 9, H - 9);   // edge pixels sit on the outline
-  svg("circle", { cx: hx, cy: hy, r: 10, fill: "none", stroke: "#fff", "stroke-width": 3.2 }, el.hot);
-  svg("circle", { cx: hx, cy: hy, r: 10, fill: "none", stroke: "#111", "stroke-width": 1.4, "stroke-dasharray": "3 2" }, el.hot);
+  el.img.setAttribute("href", mapCanvas(m.values, lo, hi).toDataURL());
   $("hotlabel").textContent = `hot spot ${fmtOhm(m.hot.ohm)} Ω`;
   drawColorbar(lo, hi);
+  renderEcad();
 }
 
-function drawColorbar(lo, hi) {
-  const cv = $("cbar"), ctx = cv.getContext("2d");
+function drawColorbar(lo, hi) { paintBar("cbar", "cb", lo, hi); }
+function paintBar(canvasId, prefix, lo, hi) {       // colour bar + its labels <prefix>-lo / -mid / -hi
+  const cv = $(canvasId), ctx = cv.getContext("2d");
   for (let x = 0; x < cv.width; x++) {
     const [R, G, B] = jet(x / (cv.width - 1));
     ctx.fillStyle = lo === null ? "#eee" : `rgb(${R},${G},${B})`;
     ctx.fillRect(x, 0, 1, cv.height);
   }
-  $("cb-lo").textContent = lo === null ? "" : `${fmtOhm(lo)} Ω`;
-  $("cb-mid").textContent = lo === null ? "" : fmtOhm(Math.sqrt(lo * hi));
-  $("cb-hi").textContent = lo === null ? "" : `${fmtOhm(hi)} Ω`;
+  $(`${prefix}-lo`).textContent = lo === null ? "" : `${fmtOhm(lo)} Ω`;
+  $(`${prefix}-mid`).textContent = lo === null ? "" : fmtOhm(Math.sqrt(lo * hi));
+  $(`${prefix}-hi`).textContent = lo === null ? "" : `${fmtOhm(hi)} Ω`;
 }
 
 let mapBusy = false, mapWanted = null;
@@ -245,12 +262,14 @@ async function pumpMap() {
   }
   mapBusy = false;
 }
+const freqHint = () => (kOf(S.codes) === 0 ? "Pick a part (keys 1–3) and click slots, or choose an example"
+  : "Click the curve to show a map");
 function setMapIndex(i) {
   // i = a frequency point (0..230) picked on the spectrum curve, or null for no map
   S.mapIndex = i === null ? null : Math.max(0, Math.min(S.setup.freqs_mhz.length - 1, i));
   const lab = $("freqlabel");
   if (S.mapIndex === null) {
-    lab.textContent = "Click the curve to show a map";
+    lab.textContent = freqHint();
     lab.classList.add("none");
   } else {
     lab.textContent = `map at ${fmtMHz(S.setup.freqs_mhz[S.mapIndex])} MHz`;
@@ -259,6 +278,7 @@ function setMapIndex(i) {
   $("clearmap").classList.toggle("hidden", S.mapIndex === null);
   drawPlot();
   requestMap();
+  fetchEcad();
 }
 
 function onPlotClick(ev) {
@@ -284,39 +304,33 @@ function yRange(traces) {
   return [Math.min(Math.log10(0.002), Math.log10(lo) - 0.08), Math.max(Math.log10(70), Math.log10(hi) + 0.08)];
 }
 function drawPlot() {
-  const f = S.setup.freqs_mhz, T = tgtObj(), c = S.check;
+  const f = S.setup.freqs_mhz, T = tgtObj(), c = S.check, p = PS();
   const tr = [
-    { x: f, y: T.curve, name: "target", line: { color: "#0b0b0b", width: 1.6 }, hoverinfo: "none" },
-    { x: f, y: T.curve.map((v) => v * (1 - T.margin)), name: `safe bar (${(1 - T.margin).toFixed(2)}×)`,
-      line: { color: "#0b0b0b", width: 1.2, dash: "dash" }, hoverinfo: "none" },
+    { x: f, y: T.curve, name: "target", line: { color: "#0b0b0b", width: 1.8 * p.lw }, hoverinfo: "none" },
+    { x: f, y: T.curve.map((v) => v * (1 - curMargin())), name: `safe bar (${(1 - curMargin()).toFixed(2)}×)`,
+      line: { color: "#0b0b0b", width: 1.4 * p.lw, dash: "dash" }, hoverinfo: "none" },
   ];
-  if (S.prevSpectrum) tr.push({ x: f, y: S.prevSpectrum, name: "previous",
-    line: { color: "#a19f97", width: 1.6, dash: "dot" }, hovertemplate: "previous %{y:.3f} Ω<extra></extra>" });
   if (c) {
     const bare = c.kind === "bare";
     tr.push({ x: f, y: c.spectrum, name: bare ? "bare board (sim.)" : "predicted",
-      line: { color: bare ? "#8a5a2b" : "#2a78d6", width: 2.6 },
+      line: { color: bare ? "#8a5a2b" : "#2a78d6", width: 2.8 * p.lw },
       hovertemplate: (bare ? "bare board" : "predicted") + " %{y:.3f} Ω<extra></extra>" });
-    const wi = c.worst_index;
-    tr.push({ x: [f[wi]], y: [c.spectrum[wi]], mode: "markers", name: "worst",
-      marker: { color: "#c8312b", size: 11, symbol: "x-thin", line: { width: 3, color: "#c8312b" } }, hoverinfo: "skip" });
   }
   if (c && c.kind !== "bare" && S.mapIndex !== null) tr.push({ x: [f[S.mapIndex]], y: [c.spectrum[S.mapIndex]], mode: "markers",
     name: `map ${fmtMHz(f[S.mapIndex])} MHz`, hoverinfo: "skip",
-    marker: { color: "#fff", size: 11, line: { color: "#0b0b0b", width: 2.2 } } });
+    marker: { color: "#fff", size: p.marker, line: { color: "#0b0b0b", width: 2.4 * p.lw } } });
   if (S.preview && S.preview.spectrum) tr.push({ x: f, y: S.preview.spectrum, name: "suggestion",
-    line: { color: "#eb6834", width: 2.4, dash: "dot" }, hovertemplate: "suggestion %{y:.3f} Ω<extra></extra>" });
+    line: { color: "#eb6834", width: 2.8 * p.lw, dash: "dot" }, hovertemplate: "suggestion %{y:.3f} Ω<extra></extra>" });
   const layout = {
-    margin: { l: 58, r: 14, t: 6, b: 42 },
-    xaxis: { type: "log", title: { text: "frequency (MHz)", standoff: 6 }, range: [Math.log10(0.93), Math.log10(640)], fixedrange: true,
-      tickvals: [1, 2, 5, 10, 20, 50, 100, 200, 500], gridcolor: "#eceae4", zeroline: false },
-    yaxis: { type: "log", title: { text: "|Z| (Ω)", standoff: 4 }, range: yRange(tr), gridcolor: "#eceae4", fixedrange: true,
+    margin: { l: p.left, r: 14, t: 6, b: 46 },
+    xaxis: { type: "log", title: { text: "frequency (MHz)", standoff: 6, font: { size: p.title } }, range: [Math.log10(0.93), Math.log10(640)], fixedrange: true,
+      tickvals: [1, 2, 5, 10, 20, 50, 100, 200, 500], gridcolor: GRID, linecolor: "#cfd5de", zeroline: false },
+    yaxis: { type: "log", title: { text: "|Z| (Ω)", standoff: 4, font: { size: p.title } }, range: yRange(tr), gridcolor: GRID, linecolor: "#cfd5de", fixedrange: true,
       tickvals: [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100],
       ticktext: ["0.001", "0.003", "0.01", "0.03", "0.1", "0.3", "1", "3", "10", "30", "100"] },
-    legend: { orientation: "h", x: 0, y: 1.0, yanchor: "bottom", font: { size: 11 } },
-    hovermode: "x unified", plot_bgcolor: "#fff", paper_bgcolor: "#fff",
-    font: { family: "Segoe UI, system-ui, sans-serif", size: 12, color: "#0b0b0b" },
-    shapes: S.mapIndex === null ? [] : [mapLine(f[S.mapIndex])],
+    legend: { orientation: "h", x: 0, y: 1.0, yanchor: "bottom", font: { size: p.legend } },
+    hovermode: "x unified", hoverlabel: hover(p), plot_bgcolor: "#fff", paper_bgcolor: "#fff",
+    font: plotFont(p),
     dragmode: false,
   };
   const div = $("spectrum");
@@ -328,30 +342,49 @@ function drawPlot() {
 function renderVerdict() {
   const c = S.check, badge = $("badge"), d = $("direct");
   if (!c) return;
-  const T = tgtObj();
   if (c.kind === "bare") {
     badge.className = "badge neutral";
     badge.innerHTML = "<small>NO DECAPS</small>BARE";
-    $("vline1").textContent = "Bare board (simulated)";
-    $("vline2").textContent = "Place a decap to get a prediction.";
+    $("vline1").textContent = "";
+    $("vline2").textContent = "Bare board (simulated)";
     d.className = "chip neutral"; d.textContent = "direct –";
     $("rho").textContent = `ρ = ${c.direct.worst_ratio.toFixed(2)} at ${fmtMHz(c.direct.worst_mhz)} MHz`;
     return;
   }
   const s = c.safe;
   badge.className = "badge " + (s.passes ? "pass" : "fail");
-  badge.innerHTML = `<small>SAFE</small>${s.passes ? "PASS" : "FAIL"}`;
-  $("vline1").textContent = `${s.passes ? "Passes" : "Fails"} ${T.label} with a ${pct(c.margin)} margin`;
-  $("vline2").textContent = s.passes ? "" : `needs ρ̂ ≤ ${(1 - c.margin).toFixed(2)}`;
+  const label = c.margin === c.thesis_margin ? "SAFE" : `MARGIN ${pct(c.margin)} %`;
+  badge.innerHTML = `<small>${label}</small>${s.passes ? "PASS" : "FAIL"}`;
+  $("vline1").textContent = "";
+  $("vline2").textContent = "";
   d.className = "chip " + (c.direct.passes ? "pass" : "fail");
   d.textContent = `direct ${c.direct.passes ? "PASS" : "FAIL"}`;
   $("rho").innerHTML = `ρ̂ = <b>${s.worst_ratio.toFixed(2)}</b> at ${fmtMHz(s.worst_mhz)} MHz`;
 }
 
+function renderMarginCtl() {
+  const thesis = pct(tgtObj().margin), m = pct(curMargin());
+  $("margin").value = m;
+  $("mval").textContent = `${m} %`;
+  $("mval").classList.toggle("custom", S.margin !== null);
+  $("mreset").disabled = S.margin === null;
+  $("mreset").title = `Back to the thesis margin (${thesis} %)`;
+  $("mticks").innerHTML = `<option value="${thesis}"></option>`;
+}
+function onMarginInput(final) {
+  const v = Number($("margin").value);
+  S.margin = v === pct(tgtObj().margin) ? null : v / 100;
+  renderMarginCtl();
+  drawPlot();                                   // the bar moves at once; verdict and lists follow
+  clearTimeout(S.marginTimer);
+  S.marginTimer = setTimeout(refresh, final ? 0 : 250);
+}
+
 // ---------------------------------------------------------------- suggestions
 function listItem(n, item, valHtml, sub) {
   const li = document.createElement("li");
-  li.innerHTML = `<span class="n">${n}</span><span class="what">${item.text}${sub ? `<small>${sub}</small>` : ""}</span>`
+  const text = item.text.replace(/\bT([123])\b/g, '<span class="tk t$1">T$1</span>');
+  li.innerHTML = `<span class="n">${n}</span><span class="what">${text}${sub ? `<small>${sub}</small>` : ""}</span>`
     + `<span class="val">${valHtml}</span>`;
   li.addEventListener("mouseenter", () => { S.preview = item; renderPreview(); drawPlot(); });
   li.addEventListener("mouseleave", () => { S.preview = null; renderPreview(); drawPlot(); });
@@ -359,7 +392,7 @@ function listItem(n, item, valHtml, sub) {
   li.title = "Hover to preview, click to apply";
   return li;
 }
-const mini = (ok, label) => `<span class="mini ${ok ? "pass" : "fail"}">${label} ${ok ? "✓" : "✗"}</span>`;
+const mini = (ok, label) => `<span class="mini ${ok ? "pass" : "fail"}" title="${label}: ${ok ? "passes" : "fails"}">${label}${ok ? " ✓" : ""}</span>`;
 
 function renderAdds() {
   const list = $("addlist"), st = $("addstatus");
@@ -379,16 +412,19 @@ async function runFixes() {
   const list = $("fixlist");
   list.replaceChildren();
   const K = kOf(S.codes);
+  const passes = !!(S.check && S.check.kind !== "bare" && S.check[S.mode].passes);   // S.check is this placement's
+  $("fixkind").classList.toggle("hidden", !passes);
   if (K === 0) { setFixStatus("Place a decap first."); return; }
-  const key = `${S.codes.join("")}|${S.target}|${S.mode}`;
+  if (passes && S.fixKind === "improve") { runImprove(my); return; }
+  const key = `${S.codes.join("")}|${S.target}|${S.mode}|${S.mode === "safe" ? curMargin() : 0}`;
   if (S.fixCache.has(key)) { renderFixes(S.fixCache.get(key)); return; }
-  const body = { codes: S.codes.slice(), target: S.target, mode: S.mode };
+  const body = { codes: S.codes.slice(), target: S.target, mode: S.mode, ...marginBody() };
   setFixStatus('<span class="spin"></span>searching…');
   let timer = null;
   try {
     let r = await api("/api/fixes", { ...body, max_radius: 2 });
     if (my !== S.fixSeq) return;
-    if (r.status === "none") {
+    if (r.status === "none" && r.max_radius < 3) {
       const t0 = performance.now();
       const tick = () => setFixStatus(`<span class="spin"></span>searching 3 changes… `
         + `${Math.round((performance.now() - t0) / 1000)} s`);
@@ -408,32 +444,223 @@ async function runFixes() {
   }
 }
 
-function renderFixes(r) {
-  const list = $("fixlist");
+async function runImprove(my) {
+  const key = `improve|${S.codes.join("")}|${S.target}`;
+  let r = S.fixCache.get(key);
+  if (!r) {
+    setFixStatus('<span class="spin"></span>searching…');
+    try { r = await api("/api/improve", { codes: S.codes.slice(), target: S.target }); } catch (e) {
+      if (my === S.fixSeq) setFixStatus(`Error: ${e.message}`);
+      return;
+    }
+    if (my !== S.fixSeq || r.status === "cancelled") return;
+    if (S.fixCache.size > 300) S.fixCache.clear();
+    S.fixCache.set(key, r);
+  }
+  const list = $("fixlist"), st = $("fixstatus");
   list.replaceChildren();
-  if (r.status === "passes") { setFixStatus("Already passes."); return; }
+  if (r.status !== "found") { setFixStatus(`No lower ρ̂ within ${r.max_radius} changes.`); st.title = ""; return; }
+  setFixStatus(`Passes · ${fmtInt(r.n_found)} with lower ρ̂ · ${r.seconds.toFixed(1)} s`);
+  st.title = `${fmtInt(r.n_scored)} placements judged; same K; up to ${r.max_radius} changes`;
+  r.suggestions.forEach((s, i) => list.appendChild(listItem(i + 1, s,
+    `ρ̂ ${r.base_ratio.toFixed(2)} → ${s.ratio.toFixed(2)}`, "")));
+}
+
+function renderFixes(r) {
+  const list = $("fixlist"), st = $("fixstatus");
+  list.replaceChildren();
+  st.title = "";
   if (r.status === "no_model") { setFixStatus(`Place 1–${kMax()} decaps.`); return; }
-  if (r.status === "none") { setFixStatus(`None within ${r.max_radius} changes. Try adding a decap.`); return; }
+  if (r.status === "none") {
+    setFixStatus(r.base_passes ? "Already passes." : `None within ${r.max_radius} changes. Try adding a decap.`);
+    return;
+  }
   const e = r.suggestions[0].edits;
-  const st = $("fixstatus");
-  setFixStatus(`${fmtInt(r.n_found)} found · ${e} change${e > 1 ? "s" : ""} · ${r.seconds.toFixed(1)} s`);
-  st.title = `${fmtInt(r.n_scored)} placements judged; same K; ${r.mode === "safe" ? `safe: ρ̂ ≤ ${(1 - r.margin).toFixed(2)}` : "direct: ρ̂ ≤ 1"}`;
-  r.suggestions.forEach((s, i) => list.appendChild(listItem(i + 1, s, `ρ̂ ${s.ratio.toFixed(2)}`, "")));
+  setFixStatus(r.base_passes
+    ? `Passes · ${fmtInt(r.n_found)} with fewer decaps · ${r.seconds.toFixed(1)} s`
+    : `${fmtInt(r.n_found)} found · ${e} change${e > 1 ? "s" : ""} · ${r.seconds.toFixed(1)} s`);
+  st.title = `${fmtInt(r.n_scored)} placements judged; ${r.mode === "safe" ? `safe: ρ̂ ≤ ${(1 - r.margin).toFixed(2)}` : "direct: ρ̂ ≤ 1"}`;
+  r.suggestions.forEach((s, i) => list.appendChild(listItem(i + 1, s,
+    `ρ̂ ${s.ratio.toFixed(2)}${s.K !== r.K ? `<span class="ktag">K ${s.K}</span>` : ""}`, "")));
+}
+
+// ---------------------------------------------------------------- eCADSTAR comparison view
+const sameJob = (j) => j && j.codes && sameCodes(j.codes, S.codes);
+async function fetchEcad() {
+  const my = ++S.ecadSeq;
+  const codes = S.codes.slice();
+  if (kOf(codes) === 0) { S.ecad = null; renderEcad(); return; }
+  try {
+    const r = await api("/api/ecad/result", { codes, target: S.target, index: S.mapIndex });
+    if (my !== S.ecadSeq) return;
+    S.ecad = r;
+    renderEcad();
+  } catch (e) { if (my === S.ecadSeq) banner(`eCADSTAR: ${e.message}`, "error"); }
+}
+
+function setView(v) {
+  S.view = v;
+  $("views").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.view === v));
+  $("view-design").classList.toggle("hidden", v !== "design");
+  $("view-ecad").classList.toggle("hidden", v !== "ecad");
+  $("palette").classList.toggle("hidden", v !== "design");     // the board is edited in the design view
+  if (v === "design") Plotly.Plots.resize("spectrum");
+  renderEcad();
+}
+
+function drawEcadPlot() {
+  if (S.view !== "ecad") return;
+  const f = S.setup.freqs_mhz, T = tgtObj(), c = S.check && S.check.kind !== "bare" ? S.check : null, p = PS();
+  const e = S.ecad && sameCodes(S.ecad.codes, S.codes) ? S.ecad : null;
+  const tr = [{ x: f, y: T.curve, name: "target", line: { color: "#0b0b0b", width: 1.8 * p.lw }, hoverinfo: "none" }];
+  if (c) {
+    tr.push({ x: f, y: c.spectrum, name: "model", line: { color: "#2a78d6", width: 2.6 * p.lw },
+      hovertemplate: "model %{y:.3f} Ω<extra></extra>" });
+  }
+  if (e && e.spectrum) {
+    tr.push({ x: f, y: e.spectrum, name: "eCADSTAR", line: { color: "#17924f", width: 3 * p.lw, dash: "dot" },
+      hovertemplate: "eCADSTAR %{y:.3f} Ω<extra></extra>" });
+  }
+  const layout = {
+    margin: { l: p.left, r: 14, t: 6, b: 46 },
+    xaxis: { type: "log", title: { text: "frequency (MHz)", standoff: 6, font: { size: p.title } }, range: [Math.log10(0.93), Math.log10(640)], fixedrange: true,
+      tickvals: [1, 2, 5, 10, 20, 50, 100, 200, 500], gridcolor: GRID, linecolor: "#cfd5de", zeroline: false },
+    yaxis: { type: "log", title: { text: "|Z| (Ω)", standoff: 4, font: { size: p.title } }, range: yRange(tr), gridcolor: GRID, linecolor: "#cfd5de", fixedrange: true,
+      tickvals: [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10, 30, 100],
+      ticktext: ["0.001", "0.003", "0.01", "0.03", "0.1", "0.3", "1", "3", "10", "30", "100"] },
+    legend: { orientation: "h", x: 0, y: 1.0, yanchor: "bottom", font: { size: p.legend } },
+    hovermode: "x unified", hoverlabel: hover(p), plot_bgcolor: "#fff", paper_bgcolor: "#fff",
+    font: plotFont(p),
+    shapes: S.mapIndex === null ? [] : [mapLine(f[S.mapIndex])],
+    dragmode: false,
+  };
+  const div = $("espectrum");
+  Plotly.react(div, tr, layout, { displayModeBar: false, responsive: true });
+  if (!div.dataset.clickBound) { div.on("plotly_click", onPlotClick); div.dataset.clickBound = "1"; }
+}
+
+// the board with a map painted on it, as on the design view (decaps, IC port, hot-spot ring)
+function boardMapSvg(root, m, lo, hi, id) {
+  root.replaceChildren();
+  const b = S.setup.board, [W, H] = b.board_mm, Y = (y) => H - y;
+  root.setAttribute("viewBox", `-14 -14 ${W + 28} ${H + 28}`);
+  const pts = b.outline.map(([x, y]) => `${x},${Y(y)}`).join(" ");
+  const clip = svg("clipPath", { id: `${id}clip` }, svg("defs", {}, root));
+  svg("polygon", { points: pts }, clip);
+  svg("polygon", { points: pts, fill: m ? "#222" : "#e9e7e1" }, root);
+  if (m) {
+    const [x0, x1, y0, y1] = b.map_extent;
+    svg("image", { x: x0, y: Y(y1), width: x1 - x0, height: y1 - y0, preserveAspectRatio: "none",
+      "clip-path": `url(#${id}clip)`, href: mapCanvas(m.values, lo, hi).toDataURL() }, root);
+  }
+  svg("polygon", { points: pts, fill: "none", stroke: "#1b1b1b", "stroke-width": 1.6 }, root);
+  b.slots.forEach(([x, y], i) => {
+    const t = S.codes[i];
+    if (!t) { svg("circle", { cx: x, cy: Y(y), r: 2.2, fill: m ? "rgba(255,255,255,0.6)" : "#b9b6ad" }, root); return; }
+    svg("circle", { cx: x, cy: Y(y), r: 9, fill: "#fff", stroke: COL[t], "stroke-width": 2.8 }, root);
+    const lab = svg("text", { x, y: Y(y), "text-anchor": "middle", "dominant-baseline": "central", "font-size": 8,
+      "font-weight": 800, fill: COL[t] }, root);
+    lab.textContent = partName(t);
+    const sub = svg("text", { x, y: Y(y) + 14.8, "text-anchor": "middle", "font-size": 6, fill: "#fff", stroke: "#111",
+      "stroke-width": 1.6, "paint-order": "stroke" }, root);
+    sub.textContent = `C${i + 1}`;
+  });
+  const [ix, iy] = b.ic_port;
+  svg("rect", { x: ix - 5, y: Y(iy) - 5, width: 10, height: 10, fill: "#fff", stroke: "#111", "stroke-width": 1.4 }, root);
+  if (m) {
+    const clamp = (v, a, c) => Math.max(a, Math.min(c, v));
+    const hx = clamp(m.hot.x, 9, W - 9), hy = H - clamp(m.hot.y, 9, H - 9);
+    svg("circle", { cx: hx, cy: hy, r: 10, fill: "none", stroke: "#fff", "stroke-width": 3.2 }, root);
+    svg("circle", { cx: hx, cy: hy, r: 10, fill: "none", stroke: "#111", "stroke-width": 1.4, "stroke-dasharray": "3 2" }, root);
+  }
+}
+
+function renderEcad() {
+  const btn = $("ecadrun"), st = $("ecadstatus");
+  const K = kOf(S.codes), e = S.ecad && sameCodes(S.ecad.codes, S.codes) ? S.ecad : null, j = S.ecadJob;
+  const mhz = S.mapIndex === null ? null : S.setup.freqs_mhz[S.mapIndex];
+  const mm = S.map && S.map.index === S.mapIndex && K > 0 ? S.map : null;     // model map (the design view's)
+  const em = e && e.map && e.map.index === S.mapIndex ? e.map : null;           // eCADSTAR map
+  const needMap = mhz !== null && !em;
+  const have = !!(e && e.spectrum) && !needMap;
+  st.classList.remove("err");
+  if (j && j.state === "running") {
+    btn.disabled = true;
+    st.innerHTML = `<span class="spin"></span>${sameJob(j) ? `simulating ${j.phase}` : "busy with another placement"}… ${Math.round(j.seconds || 0)} s`;
+  } else {
+    btn.disabled = K === 0 || have;
+    if (j && j.state === "error" && sameJob(j)) { st.textContent = `Failed: ${j.message}`; st.classList.add("err"); }
+    else if (j && j.state === "done" && sameJob(j) && have && j.seconds) st.textContent = `done · ${Math.round(j.seconds)} s`;
+    else st.textContent = K === 0 ? "Place decaps first." : "";
+  }
+  btn.textContent = have ? "✓ Simulated" : (e && e.spectrum && needMap ? `▶ Simulate map at ${fmtMHz(mhz)} MHz` : "▶ Simulate in eCADSTAR");
+
+  // table: model = what the page shows (no margin), eCADSTAR = the saved simulation
+  const c = S.check && S.check.kind !== "bare" ? S.check.direct : null, w = e && e.worst;
+  const cell = (v, cls = "") => `<td class="${cls}">${v}</td>`;
+  const dash = cell("–", "none");
+  const yes = (ok) => cell(ok ? "yes" : "no", ok ? "pass" : "fail");
+  const rows = [
+    ["ρ (worst ratio)", c ? cell(c.worst_ratio.toFixed(2)) : dash, w ? cell(w.ratio.toFixed(2)) : dash, ""],
+    ["worst frequency", c ? cell(`${fmtMHz(c.worst_mhz)} MHz`) : dash, w ? cell(`${fmtMHz(w.mhz)} MHz`) : dash, ""],
+    ["passes target", c ? yes(c.passes) : dash, w ? yes(w.passes) : dash, "ρ ≤ 1 (no margin) for both"],
+  ];
+  if (mhz !== null) rows.push([`hot spot ${fmtMHz(mhz)} MHz`, mm ? cell(`${fmtOhm(mm.hot.ohm)} Ω`) : dash,
+    em ? cell(`${fmtOhm(em.hot.ohm)} Ω`) : dash, "highest map value on the board"]);
+  $("ctbody").innerHTML = rows.map(([l, a, b, t]) => `<tr><td title="${t}">${l}</td>${a}${b}</tr>`).join("");
+
+  if (S.view !== "ecad") return;
+  drawEcadPlot();
+  // the two maps on one colour scale (the shared scale mode)
+  let lo = null, hi = null;
+  if (mm) {
+    [lo, hi] = [mm.lo, mm.hi];
+    if (S.scaleMode !== "fixed") {
+      const vals = (m) => m.values.flat().filter((v) => v !== null && v > 0);
+      const all = vals(mm).concat(em ? vals(em) : []);
+      lo = Math.min(...all); hi = Math.max(...all);
+    }
+  }
+  boardMapSvg($("emapmod"), mm, lo, hi, "emod");
+  boardMapSvg($("emapsim"), em, lo, hi, "esim");
+  const lab = (m) => (m ? `${fmtMHz(mhz)} MHz · hot spot ${fmtOhm(m.hot.ohm)} Ω` : "");
+  $("emodlab").textContent = mhz === null ? "pick a frequency on the curve" : lab(mm);
+  $("esimlab").textContent = mhz === null ? "" : (em ? lab(em) : "not simulated at this frequency");
+  $("escale").classList.toggle("hidden", !mm);
+  paintBar("ecbar", "ecb", mm ? lo : null, hi);
+}
+
+async function runEcad() {
+  try {
+    S.ecadJob = await api("/api/ecad/run", { codes: S.codes.slice(), target: S.target, index: S.mapIndex });
+  } catch (e) {
+    $("ecadstatus").textContent = e.message; $("ecadstatus").classList.add("err");
+    return;
+  }
+  if (S.ecadJob.state === "running") pollEcad(); else fetchEcad();
+  renderEcad();
+}
+function pollEcad() {
+  clearInterval(S.ecadTimer);
+  S.ecadTimer = setInterval(async () => {
+    try { S.ecadJob = await api("/api/ecad/status"); } catch (_) { return; }
+    if (S.ecadJob.state !== "running") { clearInterval(S.ecadTimer); fetchEcad(); }
+    renderEcad();
+  }, 1000);
 }
 
 // ---------------------------------------------------------------- actions
 function pushHistory() {
-  S.history.push({ codes: S.codes.slice(), target: S.target });
+  S.history.push({ codes: S.codes.slice(), target: S.target, margin: S.margin });
   if (S.history.length > 200) S.history.shift();
   $("undo").disabled = false;
 }
 function changed(newCodes) {
   pushHistory();
-  S.prevSpectrum = S.check ? S.check.spectrum : null;
   S.codes = newCodes;
   if (S.exampleId) {
     const ex = S.setup.examples.find((x) => x.id === S.exampleId);
-    if (!ex || !sameCodes(ex.codes, S.codes)) { S.exampleId = null; $("example-note").classList.add("hidden"); $("examples").value = ""; }
+    if (!ex || !sameCodes(ex.codes, S.codes)) { S.exampleId = null; $("examples").value = ""; $("examples").title = "Prepared examples"; }
   }
   refresh();
 }
@@ -450,17 +677,20 @@ function apply(codes) { S.preview = null; renderPreview(); changed(codes.slice()
 
 async function refresh() {
   renderSlots();
+  renderMarginCtl();
   $("kval").textContent = `K = ${kOf(S.codes)}`;
+  if (S.mapIndex === null) $("freqlabel").textContent = freqHint();
   const my = ++S.seq;
-  runFixes();
   try {
-    const c = await api("/api/check", { codes: S.codes, target: S.target });
+    const c = await api("/api/check", { codes: S.codes, target: S.target, ...marginBody() });
     if (my !== S.seq) return;
     S.check = c;
+    runFixes();
     renderVerdict();
     renderAdds();
     drawPlot();
     requestMap();
+    fetchEcad();
   } catch (e) { banner(e.message, "error"); }
 }
 
@@ -473,7 +703,12 @@ function buildControls() {
     sel.appendChild(o);
   });
   sel.value = S.target;
-  sel.addEventListener("change", () => { S.target = sel.value; refresh(); });
+  sel.addEventListener("change", () => { S.target = sel.value; S.margin = null; refresh(); });
+
+  $("margin").max = Math.round(S.setup.model.margin_max * 100);
+  $("margin").addEventListener("input", () => onMarginInput(false));
+  $("margin").addEventListener("change", () => onMarginInput(true));
+  $("mreset").addEventListener("click", () => { S.margin = null; clearTimeout(S.marginTimer); refresh(); });
 
   const pal = $("palette");
   const btn = (code, html, title) => {
@@ -498,13 +733,12 @@ function buildControls() {
     const e = S.setup.examples.find((x) => x.id === ex.value);
     if (!e) return;
     pushHistory();
-    S.prevSpectrum = null;
     S.codes = e.codes.slice();
     S.target = e.target; $("target").value = e.target;
+    S.margin = null;
     S.exampleId = e.id;
     S.mapIndex = null; setMapIndex(null);
-    $("example-note").textContent = e.note;
-    $("example-note").classList.remove("hidden");
+    $("examples").title = e.note;
     refresh();
   });
 
@@ -513,10 +747,17 @@ function buildControls() {
   $("clear").addEventListener("click", () => { if (kOf(S.codes)) changed(new Array(52).fill(0)); });
 
   $("clearmap").addEventListener("click", () => setMapIndex(null));
-  for (const b of $("scalemode").querySelectorAll("button")) b.addEventListener("click", () => {
-    S.scaleMode = b.dataset.v;
-    $("scalemode").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+  for (const b of $("views").querySelectorAll("button")) b.addEventListener("click", () => setView(b.dataset.view));
+  $("ecadrun").addEventListener("click", runEcad);
+  for (const b of document.querySelectorAll("#scalemode button, #escalemode button")) b.addEventListener("click", () => {
+    S.scaleMode = b.dataset.v;                    // one scale mode for the design and comparison views
+    document.querySelectorAll("#scalemode button, #escalemode button").forEach((x) => x.classList.toggle("on", x.dataset.v === S.scaleMode));
     drawMap();
+  });
+  for (const b of $("fixkind").querySelectorAll("button")) b.addEventListener("click", () => {
+    S.fixKind = b.dataset.v;
+    $("fixkind").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    runFixes();
   });
   for (const b of $("mode").querySelectorAll("button")) b.addEventListener("click", () => {
     S.mode = b.dataset.v;
@@ -531,8 +772,6 @@ function buildControls() {
     if (e.key === "0" || e.key.toLowerCase() === "e") setPart(0);
   });
 
-  const m = S.setup.model;
-  $("foot").textContent = `Surrogate predictions (${m.checkpoint}, ${m.head}), not eCADSTAR.`;
 }
 function setPart(code) {
   S.part = code;
@@ -542,8 +781,7 @@ function setPart(code) {
 function undo() {
   const h = S.history.pop();
   if (!h) return;
-  S.prevSpectrum = S.check ? S.check.spectrum : null;
-  S.codes = h.codes; S.target = h.target; $("target").value = h.target;
+  S.codes = h.codes; S.target = h.target; $("target").value = h.target; S.margin = h.margin;
   $("undo").disabled = S.history.length === 0;
   refresh();
 }
@@ -556,6 +794,8 @@ async function init() {
   buildControls();
   drawPlot();
   refresh();
-  window.addEventListener("resize", () => Plotly.Plots.resize("spectrum"));
+  try { S.ecadJob = await api("/api/ecad/status"); if (S.ecadJob.state === "running") pollEcad(); } catch (_) { /* no job */ }
+  window.addEventListener("resize", () => Plotly.Plots.resize(S.view === "ecad" ? "espectrum" : "spectrum"));
+  LARGE.addEventListener("change", () => { drawPlot(); drawEcadPlot(); });
 }
 init();

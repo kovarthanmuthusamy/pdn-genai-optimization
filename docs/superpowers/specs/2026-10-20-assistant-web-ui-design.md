@@ -73,3 +73,51 @@ fix list identical (order and codes) to `suggest.find_fixes` with the one-GPU th
   placement changes until "clear map" or a new example. The "follow worst frequency" switch was removed
   with the slider.
 - Wording cut on request (2026-10-20): short labels, details moved into hover tooltips.
+- Verdict sentence "Passes/Fails <target> with a <m> margin" removed on request (2026-10-22); the badge,
+  the "needs ρ̂ ≤ 1 − m" line on a fail, the direct chip and ρ̂ remain.
+- Margin slider (author, 2026-10-22, interview: "Verdict + fixes too", "Slider + reset"): 0–60 % in 1 %
+  steps in the verdict row, a tick at the thesis margin and a "thesis" reset button. The chosen margin
+  drives the safe bar, the badge ("MARGIN m %" when it differs from the thesis value), the safe chips of
+  the additions and the safe fix search; the API takes an optional `margin` (null = thesis margin), so
+  the default answers stay the thesis's (tests: 28 pass). The margin resets on a target or example
+  change and is kept across placement changes.
+- Text cut (author, 2026-10-22): the reset button is an icon (↺, thesis value in its tooltip); the
+  "needs ρ̂ ≤" line, the example notes (now the example list's tooltip) and the footer are gone; the
+  "Click the curve" hints stay.
+- Budget in the fix search (author, 2026-10-22, interview: "Remove decaps too", "Fewer changes first",
+  passing placement: "give a suggestion like removing this also passes"): the search also removes decaps
+  (thesis `ALLOW_REMOVE` semantics, a removal = one change, still up to 3 changes); ranked by changes,
+  then K, then the thesis order; a passing placement gets the nearest placements with fewer decaps that
+  still pass. `remove=False` in the API gives the thesis assistant. Tests: 40 pass.
+- eCADSTAR tab (author, 2026-10-22, reversing "no eCADSTAR overlay"; interview: "Spectrum +
+  picked-frequency map", "Tab beside suggestions", "Short: verdict only", one test run allowed):
+  `ecad_check.py` runs one job at a time through thesis_code `s12_evaluation.ecad` (store
+  `cache/ecad/`), refuses while `ecad.busy()`; table rows ρ / worst frequency / passes (ρ ≤ 1) / hot
+  spot, model vs eCADSTAR; map pair + green dashed simulated spectrum. Test run 2026-10-22: #138,
+  spectrum + 120 MHz map in 19 s, ρ 1.27 (matches its earlier simulation). Tests: 44 pass.
+- Same day, on request: the comparison moved out of the small tab into a full second view ("Design |
+  eCADSTAR comparison" under the header): button + table, large spectrum plot (target, model,
+  eCADSTAR), large model / eCADSTAR maps on the board. The suggestions panel is back to one pane; the
+  design view's plot no longer shows the eCADSTAR curve.
+- Design plot trimmed (author, 2026-10-22): no "previous placement" curve and no vertical line at the map
+  frequency (the ring on the curve stays); the comparison plot keeps its line. eCADSTAR curve there: dotted.
+- No hot-spot ring on the design board (author, 2026-10-22); "hot spot … Ω" under the board stays, and the
+  comparison maps keep their rings.
+- No "worst" × markers in either plot (author, 2026-10-22); the worst frequency stays in the verdict row
+  and in the comparison table.
+- Board panel narrower (40 / 60 instead of 46 / 54) and "improve" for a passing placement (author,
+  2026-10-22, interview: "Lowest ρ̂", "Up to 2 changes", "Biggest drop first", "Switch in Nearest pass"):
+  `Engine.improve` enumerates every same-K placement 1-2 changes away, keeps those below the current ρ̂,
+  lowest first (ties: fewer changes, type changes before moves); `/api/improve`; switch "fewer decaps |
+  improve" shown only when the placement passes. Fixes now start after the verdict arrives. Tests: 45.
+- Visual polish (author, 2026-10-22: "make it likable and easy"), CSS-led, no behaviour change: light
+  theme kept for the projector (dark text on light, stronger pass/fail colours), cool neutral background,
+  white cards with soft shadows, one accent blue for the active tab / primary button / slider, brand mark
+  (H-board logo), icons on Undo / Clear / view tabs, segmented switches as pills, numbered suggestion
+  rows with hover highlight and part names in their colours, map controls in a toolbar, legend swatches
+  in the comparison table and map titles, board drop shadow, one plot style for both plots, a start hint
+  while the board is empty, fail chips without the ✗ sign. Both views fit 1920×1080 and 1366×768.
+- Projector sizing (author, 2026-10-22: shown on a large screen): grey text darkened to ~5:1 contrast; from
+  1600 px wide (a 1080p projector) text, controls, numbers 15-30 % larger and plot text 15-16 px with
+  thicker lines (app.js PS); board labels larger; ≤1320 px / ≤760 px tall keep one screen (1280×720).
+  Checked: 1280×720, 1280×800, 1366×768, 1920×1080, 2560×1440, both views, no scrolling.

@@ -7,11 +7,15 @@ What: loads the thesis model through ``thesis_code`` (``settings.WEIGHTS_DIR / C
       check      verdict of a placement for one target, safe (measured margin) and direct (no margin),
                  with the predicted spectrum and the worst frequency (``suggest.verdict``);
       additions  every empty slot with every part (K + 1), ranked by the predicted worst-case ratio;
+      improve    same-K placements up to 2 changes away with a lower worst-case ratio, lowest first;
       map        the predicted map at one of the 231 frequencies, with the hot spot;
-      fixes      the nearest passing placements (``suggest.find_fixes``, the thesis assistant), judged by
-                 ``SplitJudge``: the thesis judge with its candidates spread over the GPUs. A newer fix
-                 search cancels an older one.
+      fixes      the nearest passing placements (``suggest.find_fixes``, the thesis assistant, with
+                 REMOVE on: fewer changes first, then fewer decaps; for a passing placement, the nearest
+                 ones with fewer decaps), judged by ``SplitJudge``: the thesis judge with its candidates
+                 spread over the GPUs. A newer fix search cancels an older one.
     Nothing in ``thesis_code`` is changed; verdicts and proposals are those of the thesis assistant.
+    ``check``, ``additions`` and ``fixes`` take an optional ``margin`` (0..MARGIN_MAX) for the page's margin
+    slider; None (the default) is the thesis margin of the target, so the default answers stay the thesis's.
 Why processes, not threads: two threads on two GPUs gave 1.2x (measured 2026-10-20: 4.22 s -> 3.47 s for
     131,072 placements); two processes run fully in parallel (65,536 each in 2.42 / 2.48 s, alone 2.43 s).
 Usage: ``from assistant_web.engine import Engine; eng = Engine(gpus=(0, 1))``. Import-only.
@@ -39,6 +43,7 @@ from thesis_code.s12_evaluation.common import Surrogate
 N_SLOTS = 52
 N_TYPES = 3
 TARGETS = ("0.8", "0.6", "0.5")
+MARGIN_MAX = 0.6            # largest margin of the page's slider (thesis margins: 0.25 / 0.37 / 0.27)
 PARTS = {1: {"name": "T1", "value": "100 nF", "esl": "222 pH", "esr": "8.9 mΩ"},
          2: {"name": "T2", "value": "47 nF", "esl": "154 pH", "esr": "21.4 mΩ"},
          3: {"name": "T3", "value": "22 nF", "esl": "142 pH", "esr": "25.2 mΩ"}}
@@ -47,6 +52,7 @@ PREDICT_BATCH = 8192        # the batch of VAEImpedance.predict_ohm; splits fall
                             # GPU sees the same batches as the one-GPU thesis judge (identical numbers)
 SPLIT_MIN = 4 * PREDICT_BATCH   # smaller blocks stay on the first GPU
 SPLIT_CHUNK = 8 * PREDICT_BATCH  # rows per split block; a cancelled search stops between blocks
+IMPROVE_RADIUS = 2          # improve search: every placement up to this many changes (author, 2026-10-22)
 MAP_REF_K = (3, 8)          # colour scale of the maps: reference placements with these budgets ...
 MAP_REF_PER_K = 25          # ... this many per budget ...
 MAP_REF_SEED = 0
@@ -126,25 +132,44 @@ class SplitJudge(S.Judge):
         return passes, score, {name: r}
 
 
-def neighbours_fast(codes: np.ndarray, radius: int, n_types: int, rng) -> np.ndarray:
+def _edits(codes: np.ndarray, n_types: int, remove: bool) -> list[np.ndarray]:
+    """``suggest._edits`` with ADD off and REMOVE as an argument (the thesis reads module flags):
+    RETYPE, MOVE, then REMOVE when K > 1, in the thesis order."""
+    out: list[np.ndarray] = []
+    occ, empty = np.flatnonzero(codes), np.flatnonzero(codes == 0)
+    for s in occ:                                    # RETYPE
+        for t in range(1, n_types + 1):
+            if t != codes[s]:
+                c = codes.copy(); c[s] = t; out.append(c)
+    for s in occ:                                    # MOVE
+        for d in empty:
+            c = codes.copy(); c[d] = c[s]; c[s] = 0; out.append(c)
+    if remove and len(occ) > 1:                      # REMOVE
+        for s in occ:
+            c = codes.copy(); c[s] = 0; out.append(c)
+    return out
+
+
+def neighbours_fast(codes: np.ndarray, radius: int, n_types: int, rng, remove: bool = False) -> np.ndarray:
     """``suggest.neighbours_at`` with the same result and the same generator state, faster. At its sampled
     level (radius 3) the thesis builds every single-edit neighbour of each frontier placement (245 arrays
     for K = 5, 3.2 million in all), keeps 64 drawn by ``rng.choice(len(cand), 64)`` and de-duplicates
-    them in order with tuple keys until RADIUS3_BUDGET. With ADD/REMOVE off, a placement has K (T - 1)
-    retypes and K (52 - K) moves in a fixed order, so the same draw can be made first and only the 64
-    drawn neighbours built; the de-duplication uses byte keys. Same draws, same order, same stop
-    (tested against ``suggest.neighbours_at``)."""
-    if S.ALLOW_ADD or S.ALLOW_REMOVE:
+    them in order with tuple keys until RADIUS3_BUDGET. With ADD off, a placement has K (T - 1) retypes,
+    K (52 - K) moves and (with ``remove``, as the thesis's ALLOW_REMOVE) K removals in a fixed order, so
+    the same draw can be made first and only the 64 drawn neighbours built; the de-duplication uses byte
+    keys. Same draws, same order, same stop (tested against ``suggest.neighbours_at``)."""
+    if S.ALLOW_ADD:
         return S.neighbours_at(codes, radius, n_types, rng)
+    remove = remove or S.ALLOW_REMOVE
     seen = {tuple(codes.tolist())}
     frontier = [codes]
     for r in range(radius):
         budget = S.RADIUS3_BUDGET if r >= 2 else None
         if budget is not None and r == radius - 1:
-            return _sampled_level(frontier, seen, n_types, rng, budget)
+            return _sampled_level(frontier, seen, n_types, rng, budget, remove)
         nxt: dict[tuple, np.ndarray] = {}
         for base in frontier:
-            cand = S._edits(base, n_types)
+            cand = _edits(base, n_types, remove)
             if budget is not None and len(cand) > 0:
                 idx = rng.choice(len(cand), size=min(len(cand), 64), replace=False)
                 cand = [cand[i] for i in idx]
@@ -161,7 +186,7 @@ def neighbours_fast(codes: np.ndarray, radius: int, n_types: int, rng) -> np.nda
     return np.array(frontier, dtype=np.int64) if frontier else np.zeros((0, N_SLOTS), np.int64)
 
 
-def _sampled_level(frontier: list, seen: set, n_types: int, rng, budget: int) -> np.ndarray:
+def _sampled_level(frontier: list, seen: set, n_types: int, rng, budget: int, remove: bool = False) -> np.ndarray:
     """The last, sampled level of ``neighbours_at``: per frontier placement the same draw, then only the
     drawn neighbours are built."""
     seen_b = {np.asarray(t, dtype=np.int8).tobytes() for t in seen}
@@ -169,7 +194,8 @@ def _sampled_level(frontier: list, seen: set, n_types: int, rng, budget: int) ->
     for base in frontier:
         occ, empty = np.flatnonzero(base), np.flatnonzero(base == 0)
         n_re = len(occ) * (n_types - 1)
-        n = n_re + len(occ) * len(empty)
+        n_mv = n_re + len(occ) * len(empty)
+        n = n_mv + (len(occ) if remove and len(occ) > 1 else 0)
         if n == 0:
             continue
         idx = rng.choice(n, size=min(n, 64), replace=False)
@@ -179,11 +205,14 @@ def _sampled_level(frontier: list, seen: set, n_types: int, rng, budget: int) ->
         sl = occ[idx[re] // (n_types - 1)]
         jj = idx[re] % (n_types - 1)
         cand[row[re], sl] = jj + 1 + (jj + 1 >= base[sl])       # the jj-th type other than the current one
-        q = idx[~re] - n_re                                     # MOVE: slot-major, targets ascending
+        mv = ~re & (idx < n_mv)
+        q = idx[mv] - n_re                                      # MOVE: slot-major, targets ascending
         if q.size:
             sl, d = occ[q // len(empty)], empty[q % len(empty)]
-            cand[row[~re], d] = base[sl]
-            cand[row[~re], sl] = 0
+            cand[row[mv], d] = base[sl]
+            cand[row[mv], sl] = 0
+        rm = idx >= n_mv                                        # REMOVE: slots ascending
+        cand[row[rm], occ[idx[rm] - n_mv]] = 0
         buf = cand.tobytes()
         for j in range(len(idx)):
             key = buf[j * N_SLOTS:(j + 1) * N_SLOTS]
@@ -198,13 +227,19 @@ def _sampled_level(frontier: list, seen: set, n_types: int, rng, budget: int) ->
 
 
 def find_fixes_fast(codes: np.ndarray, judge, n_types: int, *, max_radius: int, min_suggestions: int,
-                    seed: int, log=print) -> list[dict]:
-    """``suggest.find_fixes`` line for line, with ``neighbours_fast`` in place of ``neighbours_at``."""
+                    seed: int, log=print, remove: bool = False, k_max: int | None = None) -> list[dict]:
+    """``suggest.find_fixes`` line for line, with ``neighbours_fast`` in place of ``neighbours_at``.
+    ``remove`` adds REMOVE to the edits (the thesis's ALLOW_REMOVE); ``k_max`` keeps only candidates with
+    at most that many decaps (fewer decaps for a placement that already passes). Ranked by the number of
+    changed decaps, then fewer decaps (author, 2026-10-22), then type changes before moves, then headroom;
+    with K fixed this is the thesis order."""
     rng = np.random.default_rng(seed)
     k_lo, k_hi = judge.k_range
+    if k_max is not None:
+        k_hi = min(k_hi, k_max)
     found: list[dict] = []
     for r in range(1, max_radius + 1):
-        cand = neighbours_fast(codes, r, n_types, rng)
+        cand = neighbours_fast(codes, r, n_types, rng, remove)
         dropped = 0
         if cand.shape[0]:
             kc = (cand != 0).sum(1)
@@ -219,12 +254,12 @@ def find_fixes_fast(codes: np.ndarray, judge, n_types: int, *, max_radius: int, 
                 + (f"  ({dropped:,} skipped: K outside trained {k_lo}..{k_hi})" if dropped else ""))
         for i in ok:
             found.append({"codes": cand[i], "score": float(score[i]), "edits": S.n_edits(codes, cand[i]),
-                          "moves": S.n_moves(codes, cand[i]),
+                          "moves": S.n_moves(codes, cand[i]), "K": int((cand[i] != 0).sum()),
                           "radius": r, "ratios": {k: float(v[i]) for k, v in ratios.items()}})
         found = [x for x in found if x["edits"] <= r]
         if len(found) >= min_suggestions:
             break
-    found.sort(key=lambda x: (x["edits"], x["moves"], x["score"]))
+    found.sort(key=lambda x: (x["edits"], x["K"], x["moves"], x["score"]))
     return found
 
 
@@ -282,6 +317,7 @@ class Engine:
         self.k_range = tuple(int(k) for k in self.heads[0].k_range)
         self.mask = board_mask()
         self._fix_gen = 0
+        self._imp_gen = 0                 # improve searches cancel each other, not the fix search
         self._gen_lock = threading.Lock()
         self.log(f"model loaded on {', '.join(self.devices)} in {time.time() - t0:.1f} s "
                  f"(margins {', '.join(f'{t}: {m:.2f}' for t, m in self.margins.items())})")
@@ -300,10 +336,16 @@ class Engine:
             raise ValueError(f"part codes are 0 (empty) or 1..{N_TYPES}")
         return c
 
-    def _target(self, target: str) -> tuple[np.ndarray, float]:
+    def _target(self, target: str, margin: float | None = None) -> tuple[np.ndarray, float]:
+        """Target curve and safe margin: the thesis margin of the target, or ``margin`` when given."""
         if target not in self.targets:
             raise ValueError(f"target must be one of {', '.join(TARGETS)}")
-        return self.targets[target], self.margins[target]
+        if margin is None:
+            return self.targets[target], self.margins[target]
+        margin = float(margin)
+        if not 0.0 <= margin <= MARGIN_MAX:
+            raise ValueError(f"margin must be 0..{MARGIN_MAX}")
+        return self.targets[target], margin
 
     def _k_ok(self, k: int) -> bool:
         return self.k_range[0] <= k <= self.k_range[1]
@@ -349,9 +391,9 @@ class Engine:
         return np.concatenate(out) if out else np.zeros(0)
 
     # ---- check ----------------------------------------------------------------------------
-    def check(self, codes, target: str, n_additions: int = 5) -> dict:
+    def check(self, codes, target: str, n_additions: int = 5, margin: float | None = None) -> dict:
         c = self.codes(codes)
-        tgt, mg = self._target(target)
+        tgt, mg = self._target(target, margin)
         k = int((c != 0).sum())
         if k > self.k_range[1]:
             raise ValueError(f"the model was trained for up to {self.k_range[1]} decaps")
@@ -360,17 +402,17 @@ class Engine:
         else:
             z, kind = self.heads[0].predict_ohm(c[None])[0].astype(np.float64), "model"
         ratio = z[self.band] / np.maximum(tgt[self.band], 1e-12)
-        return {"kind": kind, "K": k, "target": target, "margin": mg,
+        return {"kind": kind, "K": k, "target": target, "margin": mg, "thesis_margin": self.margins[target],
                 "spectrum": z.tolist(),
                 "safe": S.verdict(z, tgt, self.band, self.f, mg),
                 "direct": S.verdict(z, tgt, self.band, self.f, 0.0),
                 "worst_index": int(self.band[int(np.argmax(ratio))]),
-                "additions": self.additions(c, target, n_additions) if k + 1 <= self.k_range[1] else []}
+                "additions": self.additions(c, target, n_additions, mg) if k + 1 <= self.k_range[1] else []}
 
-    def additions(self, codes, target: str, n: int = 5) -> list[dict]:
+    def additions(self, codes, target: str, n: int = 5, margin: float | None = None) -> list[dict]:
         """Every empty slot with every part, ranked by the predicted worst-case ratio (lowest first)."""
         c = self.codes(codes)
-        tgt, mg = self._target(target)
+        tgt, mg = self._target(target, margin)
         if not self._k_ok(int((c != 0).sum()) + 1):
             return []
         cand, meta = [], []
@@ -447,9 +489,13 @@ class Engine:
         return scale
 
     # ---- nearest passing placement --------------------------------------------------------
-    def fixes(self, codes, target: str, mode: str, max_radius: int = S.MAX_RADIUS) -> dict:
+    def fixes(self, codes, target: str, mode: str, max_radius: int = S.MAX_RADIUS,
+              margin: float | None = None, remove: bool = True) -> dict:
+        """Nearest passing placements: move, type change and (``remove``) removal, up to ``max_radius``
+        changes. A placement that already passes gets the nearest placements with fewer decaps that
+        still pass (``base_passes``); ``remove=False`` is the thesis assistant (K fixed)."""
         c = self.codes(codes)
-        tgt, mg_safe = self._target(target)
+        tgt, mg_safe = self._target(target, margin)
         if mode not in ("safe", "direct"):
             raise ValueError("mode must be 'safe' or 'direct'")
         mg = mg_safe if mode == "safe" else 0.0
@@ -457,17 +503,21 @@ class Engine:
             self._fix_gen += 1
             gen = self._fix_gen
         k = int((c != 0).sum())
-        base = {"mode": mode, "margin": mg, "max_radius": int(max_radius), "target": target}
+        base = {"mode": mode, "margin": mg, "max_radius": int(max_radius), "target": target, "K": k,
+                "base_passes": False}
         if not self._k_ok(k):
             return {**base, "status": "no_model", "suggestions": []}
         judge = SplitJudge(self, mg, tgt, self.band, cancelled=lambda: self._fix_gen != gen)
         if bool(judge.assess(c[None])[0][0]):
-            return {**base, "status": "passes", "suggestions": []}
+            base["base_passes"] = True
+            if not remove or k - 1 < self.k_range[0]:            # nothing smaller to look for
+                return {**base, "max_radius": S.MAX_RADIUS, "status": "none", "suggestions": []}
         lines: list[str] = []
         t0 = time.time()
         try:
             found = find_fixes_fast(c, judge, N_TYPES, max_radius=int(max_radius),
-                                    min_suggestions=S.MIN_SUGGESTIONS, seed=S.SEED, log=lines.append)
+                                    min_suggestions=S.MIN_SUGGESTIONS, seed=S.SEED, log=lines.append,
+                                    remove=remove, k_max=k - 1 if base["base_passes"] else None)
         except Cancelled:
             return {**base, "status": "cancelled", "suggestions": []}
         top = found[:S.MAX_SUGGESTIONS]
@@ -476,17 +526,54 @@ class Engine:
         rows = []
         for x, zz in zip(top, z):
             ch = change_list(c, x["codes"])
-            rows.append({"codes": x["codes"].tolist(), "edits": int(x["edits"]), "moves": int(x["moves"]),
+            rows.append({"codes": x["codes"].tolist(), "edits": int(x["edits"]), "moves": int(x["moves"]), "K": x["K"],
                          "radius": int(x["radius"]), "ratio": float(x["ratios"][name]), "score": float(x["score"]),
                          "changes": ch, "text": change_text(ch), "spectrum": zz.tolist()})
         return {**base, "status": "found" if rows else "none", "suggestions": rows, "n_found": len(found),
                 "n_scored": judge.n_scored, "seconds": round(time.time() - t0, 2), "log": [s.strip() for s in lines]}
 
+    # ---- lower spectrum within the budget --------------------------------------------------
+    def improve(self, codes, target: str, max_radius: int = IMPROVE_RADIUS, n: int = S.MAX_SUGGESTIONS) -> dict:
+        """Same-K placements up to ``max_radius`` changes away (type change or move, all of them) whose
+        predicted worst-case ratio is lower than the placement's own; the ``n`` lowest first (author,
+        2026-10-22: biggest drop first; ties: fewer changes, type changes before moves). A lower ratio
+        than a passing placement's also passes. A newer improve search cancels an older one."""
+        c = self.codes(codes)
+        tgt, _ = self._target(target)
+        with self._gen_lock:
+            self._imp_gen += 1
+            gen = self._imp_gen
+        k = int((c != 0).sum())
+        base = {"target": target, "K": k, "max_radius": int(max_radius)}
+        if not self._k_ok(k):
+            return {**base, "status": "no_model", "suggestions": []}
+        t0 = time.time()
+        rng = np.random.default_rng(S.SEED)           # not drawn from: levels 1 and 2 are enumerated
+        cand = np.concatenate([neighbours_fast(c, r, N_TYPES, rng) for r in range(1, int(max_radius) + 1)])
+        r0 = float(worst_ratios(self.heads[0].predict_ohm(c[None]), tgt, self.band)[0])
+        try:                                          # candidates alone: the same batches as a one-GPU call
+            ratio = self.split_ratios(cand, tgt, self.band, cancelled=lambda: self._imp_gen != gen)
+        except Cancelled:
+            return {**base, "status": "cancelled", "suggestions": []}
+        better = np.flatnonzero(ratio < r0)
+        edits = np.array([S.n_edits(c, cand[i]) for i in better], dtype=np.int64)
+        moves = np.array([S.n_moves(c, cand[i]) for i in better], dtype=np.int64)
+        order = better[np.lexsort((moves, edits, ratio[better]))][:n] if len(better) else better
+        z = self.heads[0].predict_ohm(cand[order]) if len(order) else np.zeros((0, len(self.f)))
+        rows = []
+        for i, zz in zip(order, z):
+            ch = change_list(c, cand[i])
+            rows.append({"codes": cand[i].tolist(), "edits": S.n_edits(c, cand[i]), "moves": S.n_moves(c, cand[i]),
+                         "K": k, "ratio": float(ratio[i]), "changes": ch, "text": change_text(ch),
+                         "spectrum": zz.tolist()})
+        return {**base, "status": "found" if rows else "none", "base_ratio": r0, "suggestions": rows,
+                "n_found": int(len(better)), "n_scored": int(len(cand)), "seconds": round(time.time() - t0, 2)}
+
     # ---- page setup -----------------------------------------------------------------------
     def info(self) -> dict:
         return {"checkpoint": f"{Path(settings.WEIGHTS_DIR).parent.name}/{settings.CHECKPOINT}",
                 "head": settings.HEAD, "devices": self.devices, "k_range": list(self.k_range),
-                "max_radius": S.MAX_RADIUS, "max_suggestions": S.MAX_SUGGESTIONS}
+                "max_radius": S.MAX_RADIUS, "max_suggestions": S.MAX_SUGGESTIONS, "margin_max": MARGIN_MAX}
 
     def targets_payload(self) -> list[dict]:
         return [{"name": t, "label": f"{t} Ω", "margin": self.margins[t], "curve": self.targets[t].tolist()}
